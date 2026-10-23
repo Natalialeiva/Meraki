@@ -1,0 +1,9 @@
+# Dependencias instaladas por Node.js
+node_modules/
+
+# Archivos con variables privadas, como contraseñas
+.env
+.env.*
+
+# Excepción para futuros archivos de ejemplo sin credenciales
+!.env.example
