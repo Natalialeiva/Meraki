@@ -56,6 +56,43 @@ app.get("/api/categorias", async (req, res) => {
         });
     }
 });
+// Ruta para consultar los servicios activos de Meraki.
+app.get("/api/servicios", async (req, res) => {
+    try {
+        // Consultamos los servicios y los nombres de sus emprendimientos y categorías.
+        const resultado = await pool.query(`
+            SELECT
+                s.id_servicio,
+                s.nombre AS servicio,
+                s.descripcion,
+                e.nombre AS emprendimiento,
+                c.nombre AS categoria,
+                s.precio,
+                s.duracion_min,
+                s.monto_abono
+            FROM servicio s
+            INNER JOIN emprendimiento e
+                ON s.id_emprendimiento = e.id_emprendimiento
+            INNER JOIN categoria c
+                ON s.id_categoria = c.id_categoria
+            WHERE s.activo = TRUE
+              AND e.estado = TRUE
+            ORDER BY s.nombre;
+        `);
+
+        // Enviamos los servicios al navegador en formato JSON.
+        res.json(resultado.rows);
+
+    } catch (error) {
+        // Mostramos el error en la terminal.
+        console.error("Error al consultar servicios:", error.message);
+
+        // Respondemos con un error si la consulta falla.
+        res.status(500).json({
+            mensaje: "Error al obtener los servicios"
+        });
+    }
+});
 // Iniciamos el servidor en el puerto 3000.
 app.listen(3000, () => {
     console.log("Servidor de Meraki funcionando en http://localhost:3000");
