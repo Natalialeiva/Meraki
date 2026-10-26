@@ -35,6 +35,27 @@ app.get("/api/estado-db", async (req, res) => {
         });
     }
 });
+// Ruta para consultar las categorías de servicios de Meraki.
+app.get("/api/categorias", async (req, res) => {
+    try {
+        // Obtenemos las categorías guardadas en PostgreSQL.
+        const resultado = await pool.query(
+            "SELECT id_categoria, nombre, descripcion FROM categoria ORDER BY id_categoria"
+        );
+
+        // Enviamos las categorías al navegador en formato JSON.
+        res.json(resultado.rows);
+
+    } catch (error) {
+        // Mostramos el error en la terminal.
+        console.error("Error al consultar categorías:", error.message);
+
+        // Informamos que la consulta no se pudo completar.
+        res.status(500).json({
+            mensaje: "Error al obtener las categorías"
+        });
+    }
+});
 // Iniciamos el servidor en el puerto 3000.
 app.listen(3000, () => {
     console.log("Servidor de Meraki funcionando en http://localhost:3000");
