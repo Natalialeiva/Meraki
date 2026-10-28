@@ -1,6 +1,16 @@
 // Importamos Express.
 const express = require("express");
 
+// Importamos bcrypt para proteger las contraseñas.
+const bcrypt = require("bcrypt");
+
+// Importamos las herramientas para administrar sesiones.
+const session = require("express-session");
+
+// Permitimos almacenar las sesiones en PostgreSQL.
+const connectPgSimple = require("connect-pg-simple");
+const PgSession = connectPgSimple(session);
+
 // Creamos la aplicación que utilizará Express.
 const app = express();
 
@@ -15,6 +25,66 @@ app.get("/", (req, res) => {
 
 // Importamos la conexión con PostgreSQL.
 const pool = require("./db");
+
+// Comprobamos que exista la clave privada de sesiones.
+if (!process.env.SESSION_SECRET) {
+    throw new Error("Falta SESSION_SECRET en el archivo .env");
+}
+
+// Mensaje temporal para verificar que el servidor
+// está cargando la configuración actual de sesiones.
+console.log("MERAKI: configuración de sesiones cargada");
+
+// Configuramos las sesiones de las emprendedoras.
+app.use(session({
+    // Nombre de la cookie de Meraki.
+    name: "meraki.sid",
+
+    // Clave privada utilizada para firmar la cookie.
+    secret: process.env.SESSION_SECRET,
+
+    // Almacenamos las sesiones en PostgreSQL.
+    store: new PgSession({
+        pool: pool,
+        tableName: "sesion_meraki",
+        createTableIfMissing: true
+    }),
+
+    // Evitamos guardar sesiones si no han cambiado.
+    resave: false,
+
+    // No creamos sesiones para visitantes que no han iniciado sesión.
+    saveUninitialized: false,
+
+    cookie: {
+        // JavaScript del navegador no puede leer esta cookie.
+        httpOnly: true,
+
+        // Reduce el envío de cookies en solicitudes entre sitios.
+        sameSite: "lax",
+
+        // En desarrollo local utilizamos HTTP.
+        // En producción con HTTPS deberá cambiarse a true.
+        secure: false,
+
+        // La sesión dura dos horas desde que se emite la cookie.
+        maxAge: 2 * 60 * 60 * 1000
+    }
+}));
+// Verificamos que la emprendedora haya iniciado sesión.
+// Esta función protegerá las rutas privadas del Back Office.
+function verificarSesion(req, res, next) {
+
+    // Si no existe una emprendedora autenticada, rechazamos el acceso.
+    if (!req.session || !req.session.idEmprendedora) {
+        return res.status(401).json({
+            mensaje: "Debes iniciar sesión para acceder al Back Office"
+        });
+    }
+
+    // Si existe una sesión, permitimos continuar.
+    next();
+}
 
 // Ruta para comprobar que el Backend puede consultar PostgreSQL.
 app.get("/api/estado-db", async (req, res) => {
@@ -524,7 +594,9 @@ app.post("/api/reservas", async (req, res) => {
 // Ruta para consultar las reservas de un emprendimiento.
 // Por ahora es una ruta de desarrollo; más adelante
 // estará protegida mediante autenticación y permisos.
-app.get("/api/reservas", async (req, res) => {
+
+// Solo las emprendedoras autenticadas pueden consultar reservas.
+app.get("/api/reservas", verificarSesion, async (req, res) => {
     try {
         // Recibimos el identificador del emprendimiento.
         const idEmprendimiento = Number(req.query.id_emprendimiento);
@@ -538,7 +610,20 @@ app.get("/api/reservas", async (req, res) => {
                 mensaje: "Debes indicar un emprendimiento válido"
             });
         }
+// Verificamos que el emprendimiento pertenezca a la emprendedora conectada.
+const propiedad = await pool.query(`
+    SELECT id_emprendimiento
+    FROM emprendimiento
+    WHERE id_emprendimiento = $1
+      AND id_emprendedora = $2;
+`, [idEmprendimiento, req.session.idEmprendedora]);
 
+// Si no pertenece a su cuenta, rechazamos la consulta.
+if (propiedad.rows.length === 0) {
+    return res.status(403).json({
+        mensaje: "No tienes permiso para consultar este emprendimiento"
+    });
+}
         // Consultamos las reservas y sus datos relacionados.
         const resultado = await pool.query(`
             SELECT
@@ -556,11 +641,19 @@ app.get("/api/reservas", async (req, res) => {
                 ON r.id_clienta = c.id_clienta
             INNER JOIN trabajadora t
                 ON r.id_trabajadora = t.id_trabajadora
-            INNER JOIN servicio s
+           INNER JOIN servicio s
                 ON r.id_servicio = s.id_servicio
-            WHERE r.id_emprendimiento = $1
-            ORDER BY r.fecha_hora_inicio;
-        `, [idEmprendimiento]);
+
+           -- Relacionamos la reserva con su emprendimiento.
+           INNER JOIN emprendimiento e
+                ON r.id_emprendimiento = e.id_emprendimiento
+
+           -- Verificamos el emprendimiento y su propietaria.
+           WHERE r.id_emprendimiento = $1
+            AND e.id_emprendedora = $2
+
+           ORDER BY r.fecha_hora_inicio;
+        `, [idEmprendimiento, req.session.idEmprendedora]);
 
         // Enviamos las reservas al navegador.
         res.json(resultado.rows);
@@ -576,7 +669,8 @@ app.get("/api/reservas", async (req, res) => {
 // Ruta para cancelar una reserva.
 // Es provisional para desarrollo local: requiere autenticación
 // y autorización antes de publicar el sistema.
-app.patch("/api/reservas/:id/cancelar", async (req, res) => {
+// Solo las emprendedoras autenticadas pueden solicitar cancelaciones.
+app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
     try {
         // Obtenemos el identificador de la reserva.
         const idReserva = Number(req.params.id);
@@ -591,10 +685,17 @@ app.patch("/api/reservas/:id/cancelar", async (req, res) => {
         // Cancelamos únicamente reservas pendientes o confirmadas.
         // RETURNING nos devuelve la reserva modificada.
         const resultado = await pool.query(`
-            UPDATE reserva
-            SET estado = 'cancelada'
-            WHERE id_reserva = $1
-              AND estado IN ('pendiente_abono', 'confirmada')
+           UPDATE reserva
+           SET estado = 'cancelada'
+           WHERE id_reserva = $1
+            AND estado IN ('pendiente_abono', 'confirmada')
+
+        -- Solo permitimos cancelar reservas de emprendimientos propios.
+           AND id_emprendimiento IN (
+          SELECT id_emprendimiento
+          FROM emprendimiento
+          WHERE id_emprendedora = $2
+  )
             RETURNING
                 id_reserva,
                 id_clienta,
@@ -605,14 +706,19 @@ app.patch("/api/reservas/:id/cancelar", async (req, res) => {
                     fecha_hora_inicio,
                     'YYYY-MM-DD"T"HH24:MI:SS'
                 ) AS fecha_hora_inicio;
-        `, [idReserva]);
+      `, [idReserva, req.session.idEmprendedora]);
 
         // Si no se modificó ninguna fila, comprobamos si existe.
         if (resultado.rows.length === 0) {
-            const existente = await pool.query(
-                "SELECT estado FROM reserva WHERE id_reserva = $1",
-                [idReserva]
-            );
+            // Comprobamos si la reserva existe dentro de un emprendimiento propio.
+    const existente = await pool.query(`
+       SELECT r.estado
+       FROM reserva r
+       INNER JOIN emprendimiento e
+        ON r.id_emprendimiento = e.id_emprendimiento
+       WHERE r.id_reserva = $1
+        AND e.id_emprendedora = $2
+`, [idReserva, req.session.idEmprendedora]);
 
             if (existente.rows.length === 0) {
                 return res.status(404).json({
@@ -636,6 +742,312 @@ app.patch("/api/reservas/:id/cancelar", async (req, res) => {
 
         return res.status(500).json({
             mensaje: "No se pudo cancelar la reserva"
+        });
+    }
+});
+// Ruta para registrar nuevas emprendedoras en Meraki.
+app.post("/api/auth/registro", async (req, res) => {
+    try {
+        // Recibimos los datos enviados desde el formulario.
+        const {
+            nombre,
+            apellido,
+            rut,
+            correo,
+            password,
+            telefono
+        } = req.body || {};
+
+        // Comprobamos que los datos obligatorios sean textos válidos.
+        if (
+            [nombre, apellido, rut, correo, password].some(
+                dato => typeof dato !== "string" || dato.trim() === ""
+            )
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes completar todos los campos obligatorios"
+            });
+        }
+
+        // Comprobamos que los campos no superen límites razonables.
+        if (
+            nombre.length > 100 ||
+            apellido.length > 100 ||
+            rut.length > 20 ||
+            correo.length > 150 ||
+            (telefono != null &&
+                (typeof telefono !== "string" || telefono.length > 20))
+        ) {
+            return res.status(400).json({
+                mensaje: "Uno o más campos superan el tamaño permitido"
+            });
+        }
+
+        // Normalizamos los datos para evitar diferencias innecesarias.
+        const nombreLimpio = nombre.trim();
+        const apellidoLimpio = apellido.trim();
+        const rutLimpio = rut.trim().toUpperCase();
+        const correoLimpio = correo.trim().toLowerCase();
+        const telefonoLimpio = telefono?.trim() || null;
+
+        // Validamos un formato básico de correo electrónico.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio)) {
+            return res.status(400).json({
+                mensaje: "El correo electrónico no tiene un formato válido"
+            });
+        }
+
+        // Exigimos una contraseña de al menos 12 caracteres.
+        // bcrypt trabaja con un máximo de 72 bytes de contraseña.
+        if (
+            password.length < 12 ||
+            Buffer.byteLength(password, "utf8") > 72
+        ) {
+            return res.status(400).json({
+                mensaje: "La contraseña debe tener al menos 12 caracteres y no superar 72 bytes"
+            });
+        }
+
+        // Validación básica del formato del RUT.
+        // Más adelante agregaremos la comprobación del dígito verificador.
+        if (!/^[0-9.\-K]+$/.test(rutLimpio)) {
+            return res.status(400).json({
+                mensaje: "El RUT contiene caracteres no permitidos"
+            });
+        }
+
+        // Generamos el hash. Nunca guardamos la contraseña original.
+        const passwordHash = await bcrypt.hash(password, 12);
+
+        // Registramos la emprendedora en PostgreSQL.
+        const resultado = await pool.query(`
+            INSERT INTO emprendedora (
+                nombre,
+                apellido,
+                rut,
+                correo,
+                password_hash,
+                telefono
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING
+                id_emprendedora,
+                nombre,
+                apellido,
+                rut,
+                correo,
+                telefono;
+        `, [
+            nombreLimpio,
+            apellidoLimpio,
+            rutLimpio,
+            correoLimpio,
+            passwordHash,
+            telefonoLimpio
+        ]);
+
+        // Respondemos sin mostrar la contraseña ni su hash.
+        return res.status(201).json({
+            mensaje: "Emprendedora registrada correctamente",
+            emprendedora: resultado.rows[0]
+        });
+
+    } catch (error) {
+
+        // PostgreSQL utiliza 23505 para valores UNIQUE duplicados.
+        if (error.code === "23505") {
+            return res.status(409).json({
+                mensaje: "El correo o RUT ya está registrado"
+            });
+        }
+
+        console.error("Error al registrar emprendedora:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo registrar la emprendedora"
+        });
+    }
+});
+// Ruta para comprobar las credenciales de una emprendedora.
+app.post("/api/auth/login", async (req, res) => {
+    // Mensaje temporal para comprobar que esta ruta recibe solicitudes.
+console.log("MERAKI: solicitud de login recibida");
+    try {
+        // Recibimos el correo y la contraseña.
+        const { correo, password } = req.body || {};
+
+        // Validamos los datos recibidos.
+        if (
+            typeof correo !== "string" ||
+            typeof password !== "string" ||
+            correo.trim() === "" ||
+            password === ""
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes ingresar correo y contraseña"
+            });
+        }
+
+        // Normalizamos el correo electrónico.
+        const correoLimpio = correo.trim().toLowerCase();
+
+        // Buscamos la cuenta y su contraseña protegida.
+        const resultado = await pool.query(`
+            SELECT
+                id_emprendedora,
+                nombre,
+                apellido,
+                correo,
+                password_hash,
+                estado
+            FROM emprendedora
+            WHERE correo = $1;
+        `, [correoLimpio]);
+
+        // Si el correo no existe, rechazamos el acceso.
+        if (resultado.rows.length === 0) {
+            return res.status(401).json({
+                mensaje: "Correo o contraseña incorrectos"
+            });
+        }
+
+        const emprendedora = resultado.rows[0];
+
+        // Comparamos la contraseña recibida con el hash.
+        const passwordCorrecta = await bcrypt.compare(
+            password,
+            emprendedora.password_hash
+        );
+
+        if (!passwordCorrecta) {
+            return res.status(401).json({
+                mensaje: "Correo o contraseña incorrectos"
+            });
+        }
+
+        // Comprobamos que la cuenta esté activa.
+        if (emprendedora.estado !== "activa") {
+            return res.status(403).json({
+                mensaje: "La cuenta no está activa"
+            });
+        }
+
+        // Creamos una nueva sesión después de verificar las credenciales.
+await new Promise((resolve, reject) => {
+    req.session.regenerate((error) => {
+        if (error) reject(error);
+        else resolve();
+    });
+});
+
+// Guardamos el identificador de la emprendedora conectada.
+req.session.idEmprendedora = emprendedora.id_emprendedora;
+
+// Guardamos la sesión en PostgreSQL.
+await new Promise((resolve, reject) => {
+    req.session.save((error) => {
+        if (error) reject(error);
+        else resolve();
+    });
+});
+        // Respondemos sin incluir la contraseña ni su hash.
+        return res.json({
+            mensaje: "Credenciales verificadas correctamente",
+            emprendedora: {
+                id_emprendedora: emprendedora.id_emprendedora,
+                nombre: emprendedora.nombre,
+                apellido: emprendedora.apellido,
+                correo: emprendedora.correo
+            }
+        });
+
+    } catch (error) {
+        console.error("Error al verificar credenciales:", error.message);
+
+        return res.status(500).json({
+            mensaje: "Error al verificar las credenciales"
+        });
+    }
+});
+// Ruta para consultar la emprendedora que inició sesión.
+app.get("/api/auth/yo", async (req, res) => {
+    try {
+        // Comprobamos si existe una sesión autenticada.
+        if (!req.session.idEmprendedora) {
+            return res.status(401).json({
+                mensaje: "Debes iniciar sesión"
+            });
+        }
+
+        // Consultamos los datos actuales de la emprendedora.
+        const resultado = await pool.query(`
+            SELECT
+                id_emprendedora,
+                nombre,
+                apellido,
+                correo
+            FROM emprendedora
+            WHERE id_emprendedora = $1
+              AND estado = 'activa';
+        `, [req.session.idEmprendedora]);
+
+        // Rechazamos el acceso si la cuenta ya no está activa.
+        if (resultado.rows.length === 0) {
+            return res.status(401).json({
+                mensaje: "La sesión ya no corresponde a una cuenta activa"
+            });
+        }
+
+        // Devolvemos los datos sin incluir contraseñas.
+        return res.json({
+            mensaje: "Sesión activa",
+            emprendedora: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al consultar sesión:", error.message);
+
+        return res.status(500).json({
+            mensaje: "Error al consultar la sesión"
+        });
+    }
+});
+// Ruta para cerrar la sesión de una emprendedora.
+app.post("/api/auth/logout", async (req, res) => {
+    try {
+        // Comprobamos que exista una sesión autenticada.
+        if (!req.session.idEmprendedora) {
+            return res.status(401).json({
+                mensaje: "Debes iniciar sesión"
+            });
+        }
+
+        // Eliminamos la sesión almacenada en PostgreSQL.
+        await new Promise((resolve, reject) => {
+            req.session.destroy((error) => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
+
+        // Eliminamos la cookie del navegador.
+        res.clearCookie("meraki.sid", {
+            path: "/",
+            httpOnly: true,
+            sameSite: "lax",
+            secure: false
+        });
+
+        // Confirmamos el cierre de sesión.
+        return res.json({
+            mensaje: "Sesión cerrada correctamente"
+        });
+
+    } catch (error) {
+        console.error("Error al cerrar sesión:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo cerrar la sesión"
         });
     }
 });
