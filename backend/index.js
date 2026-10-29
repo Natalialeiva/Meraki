@@ -172,6 +172,459 @@ app.get("/api/servicios", async (req, res) => {
     }
 });
 
+// Ruta para registrar nuevos servicios en Meraki.
+// Solo las emprendedoras autenticadas pueden crear servicios.
+app.post("/api/servicios", verificarSesion, async (req, res) => {
+    try {
+
+        // Recibimos los datos del servicio.
+        const {
+            id_emprendimiento,
+            id_categoria,
+            nombre,
+            descripcion,
+            precio,
+            duracion_min,
+            monto_abono
+        } = req.body || {};
+
+        // Convertimos el identificador del emprendimiento a número.
+const idEmprendimiento = Number(id_emprendimiento);
+
+// Comprobamos que sea un número entero positivo.
+if (
+    !Number.isSafeInteger(idEmprendimiento) ||
+    idEmprendimiento <= 0
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar un emprendimiento válido"
+    });
+}
+
+// Comprobamos que el emprendimiento pertenezca
+// a la emprendedora que inició sesión.
+const propiedad = await pool.query(`
+    SELECT id_emprendimiento
+    FROM emprendimiento
+    WHERE id_emprendimiento = $1
+      AND id_emprendedora = $2;
+`, [idEmprendimiento, req.session.idEmprendedora]);
+
+// Rechazamos la operación si el emprendimiento no es suyo.
+if (propiedad.rows.length === 0) {
+    return res.status(403).json({
+        mensaje: "No tienes permiso para crear servicios en este emprendimiento"
+    });
+}
+// Convertimos el identificador de la categoría a número.
+const idCategoria = Number(id_categoria);
+
+// Comprobamos que sea un entero positivo.
+if (!Number.isSafeInteger(idCategoria) || idCategoria <= 0) {
+    return res.status(400).json({
+        mensaje: "Debes indicar una categoría válida"
+    });
+}
+
+// Comprobamos que la categoría exista en PostgreSQL.
+const categoria = await pool.query(`
+    SELECT id_categoria
+    FROM categoria
+    WHERE id_categoria = $1;
+`, [idCategoria]);
+
+if (categoria.rows.length === 0) {
+    return res.status(400).json({
+        mensaje: "La categoría indicada no existe"
+    });
+}
+
+// Validamos el nombre del servicio.
+if (
+    typeof nombre !== "string" ||
+    nombre.trim() === "" ||
+    nombre.trim().length > 150
+) {
+    return res.status(400).json({
+        mensaje: "El nombre del servicio debe tener entre 1 y 150 caracteres"
+    });
+}
+
+// Preparamos el nombre sin espacios innecesarios.
+const nombreLimpio = nombre.trim();
+// Validamos que el precio sea un número mayor que cero.
+if (
+    typeof precio !== "number" ||
+    !Number.isFinite(precio) ||
+    precio <= 0
+) {
+    return res.status(400).json({
+        mensaje: "El precio debe ser un número mayor que cero"
+    });
+}
+
+// Validamos que la duración sea un entero positivo.
+if (
+    !Number.isSafeInteger(duracion_min) ||
+    duracion_min <= 0
+) {
+    return res.status(400).json({
+        mensaje: "La duración debe ser un número entero positivo"
+    });
+}
+
+// Validamos que el abono no sea negativo ni supere el precio.
+if (
+    typeof monto_abono !== "number" ||
+    !Number.isFinite(monto_abono) ||
+    monto_abono < 0 ||
+    monto_abono > precio
+) {
+    return res.status(400).json({
+        mensaje: "El abono debe estar entre cero y el precio del servicio"
+    });
+}
+
+// Validamos la descripción opcional.
+if (
+    descripcion != null &&
+    (typeof descripcion !== "string" || descripcion.length > 1000)
+) {
+    return res.status(400).json({
+        mensaje: "La descripción no debe superar los 1000 caracteres"
+    });
+}
+
+// Preparamos la descripción para guardarla.
+const descripcionLimpia = descripcion?.trim() || null;
+// Registramos el nuevo servicio en PostgreSQL.
+const resultado = await pool.query(`
+    INSERT INTO servicio (
+        id_emprendimiento,
+        id_categoria,
+        nombre,
+        descripcion,
+        precio,
+        duracion_min,
+        monto_abono
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING
+        id_servicio,
+        id_emprendimiento,
+        id_categoria,
+        nombre,
+        descripcion,
+        precio,
+        duracion_min,
+        monto_abono,
+        activo;
+`, [
+    idEmprendimiento,
+    idCategoria,
+    nombreLimpio,
+    descripcionLimpia,
+    precio,
+    duracion_min,
+    monto_abono
+]);
+
+// Confirmamos que el servicio fue registrado.
+return res.status(201).json({
+    mensaje: "Servicio registrado correctamente",
+    servicio: resultado.rows[0]
+});
+
+
+
+
+    } catch (error) {
+        console.error("Error al crear servicio:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo registrar el servicio"
+        });
+    }
+});
+
+
+// Ruta para modificar servicios del Back Office.
+// Solo las emprendedoras autenticadas pueden editar servicios.
+app.patch("/api/servicios/:id", verificarSesion, async (req, res) => {
+    try {
+
+        // Obtenemos el identificador del servicio.
+        const idServicio = Number(req.params.id);
+
+        // Comprobamos que el identificador sea válido.
+        if (!Number.isSafeInteger(idServicio) || idServicio <= 0) {
+            return res.status(400).json({
+                mensaje: "El identificador del servicio no es válido"
+            });
+        }
+
+       // Comprobamos que el servicio pertenezca a un emprendimiento
+// de la emprendedora que inició sesión.
+const propiedad = await pool.query(`
+    SELECT s.id_servicio
+    FROM servicio s
+    INNER JOIN emprendimiento e
+        ON s.id_emprendimiento = e.id_emprendimiento
+    WHERE s.id_servicio = $1
+      AND e.id_emprendedora = $2;
+`, [idServicio, req.session.idEmprendedora]);
+
+// Si el servicio no existe o no pertenece a la emprendedora,
+// no permitimos modificarlo.
+if (propiedad.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "El servicio no existe"
+    });
+}
+
+// Recibimos los campos que la emprendedora desea modificar.
+const {
+    nombre,
+    descripcion,
+    precio,
+    duracion_min,
+    monto_abono
+} = req.body || {};
+
+// Comprobamos que se haya enviado al menos un campo permitido.
+if (
+    nombre === undefined &&
+    descripcion === undefined &&
+    precio === undefined &&
+    duracion_min === undefined &&
+    monto_abono === undefined
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar al menos un campo para modificar"
+    });
+}
+
+// Validamos el nombre solamente si fue enviado.
+if (nombre !== undefined) {
+    if (
+        typeof nombre !== "string" ||
+        nombre.trim() === "" ||
+        nombre.trim().length > 150
+    ) {
+        return res.status(400).json({
+            mensaje: "El nombre del servicio debe tener entre 1 y 150 caracteres"
+        });
+    }
+}
+
+// Validamos la descripción solamente si fue enviada.
+if (descripcion !== undefined) {
+    if (
+        descripcion !== null &&
+        (
+            typeof descripcion !== "string" ||
+            descripcion.length > 1000
+        )
+    ) {
+        return res.status(400).json({
+            mensaje: "La descripción no debe superar los 1000 caracteres"
+        });
+    }
+}
+
+// Validamos el precio si fue enviado.
+if (precio !== undefined) {
+    if (
+        typeof precio !== "number" ||
+        !Number.isFinite(precio) ||
+        precio <= 0
+    ) {
+        return res.status(400).json({
+            mensaje: "El precio debe ser un número mayor que cero"
+        });
+    }
+}
+
+// Validamos la duración si fue enviada.
+if (duracion_min !== undefined) {
+    if (
+        !Number.isSafeInteger(duracion_min) ||
+        duracion_min <= 0
+    ) {
+        return res.status(400).json({
+            mensaje: "La duración debe ser un número entero positivo"
+        });
+    }
+}
+
+// Validamos el abono si fue enviado.
+if (monto_abono !== undefined) {
+    if (
+        typeof monto_abono !== "number" ||
+        !Number.isFinite(monto_abono) ||
+        monto_abono < 0
+    ) {
+        return res.status(400).json({
+            mensaje: "El abono debe ser un número mayor o igual a cero"
+        });
+    }
+}
+
+// Consultamos los valores actuales del servicio.
+// Los necesitamos porque PATCH permite modificar solo algunos campos.
+const servicioActual = await pool.query(`
+    SELECT precio, monto_abono
+    FROM servicio
+    WHERE id_servicio = $1;
+`, [idServicio]);
+
+// Obtenemos los valores actuales desde PostgreSQL.
+const precioActual = Number(servicioActual.rows[0].precio);
+const abonoActual = Number(servicioActual.rows[0].monto_abono);
+
+// Si enviaron un precio o abono nuevo, lo utilizamos.
+// Si no, conservamos el valor que ya estaba registrado.
+const precioFinal = precio !== undefined ? precio : precioActual;
+const abonoFinal = monto_abono !== undefined ? monto_abono : abonoActual;
+
+// Comprobamos que el abono no supere el precio final.
+if (abonoFinal > precioFinal) {
+    return res.status(400).json({
+        mensaje: "El abono no puede superar el precio del servicio"
+    });
+}
+
+// Actualizamos únicamente los campos enviados.
+// Los demás conservan sus valores actuales.
+const resultado = await pool.query(`
+    UPDATE servicio
+    SET
+        nombre = COALESCE($1, nombre),
+        descripcion = CASE
+            WHEN $2::boolean THEN $3::text
+            ELSE descripcion
+        END,
+        precio = COALESCE($4, precio),
+        duracion_min = COALESCE($5, duracion_min),
+        monto_abono = COALESCE($6, monto_abono)
+    WHERE id_servicio = $7
+      AND id_emprendimiento IN (
+          SELECT id_emprendimiento
+          FROM emprendimiento
+          WHERE id_emprendedora = $8
+      )
+    RETURNING
+        id_servicio,
+        id_emprendimiento,
+        id_categoria,
+        nombre,
+        descripcion,
+        precio,
+        duracion_min,
+        monto_abono,
+        activo;
+`, [
+    nombre !== undefined ? nombre.trim() : null,
+    descripcion !== undefined,
+    descripcion == null ? null : descripcion.trim(),
+    precio !== undefined ? precio : null,
+    duracion_min !== undefined ? duracion_min : null,
+    monto_abono !== undefined ? monto_abono : null,
+    idServicio,
+    req.session.idEmprendedora
+]);
+
+// Comprobamos que el servicio haya sido actualizado.
+if (resultado.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "El servicio no existe"
+    });
+}
+
+// Respondemos con los datos actualizados.
+return res.json({
+    mensaje: "Servicio actualizado correctamente",
+    servicio: resultado.rows[0]
+});
+
+    } catch (error) {
+        console.error("Error al modificar servicio:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo modificar el servicio"
+        });
+    }
+});
+
+
+
+ // Ruta para desactivar servicios del Back Office.
+ // Solo las emprendedoras autenticadas pueden desactivar sus servicios.
+ app.patch("/api/servicios/:id/desactivar", verificarSesion, async (req, res) => {
+     try {
+         // Obtenemos el identificador del servicio.
+         const idServicio = Number(req.params.id);
+
+         // Comprobamos que sea un identificador válido.
+         if (!Number.isSafeInteger(idServicio) || idServicio <= 0) {
+             return res.status(400).json({
+                 mensaje: "El identificador del servicio no es válido"
+             });
+         }
+
+         // Desactivamos únicamente un servicio activo
+         // perteneciente a la emprendedora autenticada.
+         const resultado = await pool.query(`
+             UPDATE servicio
+             SET activo = FALSE
+             WHERE id_servicio = $1
+               AND activo = TRUE
+               AND id_emprendimiento IN (
+                   SELECT id_emprendimiento
+                   FROM emprendimiento
+                   WHERE id_emprendedora = $2
+               )
+             RETURNING id_servicio, nombre, activo;
+         `, [idServicio, req.session.idEmprendedora]);
+
+         // Si no se actualizó, comprobamos si pertenece a la emprendedora.
+         if (resultado.rows.length === 0) {
+             const existente = await pool.query(`
+                 SELECT s.id_servicio
+                 FROM servicio s
+                 INNER JOIN emprendimiento e
+                     ON s.id_emprendimiento = e.id_emprendimiento
+                 WHERE s.id_servicio = $1
+                   AND e.id_emprendedora = $2;
+             `, [idServicio, req.session.idEmprendedora]);
+
+             if (existente.rows.length === 0) {
+                 return res.status(404).json({
+                     mensaje: "El servicio no existe"
+                 });
+             }
+
+             return res.status(409).json({
+                 mensaje: "El servicio ya está desactivado"
+             });
+         }
+
+         return res.json({
+             mensaje: "Servicio desactivado correctamente",
+             servicio: resultado.rows[0]
+         });
+
+     } catch (error) {
+         console.error("Error al desactivar servicio:", error.message);
+
+         return res.status(500).json({
+             mensaje: "No se pudo desactivar el servicio"
+         });
+     }
+ });
+
+
+
 
 // Ruta para consultar los horarios de atención.
 app.get("/api/disponibilidad", async (req, res) => {
