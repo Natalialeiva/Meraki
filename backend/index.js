@@ -244,6 +244,520 @@ app.get("/api/mis-trabajadoras", verificarSesion, async (req, res) => {
         });
     }
 });
+
+// Ruta para consultar los horarios de atención del Back Office.
+// Incluye horarios activos e inactivos de los negocios propios.
+app.get("/api/mis-horarios", verificarSesion, async (req, res) => {
+    try {
+        // Consultamos los horarios de las trabajadoras
+        // de los emprendimientos de la sesión.
+        const resultado = await pool.query(`
+            SELECT
+                h.id_horario,
+                h.id_trabajadora,
+                t.nombre AS trabajadora,
+                t.id_emprendimiento,
+                e.nombre AS emprendimiento,
+                h.dia_semana,
+                h.hora_inicio,
+                h.hora_fin,
+                h.activo
+            FROM horario_atencion h
+            INNER JOIN trabajadora t
+                ON h.id_trabajadora = t.id_trabajadora
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            WHERE e.id_emprendedora = $1
+            ORDER BY
+                t.id_trabajadora,
+                h.dia_semana,
+                h.hora_inicio;
+        `, [req.session.idEmprendedora]);
+
+        return res.json(resultado.rows);
+
+    } catch (error) {
+        console.error("Error al consultar horarios:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudieron obtener los horarios"
+        });
+    }
+});
+// Ruta para registrar horarios de atención del Back Office.
+// Solo las emprendedoras autenticadas pueden registrar horarios.
+app.post("/api/horarios", verificarSesion, async (req, res) => {
+    try {
+        // Recibimos los datos del horario.
+        const {
+            id_trabajadora,
+            dia_semana,
+            hora_inicio,
+            hora_fin
+        } = req.body || {};
+
+        // Convertimos el identificador de la trabajadora a número.
+const idTrabajadora = Number(id_trabajadora);
+
+// Validamos que sea un identificador entero positivo.
+if (
+    !Number.isSafeInteger(idTrabajadora) ||
+    idTrabajadora <= 0
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar una trabajadora válida"
+    });
+}
+
+// Comprobamos que la trabajadora pertenezca a un
+// emprendimiento de la emprendedora autenticada.
+const propiedad = await pool.query(`
+    SELECT t.id_trabajadora, t.activa
+    FROM trabajadora t
+    INNER JOIN emprendimiento e
+        ON t.id_emprendimiento = e.id_emprendimiento
+    WHERE t.id_trabajadora = $1
+      AND e.id_emprendedora = $2;
+`, [idTrabajadora, req.session.idEmprendedora]);
+
+// Rechazamos trabajadoras inexistentes o ajenas.
+if (propiedad.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "La trabajadora no existe"
+    });
+}
+
+// No permitimos registrar horarios para trabajadoras desactivadas.
+if (propiedad.rows[0].activa === false) {
+    return res.status(409).json({
+        mensaje: "No puedes registrar horarios para una trabajadora desactivada"
+    });
+}
+
+// Definimos los días válidos para mantener el mismo
+// formato utilizado por la API de disponibilidad.
+const diasValidos = [
+    "lunes",
+    "martes",
+    "miercoles",
+    "jueves",
+    "viernes",
+    "sabado",
+    "domingo"
+];
+
+// Validamos el día de la semana.
+if (
+    typeof dia_semana !== "string" ||
+    !diasValidos.includes(dia_semana.trim().toLowerCase())
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar un día de la semana válido"
+    });
+}
+
+// Normalizamos el día antes de guardarlo.
+const diaSemanaLimpio = dia_semana.trim().toLowerCase();
+
+// Validamos que las horas tengan formato HH:MM o HH:MM:SS.
+const formatoHora = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+if (
+    typeof hora_inicio !== "string" ||
+    typeof hora_fin !== "string" ||
+    !formatoHora.test(hora_inicio) ||
+    !formatoHora.test(hora_fin)
+) {
+    return res.status(400).json({
+        mensaje: "Las horas deben tener formato HH:MM o HH:MM:SS"
+    });
+}
+
+// Normalizamos las horas a HH:MM:SS.
+const horaInicioLimpia =
+    hora_inicio.length === 5 ? `${hora_inicio}:00` : hora_inicio;
+
+const horaFinLimpia =
+    hora_fin.length === 5 ? `${hora_fin}:00` : hora_fin;
+
+// Comprobamos que el horario termine después de comenzar.
+if (horaFinLimpia <= horaInicioLimpia) {
+    return res.status(400).json({
+        mensaje: "La hora de término debe ser posterior a la hora de inicio"
+    });
+}
+
+// Comprobamos si ya existe un horario activo que se cruce
+// con el nuevo horario de la misma trabajadora y día.
+const superposicion = await pool.query(`
+    SELECT id_horario
+    FROM horario_atencion
+    WHERE id_trabajadora = $1
+      AND dia_semana = $2
+      AND activo = TRUE
+      AND hora_inicio < $4::time
+      AND hora_fin > $3::time
+    LIMIT 1;
+`, [
+    idTrabajadora,
+    diaSemanaLimpio,
+    horaInicioLimpia,
+    horaFinLimpia
+]);
+
+// Si encontramos un horario superpuesto, rechazamos el registro.
+if (superposicion.rows.length > 0) {
+    return res.status(409).json({
+        mensaje: "La trabajadora ya tiene un horario que se superpone con el indicado"
+    });
+}
+
+// Registramos el horario de atención en PostgreSQL.
+const resultado = await pool.query(`
+    INSERT INTO horario_atencion (
+        id_trabajadora,
+        dia_semana,
+        hora_inicio,
+        hora_fin
+    )
+    VALUES ($1, $2, $3::time, $4::time)
+    RETURNING
+        id_horario,
+        id_trabajadora,
+        dia_semana,
+        hora_inicio,
+        hora_fin,
+        activo;
+`, [
+    idTrabajadora,
+    diaSemanaLimpio,
+    horaInicioLimpia,
+    horaFinLimpia
+]);
+
+// Confirmamos que el horario fue registrado.
+return res.status(201).json({
+    mensaje: "Horario registrado correctamente",
+    horario: resultado.rows[0]
+});
+
+    } catch (error) {
+    // Detectamos cuando PostgreSQL rechaza horarios superpuestos.
+    if (error.code === "23P01") {
+        return res.status(409).json({
+            mensaje: "La trabajadora ya tiene un horario que se superpone con el indicado"
+        });
+    }
+
+    console.error("Error al registrar horario:", error.message);
+
+    return res.status(500).json({
+        mensaje: "No se pudo registrar el horario"
+    });
+}
+});
+// Ruta para editar horarios de atención del Back Office.
+app.patch("/api/horarios/:id", verificarSesion, async (req, res) => {
+    try {
+        // Identificamos el horario que se desea modificar.
+        const idHorario = Number(req.params.id);
+
+        // Validamos el identificador.
+        if (!Number.isSafeInteger(idHorario) || idHorario <= 0) {
+            return res.status(400).json({
+                mensaje: "Debes indicar un horario válido"
+            });
+        }
+
+       // Buscamos el horario y comprobamos que pertenezca
+// a un emprendimiento de la emprendedora autenticada.
+const propiedad = await pool.query(`
+    SELECT
+        h.id_horario,
+        h.id_trabajadora,
+        h.dia_semana,
+        h.hora_inicio,
+        h.hora_fin,
+        h.activo
+    FROM horario_atencion h
+    INNER JOIN trabajadora t
+        ON h.id_trabajadora = t.id_trabajadora
+    INNER JOIN emprendimiento e
+        ON t.id_emprendimiento = e.id_emprendimiento
+    WHERE h.id_horario = $1
+      AND e.id_emprendedora = $2;
+`, [idHorario, req.session.idEmprendedora]);
+
+// Rechazamos horarios inexistentes o de otros emprendimientos.
+if (propiedad.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "El horario no existe"
+    });
+}
+
+// Guardamos los datos actuales para utilizarlos al editar.
+const horarioActual = propiedad.rows[0];
+
+// No permitimos editar horarios desactivados.
+if (horarioActual.activo === false) {
+    return res.status(409).json({
+        mensaje: "No puedes editar un horario desactivado"
+    });
+}
+
+       // Recibimos los datos que la emprendedora desea modificar.
+const {
+    dia_semana,
+    hora_inicio,
+    hora_fin
+} = req.body || {};
+
+// Si no se envía un campo, conservamos su valor actual.
+const nuevoDia = dia_semana === undefined
+    ? horarioActual.dia_semana
+    : dia_semana;
+
+const nuevaHoraInicio = hora_inicio === undefined
+    ? horarioActual.hora_inicio
+    : hora_inicio;
+
+const nuevaHoraFin = hora_fin === undefined
+    ? horarioActual.hora_fin
+    : hora_fin;
+
+// Definimos los días de atención válidos.
+const diasValidos = [
+    "lunes",
+    "martes",
+    "miercoles",
+    "jueves",
+    "viernes",
+    "sabado",
+    "domingo"
+];
+
+// Validamos el día.
+if (
+    typeof nuevoDia !== "string" ||
+    !diasValidos.includes(nuevoDia.trim().toLowerCase())
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar un día de la semana válido"
+    });
+}
+
+const diaSemanaLimpio = nuevoDia.trim().toLowerCase();
+
+// Validamos el formato de las horas.
+const formatoHora = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+if (
+    typeof nuevaHoraInicio !== "string" ||
+    typeof nuevaHoraFin !== "string" ||
+    !formatoHora.test(nuevaHoraInicio) ||
+    !formatoHora.test(nuevaHoraFin)
+) {
+    return res.status(400).json({
+        mensaje: "Las horas deben tener formato HH:MM o HH:MM:SS"
+    });
+}
+
+// Normalizamos las horas.
+const horaInicioLimpia = nuevaHoraInicio.length === 5
+    ? `${nuevaHoraInicio}:00`
+    : nuevaHoraInicio;
+
+const horaFinLimpia = nuevaHoraFin.length === 5
+    ? `${nuevaHoraFin}:00`
+    : nuevaHoraFin;
+
+// La hora de término debe ser posterior a la de inicio.
+if (horaFinLimpia <= horaInicioLimpia) {
+    return res.status(400).json({
+        mensaje: "La hora de término debe ser posterior a la hora de inicio"
+    });
+}
+
+// Comprobamos que el nuevo horario no se superponga
+// con otro horario activo de la misma trabajadora.
+const superposicion = await pool.query(`
+    SELECT id_horario
+    FROM horario_atencion
+    WHERE id_trabajadora = $1
+      AND dia_semana = $2
+      AND activo = TRUE
+      AND id_horario <> $3
+      AND hora_inicio < $5::time
+      AND hora_fin > $4::time
+    LIMIT 1;
+`, [
+    horarioActual.id_trabajadora,
+    diaSemanaLimpio,
+    idHorario,
+    horaInicioLimpia,
+    horaFinLimpia
+]);
+
+// Rechazamos la edición si encontramos un conflicto.
+if (superposicion.rows.length > 0) {
+    return res.status(409).json({
+        mensaje: "El horario modificado se superpone con otro horario de la trabajadora"
+    });
+}
+
+// Actualizamos el horario en PostgreSQL.
+const resultado = await pool.query(`
+    UPDATE horario_atencion
+    SET
+        dia_semana = $1,
+        hora_inicio = $2::time,
+        hora_fin = $3::time
+    WHERE id_horario = $4
+      AND activo = TRUE
+      AND EXISTS (
+          SELECT 1
+          FROM trabajadora t
+          INNER JOIN emprendimiento e
+              ON t.id_emprendimiento = e.id_emprendimiento
+          WHERE t.id_trabajadora = horario_atencion.id_trabajadora
+            AND e.id_emprendedora = $5
+      )
+    RETURNING
+        id_horario,
+        id_trabajadora,
+        dia_semana,
+        hora_inicio,
+        hora_fin,
+        activo;
+`, [
+    diaSemanaLimpio,
+    horaInicioLimpia,
+    horaFinLimpia,
+    idHorario,
+    req.session.idEmprendedora
+]);
+
+// Comprobamos que el horario haya sido actualizado.
+if (resultado.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "El horario no está disponible para edición"
+    });
+}
+
+// Confirmamos la modificación.
+return res.status(200).json({
+    mensaje: "Horario actualizado correctamente",
+    horario: resultado.rows[0]
+});
+
+    } catch (error) {
+    // Detectamos conflictos de horarios desde PostgreSQL.
+    if (error.code === "23P01") {
+        return res.status(409).json({
+            mensaje: "El horario modificado se superpone con otro horario de la trabajadora"
+        });
+    }
+
+    console.error("Error al editar horario:", error.message);
+
+    return res.status(500).json({
+        mensaje: "No se pudo editar el horario"
+    });
+}
+});
+// Ruta para desactivar horarios de atención del Back Office.
+app.patch("/api/horarios/:id/desactivar", verificarSesion, async (req, res) => {
+    try {
+        // Obtenemos el identificador del horario.
+        const idHorario = Number(req.params.id);
+
+        // Validamos el identificador.
+        if (!Number.isSafeInteger(idHorario) || idHorario <= 0) {
+            return res.status(400).json({
+                mensaje: "Debes indicar un horario válido"
+            });
+        }
+
+      // Buscamos el horario y verificamos que pertenezca
+// a un emprendimiento de la emprendedora autenticada.
+const propiedad = await pool.query(`
+    SELECT
+        h.id_horario,
+        h.id_trabajadora,
+        h.activo
+    FROM horario_atencion h
+    INNER JOIN trabajadora t
+        ON h.id_trabajadora = t.id_trabajadora
+    INNER JOIN emprendimiento e
+        ON t.id_emprendimiento = e.id_emprendimiento
+    WHERE h.id_horario = $1
+      AND e.id_emprendedora = $2;
+`, [
+    idHorario,
+    req.session.idEmprendedora
+]);
+
+// Rechazamos horarios inexistentes o de otros emprendimientos.
+if (propiedad.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "El horario no existe"
+    });
+}
+
+// Comprobamos si el horario ya está desactivado.
+if (propiedad.rows[0].activo === false) {
+    return res.status(409).json({
+        mensaje: "El horario ya está desactivado"
+    });
+}
+
+        // Desactivamos el horario sin eliminarlo de PostgreSQL.
+const resultado = await pool.query(`
+    UPDATE horario_atencion
+    SET activo = FALSE
+    WHERE id_horario = $1
+      AND activo = TRUE
+      AND EXISTS (
+          SELECT 1
+          FROM trabajadora t
+          INNER JOIN emprendimiento e
+              ON t.id_emprendimiento = e.id_emprendimiento
+          WHERE t.id_trabajadora = horario_atencion.id_trabajadora
+            AND e.id_emprendedora = $2
+      )
+    RETURNING
+        id_horario,
+        id_trabajadora,
+        dia_semana,
+        hora_inicio,
+        hora_fin,
+        activo;
+`, [
+    idHorario,
+    req.session.idEmprendedora
+]);
+
+// Comprobamos que la desactivación se haya realizado.
+if (resultado.rows.length === 0) {
+    return res.status(409).json({
+        mensaje: "El horario no está disponible para desactivación"
+    });
+}
+
+// Confirmamos la desactivación.
+return res.status(200).json({
+    mensaje: "Horario desactivado correctamente",
+    horario: resultado.rows[0]
+});
+
+    } catch (error) {
+        console.error("Error al desactivar horario:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo desactivar el horario"
+        });
+    }
+});
 // Ruta para registrar nuevas trabajadoras en Meraki.
 // Solo las emprendedoras autenticadas pueden registrar trabajadoras.
 app.post("/api/trabajadoras", verificarSesion, async (req, res) => {

@@ -8,6 +8,8 @@ CREATE TYPE estado_emprendedora AS ENUM (
     'activa',
     'inactiva'
 );
+-- Habilita las comparaciones necesarias para evitar horarios superpuestos.
+CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- Tabla que almacena las cuentas de las emprendedoras.
 CREATE TABLE emprendedora (
@@ -185,6 +187,19 @@ CREATE TABLE horario_atencion (
     CONSTRAINT chk_horario_atencion_horas
         CHECK (hora_fin > hora_inicio)
 );
+-- Impide que una trabajadora tenga horarios activos superpuestos.
+ALTER TABLE horario_atencion
+ADD CONSTRAINT horario_atencion_sin_superposicion
+EXCLUDE USING gist (
+    id_trabajadora WITH =,
+    dia_semana WITH =,
+    tsrange(
+        DATE '2000-01-01' + hora_inicio,
+        DATE '2000-01-01' + hora_fin,
+        '[)'
+    ) WITH &&
+)
+WHERE (activo = TRUE);
 
 -- Tabla que registra los períodos en que una trabajadora no está disponible.
 CREATE TABLE bloqueo_horario (
