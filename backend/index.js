@@ -171,6 +171,427 @@ app.get("/api/servicios", async (req, res) => {
         });
     }
 });
+// Ruta para consultar los servicios propios del Back Office.
+// Incluye servicios activos y desactivados.
+app.get("/api/mis-servicios", verificarSesion, async (req, res) => {
+    try {
+
+        // Consultamos únicamente los servicios de los
+        // emprendimientos de la emprendedora autenticada.
+        const resultado = await pool.query(`
+            SELECT
+                s.id_servicio,
+                s.id_emprendimiento,
+                e.nombre AS emprendimiento,
+                s.id_categoria,
+                c.nombre AS categoria,
+                s.nombre AS servicio,
+                s.descripcion,
+                s.precio,
+                s.duracion_min,
+                s.monto_abono,
+                s.activo
+            FROM servicio s
+            INNER JOIN emprendimiento e
+                ON s.id_emprendimiento = e.id_emprendimiento
+            INNER JOIN categoria c
+                ON s.id_categoria = c.id_categoria
+            WHERE e.id_emprendedora = $1
+            ORDER BY s.id_servicio;
+        `, [req.session.idEmprendedora]);
+
+        // Enviamos los servicios al Back Office.
+        return res.json(resultado.rows);
+
+    } catch (error) {
+        console.error("Error al consultar servicios propios:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudieron obtener los servicios"
+        });
+    }
+});
+// Ruta para consultar las trabajadoras del Back Office.
+// Solo muestra las trabajadoras de los emprendimientos propios.
+app.get("/api/mis-trabajadoras", verificarSesion, async (req, res) => {
+    try {
+
+        // Consultamos las trabajadoras de la emprendedora autenticada.
+        const resultado = await pool.query(`
+            SELECT
+                t.id_trabajadora,
+                t.id_emprendimiento,
+                e.nombre AS emprendimiento,
+                t.nombre,
+                t.apellido,
+                t.descripcion,
+                t.activa
+            FROM trabajadora t
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            WHERE e.id_emprendedora = $1
+            ORDER BY t.id_trabajadora;
+        `, [req.session.idEmprendedora]);
+
+        // Enviamos las trabajadoras al Back Office.
+        return res.json(resultado.rows);
+
+    } catch (error) {
+        console.error("Error al consultar trabajadoras:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudieron obtener las trabajadoras"
+        });
+    }
+});
+// Ruta para registrar nuevas trabajadoras en Meraki.
+// Solo las emprendedoras autenticadas pueden registrar trabajadoras.
+app.post("/api/trabajadoras", verificarSesion, async (req, res) => {
+    try {
+
+        // Recibimos los datos de la trabajadora.
+        const {
+            id_emprendimiento,
+            nombre,
+            apellido,
+            descripcion
+        } = req.body || {};
+
+        // Convertimos el identificador del emprendimiento a número.
+const idEmprendimiento = Number(id_emprendimiento);
+
+// Comprobamos que sea un entero positivo.
+if (
+    !Number.isSafeInteger(idEmprendimiento) ||
+    idEmprendimiento <= 0
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar un emprendimiento válido"
+    });
+}
+
+// Verificamos que el emprendimiento pertenezca
+// a la emprendedora que inició sesión.
+const propiedad = await pool.query(`
+    SELECT id_emprendimiento
+    FROM emprendimiento
+    WHERE id_emprendimiento = $1
+      AND id_emprendedora = $2;
+`, [idEmprendimiento, req.session.idEmprendedora]);
+
+// Impedimos registrar trabajadoras en emprendimientos ajenos.
+if (propiedad.rows.length === 0) {
+    return res.status(403).json({
+        mensaje: "No tienes permiso para registrar trabajadoras en este emprendimiento"
+    });
+}
+
+// Validamos que el nombre sea obligatorio y no supere 100 caracteres.
+if (
+    typeof nombre !== "string" ||
+    nombre.trim() === "" ||
+    nombre.trim().length > 100
+) {
+    return res.status(400).json({
+        mensaje: "El nombre debe tener entre 1 y 100 caracteres"
+    });
+}
+
+// Validamos el apellido, que es opcional.
+if (
+    apellido != null &&
+    (
+        typeof apellido !== "string" ||
+        apellido.trim().length > 100
+    )
+) {
+    return res.status(400).json({
+        mensaje: "El apellido no debe superar 100 caracteres"
+    });
+}
+
+// Validamos la descripción, que también es opcional.
+if (
+    descripcion != null &&
+    (
+        typeof descripcion !== "string" ||
+        descripcion.length > 1000
+    )
+) {
+    return res.status(400).json({
+        mensaje: "La descripción no debe superar 1000 caracteres"
+    });
+}
+
+// Preparamos los datos para guardarlos en PostgreSQL.
+const nombreLimpio = nombre.trim();
+const apellidoLimpio = apellido?.trim() || null;
+const descripcionLimpia = descripcion?.trim() || null;
+
+// Registramos la trabajadora en PostgreSQL.
+const resultado = await pool.query(`
+    INSERT INTO trabajadora (
+        id_emprendimiento,
+        nombre,
+        apellido,
+        descripcion
+    )
+    VALUES ($1, $2, $3, $4)
+    RETURNING
+        id_trabajadora,
+        id_emprendimiento,
+        nombre,
+        apellido,
+        descripcion,
+        activa;
+`, [
+    idEmprendimiento,
+    nombreLimpio,
+    apellidoLimpio,
+    descripcionLimpia
+]);
+
+
+// Confirmamos que la trabajadora fue registrada.
+return res.status(201).json({
+    mensaje: "Trabajadora registrada correctamente",
+    trabajadora: resultado.rows[0]
+});
+
+    } catch (error) {
+        console.error("Error al registrar trabajadora:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo registrar la trabajadora"
+        });
+    }
+});
+
+// Ruta para modificar los datos de una trabajadora del Back Office.
+// Solo las emprendedoras autenticadas pueden modificar trabajadoras.
+app.patch("/api/trabajadoras/:id", verificarSesion, async (req, res) => {
+    try {
+        // Obtenemos el identificador de la trabajadora.
+        const idTrabajadora = Number(req.params.id);
+
+        // Comprobamos que sea un número entero positivo.
+        if (
+            !Number.isSafeInteger(idTrabajadora) ||
+            idTrabajadora <= 0
+        ) {
+            return res.status(400).json({
+                mensaje: "El identificador de la trabajadora no es válido"
+            });
+        }
+
+        // Verificamos que la trabajadora pertenezca a un
+// emprendimiento de la emprendedora autenticada.
+const propiedad = await pool.query(`
+    SELECT t.id_trabajadora
+    FROM trabajadora t
+    INNER JOIN emprendimiento e
+        ON t.id_emprendimiento = e.id_emprendimiento
+    WHERE t.id_trabajadora = $1
+      AND e.id_emprendedora = $2;
+`, [idTrabajadora, req.session.idEmprendedora]);
+
+// Si no existe o no pertenece a su negocio, rechazamos la edición.
+if (propiedad.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "La trabajadora no existe"
+    });
+}
+
+// Recibimos los datos que la emprendedora desea modificar.
+const {
+    nombre,
+    apellido,
+    descripcion
+} = req.body || {};
+
+// Comprobamos que se haya enviado al menos un campo editable.
+if (
+    nombre === undefined &&
+    apellido === undefined &&
+    descripcion === undefined
+) {
+    return res.status(400).json({
+        mensaje: "Debes indicar al menos un campo para modificar"
+    });
+}
+
+// Validamos el nombre solamente si fue enviado.
+if (nombre !== undefined) {
+    if (
+        typeof nombre !== "string" ||
+        nombre.trim() === "" ||
+        nombre.trim().length > 100
+    ) {
+        return res.status(400).json({
+            mensaje: "El nombre debe tener entre 1 y 100 caracteres"
+        });
+    }
+}
+
+// Validamos el apellido si fue enviado.
+// También permitimos null para quitar el apellido.
+if (
+    apellido !== undefined &&
+    apellido !== null &&
+    (
+        typeof apellido !== "string" ||
+        apellido.trim().length > 100
+    )
+) {
+    return res.status(400).json({
+        mensaje: "El apellido no debe superar 100 caracteres"
+    });
+}
+
+// Validamos la descripción si fue enviada.
+// También permitimos null para quitar la descripción.
+if (
+    descripcion !== undefined &&
+    descripcion !== null &&
+    (
+        typeof descripcion !== "string" ||
+        descripcion.length > 1000
+    )
+) {
+    return res.status(400).json({
+        mensaje: "La descripción no debe superar 1000 caracteres"
+    });
+}
+
+// Actualizamos únicamente los campos enviados.
+// Los demás conservarán sus valores actuales.
+const resultado = await pool.query(`
+    UPDATE trabajadora
+    SET
+        nombre = COALESCE($1::text, nombre),
+        apellido = CASE
+            WHEN $2::boolean THEN $3::text
+            ELSE apellido
+        END,
+        descripcion = CASE
+            WHEN $4::boolean THEN $5::text
+            ELSE descripcion
+        END
+    WHERE id_trabajadora = $6
+      AND id_emprendimiento IN (
+          SELECT id_emprendimiento
+          FROM emprendimiento
+          WHERE id_emprendedora = $7
+      )
+    RETURNING
+        id_trabajadora,
+        id_emprendimiento,
+        nombre,
+        apellido,
+        descripcion,
+        activa;
+`, [
+    nombre !== undefined ? nombre.trim() : null,
+    apellido !== undefined,
+    apellido == null ? null : apellido.trim(),
+    descripcion !== undefined,
+    descripcion == null ? null : descripcion.trim(),
+    idTrabajadora,
+    req.session.idEmprendedora
+]);
+
+// Comprobamos que se haya actualizado la trabajadora.
+if (resultado.rows.length === 0) {
+    return res.status(404).json({
+        mensaje: "La trabajadora no existe"
+    });
+}
+
+// Devolvemos los datos actualizados al Back Office.
+return res.json({
+    mensaje: "Trabajadora actualizada correctamente",
+    trabajadora: resultado.rows[0]
+});
+
+    } catch (error) {
+        console.error("Error al modificar trabajadora:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo modificar la trabajadora"
+        });
+    }
+});
+
+// Ruta para desactivar trabajadoras del Back Office.
+// Solo las emprendedoras autenticadas pueden desactivar trabajadoras.
+app.patch("/api/trabajadoras/:id/desactivar", verificarSesion, async (req, res) => {
+    try {
+        // Obtenemos y validamos el identificador.
+        const idTrabajadora = Number(req.params.id);
+
+        if (!Number.isSafeInteger(idTrabajadora) || idTrabajadora <= 0) {
+            return res.status(400).json({
+                mensaje: "El identificador de la trabajadora no es válido"
+            });
+        }
+
+        // Desactivamos únicamente trabajadoras activas
+        // pertenecientes a los emprendimientos de la sesión.
+        const resultado = await pool.query(`
+            UPDATE trabajadora
+            SET activa = FALSE
+            WHERE id_trabajadora = $1
+              AND activa = TRUE
+              AND id_emprendimiento IN (
+                  SELECT id_emprendimiento
+                  FROM emprendimiento
+                  WHERE id_emprendedora = $2
+              )
+            RETURNING
+                id_trabajadora,
+                id_emprendimiento,
+                nombre,
+                apellido,
+                activa;
+        `, [idTrabajadora, req.session.idEmprendedora]);
+
+        // Si no hubo actualización, comprobamos si la trabajadora
+        // existe dentro de los emprendimientos de esta cuenta.
+        if (resultado.rows.length === 0) {
+            const existente = await pool.query(`
+                SELECT t.id_trabajadora
+                FROM trabajadora t
+                INNER JOIN emprendimiento e
+                    ON t.id_emprendimiento = e.id_emprendimiento
+                WHERE t.id_trabajadora = $1
+                  AND e.id_emprendedora = $2;
+            `, [idTrabajadora, req.session.idEmprendedora]);
+
+            if (existente.rows.length === 0) {
+                return res.status(404).json({
+                    mensaje: "La trabajadora no existe"
+                });
+            }
+
+            return res.status(409).json({
+                mensaje: "La trabajadora ya está desactivada"
+            });
+        }
+
+        return res.json({
+            mensaje: "Trabajadora desactivada correctamente",
+            trabajadora: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al desactivar trabajadora:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo desactivar la trabajadora"
+        });
+    }
+});
+
 
 // Ruta para registrar nuevos servicios en Meraki.
 // Solo las emprendedoras autenticadas pueden crear servicios.
