@@ -245,7 +245,174 @@ app.get("/api/mis-trabajadoras", verificarSesion, async (req, res) => {
     }
 });
 
+
+// Ruta para consultar los servicios asignados a una trabajadora.
+// Solo permite acceder a trabajadoras de los emprendimientos propios.
+
+// ============================================================
+// CONSULTAR SERVICIOS ASIGNADOS A UNA TRABAJADORA
+// ============================================================
+
+app.get("/api/trabajadoras/:id/servicios", verificarSesion, async (req, res) => {
+    try {
+        const idTrabajadora = Number(req.params.id);
+
+        // Validamos el identificador de la trabajadora.
+        if (!Number.isSafeInteger(idTrabajadora) || idTrabajadora <= 0) {
+            return res.status(400).json({
+                mensaje: "Debes indicar una trabajadora válida"
+            });
+        }
+
+        // Verificamos que la trabajadora pertenezca
+        // a la emprendedora que inició sesión.
+        const propiedad = await pool.query(`
+            SELECT
+                t.id_trabajadora,
+                t.nombre,
+                t.id_emprendimiento
+            FROM trabajadora t
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            WHERE t.id_trabajadora = $1
+              AND e.id_emprendedora = $2;
+        `, [
+            idTrabajadora,
+            req.session.idEmprendedora
+        ]);
+
+        if (propiedad.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "La trabajadora no existe"
+            });
+        }
+
+        // Consultamos los servicios asignados a la trabajadora.
+        // Incluimos servicios activos e inactivos para el Back Office.
+        const resultado = await pool.query(`
+            SELECT
+                s.id_servicio,
+                s.id_emprendimiento,
+                s.nombre,
+                s.descripcion,
+                s.duracion_min,
+                s.precio,
+                s.activo
+            FROM trabajadora_servicio ts
+            INNER JOIN servicio s
+                ON ts.id_servicio = s.id_servicio
+            WHERE ts.id_trabajadora = $1
+              AND s.id_emprendimiento = $2
+            ORDER BY s.nombre;
+        `, [
+            idTrabajadora,
+            propiedad.rows[0].id_emprendimiento
+        ]);
+
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        console.error("Error al consultar servicios asignados:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar los servicios de la trabajadora"
+        });
+    }
+});
+
+
+// ============================================================
+// ASIGNAR UN SERVICIO A UNA TRABAJADORA
+// ============================================================
+
+app.post("/api/trabajadoras/:id/servicios", verificarSesion, async (req, res) => {
+    try {
+        const idTrabajadora = Number(req.params.id);
+        const { id_servicio } = req.body || {};
+        const idServicio = Number(id_servicio);
+
+        // Validamos los identificadores.
+        if (
+            !Number.isSafeInteger(idTrabajadora) ||
+            idTrabajadora <= 0 ||
+            !Number.isSafeInteger(idServicio) ||
+            idServicio <= 0
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes indicar una trabajadora y un servicio válidos"
+            });
+        }
+
+        // Comprobamos que ambos pertenezcan al mismo
+        // emprendimiento y estén activos.
+        const propiedad = await pool.query(`
+            SELECT
+                t.id_trabajadora,
+                s.id_servicio,
+                t.id_emprendimiento
+            FROM trabajadora t
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            INNER JOIN servicio s
+                ON s.id_emprendimiento = e.id_emprendimiento
+            WHERE t.id_trabajadora = $1
+              AND s.id_servicio = $2
+              AND e.id_emprendedora = $3
+              AND t.activa = TRUE
+              AND s.activo = TRUE;
+        `, [
+            idTrabajadora,
+            idServicio,
+            req.session.idEmprendedora
+        ]);
+
+        if (propiedad.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "No se encontró una trabajadora activa y un servicio activo válidos para este emprendimiento"
+            });
+        }
+
+        // Registramos la asignación, evitando duplicados.
+        const resultado = await pool.query(`
+            INSERT INTO trabajadora_servicio (
+                id_trabajadora,
+                id_servicio
+            )
+            VALUES ($1, $2)
+            ON CONFLICT (id_trabajadora, id_servicio)
+            DO NOTHING
+            RETURNING id_trabajadora, id_servicio;
+        `, [
+            idTrabajadora,
+            idServicio
+        ]);
+
+        // La asignación ya existía.
+        if (resultado.rows.length === 0) {
+            return res.status(409).json({
+                mensaje: "Este servicio ya está asignado a la trabajadora"
+            });
+        }
+
+        return res.status(201).json({
+            mensaje: "Servicio asignado correctamente",
+            asignacion: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al asignar servicio:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo asignar el servicio a la trabajadora"
+        });
+    }
+});
+
+
+
 // Ruta para consultar los horarios de atención del Back Office.
+
+
 // Incluye horarios activos e inactivos de los negocios propios.
 app.get("/api/mis-horarios", verificarSesion, async (req, res) => {
     try {
@@ -284,6 +451,7 @@ app.get("/api/mis-horarios", verificarSesion, async (req, res) => {
         });
     }
 });
+
 // Ruta para registrar horarios de atención del Back Office.
 // Solo las emprendedoras autenticadas pueden registrar horarios.
 app.post("/api/horarios", verificarSesion, async (req, res) => {
@@ -456,6 +624,9 @@ return res.status(201).json({
     });
 }
 });
+
+
+
 // Ruta para editar horarios de atención del Back Office.
 app.patch("/api/horarios/:id", verificarSesion, async (req, res) => {
     try {
@@ -665,6 +836,8 @@ return res.status(200).json({
     });
 }
 });
+
+
 // Ruta para desactivar horarios de atención del Back Office.
 app.patch("/api/horarios/:id/desactivar", verificarSesion, async (req, res) => {
     try {
