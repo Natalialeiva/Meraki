@@ -2393,6 +2393,102 @@ app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
         });
     }
 });
+
+
+// ============================================================
+// CONFIRMAR RESERVAS DEL BACK OFFICE
+// ============================================================
+
+app.patch("/api/reservas/:id/confirmar", verificarSesion, async (req, res) => {
+    try {
+        // Obtenemos el identificador de la reserva.
+        const idReserva = Number(req.params.id);
+
+        // Validamos que sea un entero positivo.
+        if (!Number.isSafeInteger(idReserva) || idReserva <= 0) {
+            return res.status(400).json({
+                mensaje: "El identificador de la reserva no es válido"
+            });
+        }
+
+        // Confirmamos solo reservas pendientes de abono
+        // que pertenezcan a los emprendimientos de la sesión.
+        const resultado = await pool.query(`
+            UPDATE reserva
+            SET estado = 'confirmada'
+            WHERE id_reserva = $1
+              AND estado = 'pendiente_abono'
+              AND id_emprendimiento IN (
+                  SELECT id_emprendimiento
+                  FROM emprendimiento
+                  WHERE id_emprendedora = $2
+              )
+            RETURNING
+                id_reserva,
+                id_clienta,
+                id_trabajadora,
+                id_servicio,
+                estado,
+                TO_CHAR(
+                    fecha_hora_inicio,
+                    'YYYY-MM-DD"T"HH24:MI:SS'
+                ) AS fecha_hora_inicio;
+        `, [
+            idReserva,
+            req.session.idEmprendedora
+        ]);
+
+        // Si no se actualizó, verificamos si la reserva existe.
+        if (resultado.rows.length === 0) {
+            const existente = await pool.query(`
+                SELECT r.estado
+                FROM reserva r
+                INNER JOIN emprendimiento e
+                    ON r.id_emprendimiento = e.id_emprendimiento
+                WHERE r.id_reserva = $1
+                  AND e.id_emprendedora = $2;
+            `, [
+                idReserva,
+                req.session.idEmprendedora
+            ]);
+
+            if (existente.rows.length === 0) {
+                return res.status(404).json({
+                    mensaje: "La reserva no existe"
+                });
+            }
+
+            return res.status(409).json({
+                mensaje: "La reserva no puede confirmarse en su estado actual"
+            });
+        }
+
+        // Respondemos con la reserva confirmada.
+        return res.status(200).json({
+            mensaje: "Reserva confirmada correctamente",
+            reserva: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al confirmar reserva:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo confirmar la reserva"
+        });
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
+
 // Ruta para registrar nuevas emprendedoras en Meraki.
 app.post("/api/auth/registro", async (req, res) => {
     try {
