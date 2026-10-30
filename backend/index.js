@@ -1028,64 +1028,71 @@ return res.status(200).json({
 // REGISTRAR BLOQUEOS DE HORARIOS DEL BACK OFFICE
 // ============================================================
 
+
+// Registrar bloqueos de horarios del Back Office.
+// Utiliza la misma protección de concurrencia que las reservas.
 app.post("/api/bloqueos", verificarSesion, async (req, res) => {
+    const { id_trabajadora, fecha_inicio, fecha_fin, motivo } = req.body || {};
+
+    const idTrabajadora = Number(id_trabajadora);
+
+    if (!Number.isSafeInteger(idTrabajadora) || idTrabajadora <= 0) {
+        return res.status(400).json({
+            mensaje: "Debes indicar una trabajadora válida"
+        });
+    }
+
+    const formatoFecha = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+    const fechaValida = (valor) => {
+        if (typeof valor !== "string" || !formatoFecha.test(valor)) {
+            return false;
+        }
+
+        const fecha = new Date(valor + ":00Z");
+
+        return !Number.isNaN(fecha.getTime()) &&
+            fecha.toISOString().slice(0, 16) === valor;
+    };
+
+    if (!fechaValida(fecha_inicio) || !fechaValida(fecha_fin)) {
+        return res.status(400).json({
+            mensaje: "Las fechas deben ser válidas y tener formato AAAA-MM-DDTHH:MM"
+        });
+    }
+
+    if (fecha_fin <= fecha_inicio) {
+        return res.status(400).json({
+            mensaje: "La fecha de término debe ser posterior al inicio"
+        });
+    }
+
+    if (
+        motivo !== undefined &&
+        motivo !== null &&
+        (typeof motivo !== "string" || motivo.length > 255)
+    ) {
+        return res.status(400).json({
+            mensaje: "El motivo no debe superar 255 caracteres"
+        });
+    }
+
+    let clienteDB;
+
     try {
-        const {
-            id_trabajadora,
-            fecha_inicio,
-            fecha_fin,
-            motivo
-        } = req.body || {};
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
 
-        const idTrabajadora = Number(id_trabajadora);
+        // Es el mismo bloqueo utilizado en POST /api/reservas.
+        // Evita que ambas operaciones se ejecuten simultáneamente
+        // para la misma trabajadora.
+        await clienteDB.query(
+            "SELECT pg_advisory_xact_lock(117, $1)",
+            [idTrabajadora]
+        );
 
-        // Validamos el identificador.
-        if (!Number.isSafeInteger(idTrabajadora) || idTrabajadora <= 0) {
-            return res.status(400).json({
-                mensaje: "Debes indicar una trabajadora válida"
-            });
-        }
-
-        // Validamos fechas en formato AAAA-MM-DDTHH:MM.
-        const formatoFecha = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/;
-
-        const fechaValida = (valor) => {
-            if (typeof valor !== "string" || !formatoFecha.test(valor)) {
-                return false;
-            }
-
-            const fecha = new Date(valor + ":00Z");
-
-            return !Number.isNaN(fecha.getTime()) &&
-                fecha.toISOString().slice(0, 16) === valor;
-        };
-
-        if (!fechaValida(fecha_inicio) || !fechaValida(fecha_fin)) {
-            return res.status(400).json({
-                mensaje: "Las fechas deben ser válidas y tener formato AAAA-MM-DDTHH:MM"
-            });
-        }
-
-        if (fecha_fin <= fecha_inicio) {
-            return res.status(400).json({
-                mensaje: "La fecha de término debe ser posterior al inicio"
-            });
-        }
-
-        // Validamos el motivo opcional.
-        if (
-            motivo !== undefined &&
-            motivo !== null &&
-            (typeof motivo !== "string" || motivo.length > 255)
-        ) {
-            return res.status(400).json({
-                mensaje: "El motivo no debe superar 255 caracteres"
-            });
-        }
-
-        // Comprobamos que la trabajadora sea del emprendimiento
-        // de la emprendedora autenticada y esté activa.
-        const propiedad = await pool.query(`
+        // Verificar que la trabajadora sea del emprendimiento autenticado.
+        const propiedad = await clienteDB.query(`
             SELECT t.id_trabajadora
             FROM trabajadora t
             INNER JOIN emprendimiento e
@@ -1093,39 +1100,36 @@ app.post("/api/bloqueos", verificarSesion, async (req, res) => {
             WHERE t.id_trabajadora = $1
               AND e.id_emprendedora = $2
               AND t.activa = TRUE;
-        `, [
-            idTrabajadora,
-            req.session.idEmprendedora
-        ]);
+        `, [idTrabajadora, req.session.idEmprendedora]);
 
         if (propiedad.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+
             return res.status(404).json({
                 mensaje: "No se encontró una trabajadora activa de tu emprendimiento"
             });
         }
 
-        // Evitamos bloqueos superpuestos.
-        const superposicion = await pool.query(`
+        // Evitar bloqueos superpuestos.
+        const superposicion = await clienteDB.query(`
             SELECT id_bloqueo
             FROM bloqueo_horario
             WHERE id_trabajadora = $1
               AND fecha_inicio < $3::timestamp
               AND fecha_fin > $2::timestamp
             LIMIT 1;
-        `, [
-            idTrabajadora,
-            fecha_inicio,
-            fecha_fin
-        ]);
+        `, [idTrabajadora, fecha_inicio, fecha_fin]);
 
         if (superposicion.rows.length > 0) {
+            await clienteDB.query("ROLLBACK");
+
             return res.status(409).json({
                 mensaje: "La trabajadora ya tiene un bloqueo que se superpone con estas fechas"
             });
         }
 
-        // No permitimos bloquear períodos con reservas activas.
-        const reservas = await pool.query(`
+        // Impedir bloqueos sobre reservas activas.
+        const reservas = await clienteDB.query(`
             SELECT id_reserva
             FROM reserva
             WHERE id_trabajadora = $1
@@ -1133,20 +1137,18 @@ app.post("/api/bloqueos", verificarSesion, async (req, res) => {
               AND fecha_hora_inicio < $3::timestamp
               AND fecha_hora_fin > $2::timestamp
             LIMIT 1;
-        `, [
-            idTrabajadora,
-            fecha_inicio,
-            fecha_fin
-        ]);
+        `, [idTrabajadora, fecha_inicio, fecha_fin]);
 
         if (reservas.rows.length > 0) {
+            await clienteDB.query("ROLLBACK");
+
             return res.status(409).json({
                 mensaje: "No puedes bloquear este período porque existen reservas activas"
             });
         }
 
-        // Guardamos el bloqueo en PostgreSQL.
-        const resultado = await pool.query(`
+        // Crear el bloqueo dentro de la misma transacción.
+        const resultado = await clienteDB.query(`
             INSERT INTO bloqueo_horario (
                 id_trabajadora,
                 fecha_inicio,
@@ -1167,19 +1169,38 @@ app.post("/api/bloqueos", verificarSesion, async (req, res) => {
             motivo?.trim() || null
         ]);
 
+        await clienteDB.query("COMMIT");
+
         return res.status(201).json({
             mensaje: "Bloqueo registrado correctamente",
             bloqueo: resultado.rows[0]
         });
 
     } catch (error) {
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error(
+                    "Error al revertir bloqueo:",
+                    errorRollback.message
+                );
+            }
+        }
+
         console.error("Error al registrar bloqueo:", error.message);
 
         return res.status(500).json({
             mensaje: "No se pudo registrar el bloqueo"
         });
+
+    } finally {
+        if (clienteDB) {
+            clienteDB.release();
+        }
     }
 });
+
 
 
 
@@ -2245,6 +2266,86 @@ const resultado = await pool.query(`
         });
     }
 });
+
+
+
+
+// Registrar nuevas clientas desde el Front Office.
+app.post("/api/clientas", async (req, res) => {
+    try {
+        const { nombre, correo, telefono } = req.body || {};
+
+        // Validar los campos obligatorios.
+        if (
+            typeof nombre !== "string" ||
+            typeof correo !== "string" ||
+            nombre.trim() === "" ||
+            correo.trim() === ""
+        ) {
+            return res.status(400).json({
+                mensaje: "El nombre y el correo son obligatorios"
+            });
+        }
+
+        const nombreLimpio = nombre.trim();
+        const correoLimpio = correo.trim().toLowerCase();
+
+        // Validar la longitud de los campos.
+        if (
+            nombreLimpio.length > 100 ||
+            correoLimpio.length > 150 ||
+            (telefono != null &&
+                (typeof telefono !== "string" || telefono.trim().length > 20))
+        ) {
+            return res.status(400).json({
+                mensaje: "Uno o más campos son inválidos o demasiado largos"
+            });
+        }
+
+        // Validar el formato del correo electrónico.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoLimpio)) {
+            return res.status(400).json({
+                mensaje: "El correo electrónico no tiene un formato válido"
+            });
+        }
+
+        const telefonoLimpio = telefono?.trim() || null;
+
+        // Registrar la clienta en PostgreSQL.
+        const resultado = await pool.query(`
+            INSERT INTO clienta (nombre, correo, telefono)
+            VALUES ($1, $2, $3)
+            RETURNING id_clienta;
+        `, [
+            nombreLimpio,
+            correoLimpio,
+            telefonoLimpio
+        ]);
+
+        return res.status(201).json({
+            mensaje: "Clienta registrada correctamente",
+            id_clienta: resultado.rows[0].id_clienta
+        });
+
+    } catch (error) {
+        // Evitar registros con correos duplicados.
+        if (error.code === "23505") {
+            return res.status(409).json({
+                mensaje: "No se pudo completar el registro con los datos proporcionados"
+            });
+        }
+
+        console.error("Error al registrar clienta:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo registrar la clienta"
+        });
+    }
+});
+
+
+
+
 // Ruta para registrar nuevas reservas en Meraki.
 app.post("/api/reservas", async (req, res) => {
 

@@ -228,6 +228,11 @@ CREATE TABLE clienta (
     fecha_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Evitar correos duplicados en el registro de clientas.
+-- No distingue mayúsculas y elimina espacios exteriores.
+CREATE UNIQUE INDEX IF NOT EXISTS clienta_correo_unico
+ON clienta (LOWER(TRIM(correo)));
+
 -- Estados permitidos para las reservas de Meraki.
 CREATE TYPE estado_reserva AS ENUM (
     'pendiente_abono',
