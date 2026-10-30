@@ -957,6 +957,9 @@ const propiedad = await pool.query(`
     req.session.idEmprendedora
 ]);
 
+
+
+
 // Rechazamos horarios inexistentes o de otros emprendimientos.
 if (propiedad.rows.length === 0) {
     return res.status(404).json({
@@ -1018,6 +1021,280 @@ return res.status(200).json({
         });
     }
 });
+ // Fin de la ruta para desactivar horarios
+
+
+// ============================================================
+// REGISTRAR BLOQUEOS DE HORARIOS DEL BACK OFFICE
+// ============================================================
+
+app.post("/api/bloqueos", verificarSesion, async (req, res) => {
+    try {
+        const {
+            id_trabajadora,
+            fecha_inicio,
+            fecha_fin,
+            motivo
+        } = req.body || {};
+
+        const idTrabajadora = Number(id_trabajadora);
+
+        // Validamos el identificador.
+        if (!Number.isSafeInteger(idTrabajadora) || idTrabajadora <= 0) {
+            return res.status(400).json({
+                mensaje: "Debes indicar una trabajadora válida"
+            });
+        }
+
+        // Validamos fechas en formato AAAA-MM-DDTHH:MM.
+        const formatoFecha = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+        const fechaValida = (valor) => {
+            if (typeof valor !== "string" || !formatoFecha.test(valor)) {
+                return false;
+            }
+
+            const fecha = new Date(valor + ":00Z");
+
+            return !Number.isNaN(fecha.getTime()) &&
+                fecha.toISOString().slice(0, 16) === valor;
+        };
+
+        if (!fechaValida(fecha_inicio) || !fechaValida(fecha_fin)) {
+            return res.status(400).json({
+                mensaje: "Las fechas deben ser válidas y tener formato AAAA-MM-DDTHH:MM"
+            });
+        }
+
+        if (fecha_fin <= fecha_inicio) {
+            return res.status(400).json({
+                mensaje: "La fecha de término debe ser posterior al inicio"
+            });
+        }
+
+        // Validamos el motivo opcional.
+        if (
+            motivo !== undefined &&
+            motivo !== null &&
+            (typeof motivo !== "string" || motivo.length > 255)
+        ) {
+            return res.status(400).json({
+                mensaje: "El motivo no debe superar 255 caracteres"
+            });
+        }
+
+        // Comprobamos que la trabajadora sea del emprendimiento
+        // de la emprendedora autenticada y esté activa.
+        const propiedad = await pool.query(`
+            SELECT t.id_trabajadora
+            FROM trabajadora t
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            WHERE t.id_trabajadora = $1
+              AND e.id_emprendedora = $2
+              AND t.activa = TRUE;
+        `, [
+            idTrabajadora,
+            req.session.idEmprendedora
+        ]);
+
+        if (propiedad.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "No se encontró una trabajadora activa de tu emprendimiento"
+            });
+        }
+
+        // Evitamos bloqueos superpuestos.
+        const superposicion = await pool.query(`
+            SELECT id_bloqueo
+            FROM bloqueo_horario
+            WHERE id_trabajadora = $1
+              AND fecha_inicio < $3::timestamp
+              AND fecha_fin > $2::timestamp
+            LIMIT 1;
+        `, [
+            idTrabajadora,
+            fecha_inicio,
+            fecha_fin
+        ]);
+
+        if (superposicion.rows.length > 0) {
+            return res.status(409).json({
+                mensaje: "La trabajadora ya tiene un bloqueo que se superpone con estas fechas"
+            });
+        }
+
+        // No permitimos bloquear períodos con reservas activas.
+        const reservas = await pool.query(`
+            SELECT id_reserva
+            FROM reserva
+            WHERE id_trabajadora = $1
+              AND estado IN ('pendiente_abono', 'confirmada')
+              AND fecha_hora_inicio < $3::timestamp
+              AND fecha_hora_fin > $2::timestamp
+            LIMIT 1;
+        `, [
+            idTrabajadora,
+            fecha_inicio,
+            fecha_fin
+        ]);
+
+        if (reservas.rows.length > 0) {
+            return res.status(409).json({
+                mensaje: "No puedes bloquear este período porque existen reservas activas"
+            });
+        }
+
+        // Guardamos el bloqueo en PostgreSQL.
+        const resultado = await pool.query(`
+            INSERT INTO bloqueo_horario (
+                id_trabajadora,
+                fecha_inicio,
+                fecha_fin,
+                motivo
+            )
+            VALUES ($1, $2::timestamp, $3::timestamp, $4)
+            RETURNING
+                id_bloqueo,
+                id_trabajadora,
+                fecha_inicio,
+                fecha_fin,
+                motivo;
+        `, [
+            idTrabajadora,
+            fecha_inicio,
+            fecha_fin,
+            motivo?.trim() || null
+        ]);
+
+        return res.status(201).json({
+            mensaje: "Bloqueo registrado correctamente",
+            bloqueo: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al registrar bloqueo:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo registrar el bloqueo"
+        });
+    }
+});
+
+
+
+
+
+app.get("/api/mis-bloqueos", verificarSesion, async (req, res) => {
+    try {
+        // Consultamos los bloqueos de las trabajadoras
+        // pertenecientes a los emprendimientos de la sesión.
+        const resultado = await pool.query(`
+            SELECT
+                b.id_bloqueo,
+                b.id_trabajadora,
+                t.nombre AS trabajadora,
+                t.id_emprendimiento,
+                e.nombre AS emprendimiento,
+                TO_CHAR(
+                    b.fecha_inicio,
+                    'YYYY-MM-DD"T"HH24:MI:SS'
+                ) AS fecha_inicio,
+                TO_CHAR(
+                    b.fecha_fin,
+                    'YYYY-MM-DD"T"HH24:MI:SS'
+                ) AS fecha_fin,
+                b.motivo
+            FROM bloqueo_horario b
+            INNER JOIN trabajadora t
+                ON b.id_trabajadora = t.id_trabajadora
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            WHERE e.id_emprendedora = $1
+            ORDER BY b.fecha_inicio, b.id_bloqueo;
+        `, [req.session.idEmprendedora]);
+
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        console.error("Error al consultar bloqueos:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar los bloqueos"
+        });
+    }
+});
+
+
+// ============================================================
+// ELIMINAR BLOQUEOS DE HORARIOS DEL BACK OFFICE
+// ============================================================
+
+app.delete("/api/bloqueos/:id", verificarSesion, async (req, res) => {
+    try {
+        // Identificamos el bloqueo que se desea eliminar.
+        const idBloqueo = Number(req.params.id);
+
+        // Validamos el identificador.
+        if (!Number.isSafeInteger(idBloqueo) || idBloqueo <= 0) {
+            return res.status(400).json({
+                mensaje: "El identificador del bloqueo no es válido"
+            });
+        }
+
+        // Eliminamos únicamente bloqueos pertenecientes
+        // a trabajadoras de los emprendimientos de la sesión.
+        const resultado = await pool.query(`
+            DELETE FROM bloqueo_horario b
+            WHERE b.id_bloqueo = $1
+              AND EXISTS (
+                  SELECT 1
+                  FROM trabajadora t
+                  INNER JOIN emprendimiento e
+                      ON t.id_emprendimiento = e.id_emprendimiento
+                  WHERE t.id_trabajadora = b.id_trabajadora
+                    AND e.id_emprendedora = $2
+              )
+            RETURNING
+                b.id_bloqueo,
+                b.id_trabajadora,
+                b.fecha_inicio,
+                b.fecha_fin,
+                b.motivo;
+        `, [
+            idBloqueo,
+            req.session.idEmprendedora
+        ]);
+
+        // Si no se eliminó ningún bloqueo, devolvemos 404.
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "El bloqueo no existe"
+            });
+        }
+
+        // Confirmamos la eliminación.
+        return res.status(200).json({
+            mensaje: "Bloqueo eliminado correctamente",
+            bloqueo: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al eliminar bloqueo:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo eliminar el bloqueo"
+        });
+    }
+});
+
+
+
+
+
+
+
+
 // Ruta para registrar nuevas trabajadoras en Meraki.
 // Solo las emprendedoras autenticadas pueden registrar trabajadoras.
 app.post("/api/trabajadoras", verificarSesion, async (req, res) => {
@@ -1043,6 +1320,17 @@ if (
         mensaje: "Debes indicar un emprendimiento válido"
     });
 }
+
+
+// ============================================================
+// CONSULTAR BLOQUEOS DE HORARIOS DEL BACK OFFICE
+// ============================================================
+
+
+
+
+
+
 
 // Verificamos que el emprendimiento pertenezca
 // a la emprendedora que inició sesión.
@@ -2477,11 +2765,6 @@ app.patch("/api/reservas/:id/confirmar", verificarSesion, async (req, res) => {
         });
     }
 });
-
-
-
-
-
 
 
 
