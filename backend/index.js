@@ -410,6 +410,93 @@ app.post("/api/trabajadoras/:id/servicios", verificarSesion, async (req, res) =>
 
 
 
+/* ============================================================
+   DESASIGNAR UN SERVICIO DE UNA TRABAJADORA
+   ============================================================ */
+
+app.delete("/api/trabajadoras/:id/servicios/:id_servicio", verificarSesion, async (req, res) => {
+    try {
+        // Obtenemos los identificadores enviados en la URL.
+        const idTrabajadora = Number(req.params.id);
+        const idServicio = Number(req.params.id_servicio);
+
+        // Validamos que ambos identificadores sean enteros positivos.
+        if (
+            !Number.isSafeInteger(idTrabajadora) ||
+            idTrabajadora <= 0 ||
+            !Number.isSafeInteger(idServicio) ||
+            idServicio <= 0
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes indicar una trabajadora y un servicio válidos"
+            });
+        }
+
+        // Comprobamos que la trabajadora y el servicio
+        // pertenezcan al mismo emprendimiento de la sesión.
+        const propiedad = await pool.query(`
+            SELECT
+                t.id_trabajadora,
+                s.id_servicio
+            FROM trabajadora t
+            INNER JOIN emprendimiento e
+                ON t.id_emprendimiento = e.id_emprendimiento
+            INNER JOIN servicio s
+                ON s.id_emprendimiento = e.id_emprendimiento
+            WHERE t.id_trabajadora = $1
+              AND s.id_servicio = $2
+              AND e.id_emprendedora = $3;
+        `, [
+            idTrabajadora,
+            idServicio,
+            req.session.idEmprendedora
+        ]);
+
+        // Rechazamos registros inexistentes o ajenos.
+        if (propiedad.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "No se encontró la trabajadora o el servicio en tu emprendimiento"
+            });
+        }
+
+        // Eliminamos únicamente la relación entre ambos.
+        const resultado = await pool.query(`
+            DELETE FROM trabajadora_servicio
+            WHERE id_trabajadora = $1
+              AND id_servicio = $2
+            RETURNING id_trabajadora, id_servicio;
+        `, [
+            idTrabajadora,
+            idServicio
+        ]);
+
+        // Comprobamos que existiera una asignación.
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "El servicio no está asignado a esta trabajadora"
+            });
+        }
+
+        // Confirmamos la desasignación.
+        return res.status(200).json({
+            mensaje: "Servicio desasignado correctamente",
+            asignacion: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al desasignar servicio:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo desasignar el servicio de la trabajadora"
+        });
+    }
+});
+
+
+
+
+
+
 // Ruta para consultar los horarios de atención del Back Office.
 
 
