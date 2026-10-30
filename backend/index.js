@@ -1,6 +1,25 @@
 // Importamos Express.
 const express = require("express");
 
+// Importamos el SDK de Transbank para gestionar abonos mediante Webpay Plus.
+const {
+    WebpayPlus,
+    Options,
+    IntegrationCommerceCodes,
+    IntegrationApiKeys,
+    Environment
+} = require("transbank-sdk");
+
+// Configuración de Webpay Plus para pruebas.
+// No se utilizan credenciales de producción.
+const webpay = new WebpayPlus.Transaction(
+    new Options(
+        IntegrationCommerceCodes.WEBPAY_PLUS,
+        IntegrationApiKeys.WEBPAY,
+        Environment.Integration
+    )
+);
+
 // Importamos bcrypt para proteger las contraseñas.
 const bcrypt = require("bcrypt");
 
@@ -17,6 +36,9 @@ const app = express();
 // Permitimos que el Backend reciba datos en formato JSON.
 // Esto será necesario para registrar reservas desde el Front Office.
 app.use(express.json());
+
+// Permitir recibir formularios enviados por Webpay Plus.
+app.use(express.urlencoded({ extended: false }));
 
 // Ruta principal para comprobar el funcionamiento del Backend.
 app.get("/", (req, res) => {
@@ -2628,6 +2650,878 @@ app.post("/api/reservas", async (req, res) => {
         }
     }
 });
+
+// ============================================================
+// WEBPAY PLUS — INICIAR PAGO DE ABONO
+// ============================================================
+
+
+// Iniciar un abono mediante Webpay Plus.
+// Versión inicial protegida para pruebas de integración.
+app.post("/api/abonos/iniciar", verificarSesion, async (req, res) => {
+    const idReserva = Number(req.body?.id_reserva);
+
+    if (!Number.isSafeInteger(idReserva) || idReserva <= 0) {
+        return res.status(400).json({
+            mensaje: "Debes indicar una reserva válida"
+        });
+    }
+
+    let clienteDB;
+
+    try {
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
+
+        // Consultar la reserva y comprobar que pertenece
+        // al emprendimiento de la sesión.
+        const reserva = await clienteDB.query(`
+            SELECT
+                r.id_reserva,
+                r.estado,
+                r.monto_abono
+            FROM reserva r
+            INNER JOIN emprendimiento e
+                ON r.id_emprendimiento = e.id_emprendimiento
+            WHERE r.id_reserva = $1
+              AND e.id_emprendedora = $2
+            FOR UPDATE OF r;
+        `, [idReserva, req.session.idEmprendedora]);
+
+        if (reserva.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+            return res.status(404).json({
+                mensaje: "La reserva no existe"
+            });
+        }
+
+        const datos = reserva.rows[0];
+        const monto = Number(datos.monto_abono);
+
+        if (datos.estado !== "pendiente_abono") {
+            await clienteDB.query("ROLLBACK");
+            return res.status(409).json({
+                mensaje: "La reserva no está pendiente de abono"
+            });
+        }
+
+        if (!Number.isSafeInteger(monto) || monto <= 0) {
+            await clienteDB.query("ROLLBACK");
+            return res.status(400).json({
+                mensaje: "El monto del abono no es válido"
+            });
+        }
+
+        // Evitar iniciar otro abono para una reserva
+        // que ya tiene un registro de pago.
+        // Buscar todos los intentos de pago asociados a la reserva.
+const existente = await clienteDB.query(`
+    SELECT
+        id_abono,
+        monto,
+        estado,
+        token_transaccion,
+        buy_order,
+        fecha_creacion,
+        fecha_pago
+    FROM abono
+    WHERE id_reserva = $1
+    ORDER BY id_abono DESC;
+`, [idReserva]);
+
+ // Identificar intentos pendientes que requieren verificación.
+const intentosPendientes = existente.rows.filter(
+    abono => abono.estado === "pendiente"
+);
+
+// Registrar únicamente información de diagnóstico.
+if (intentosPendientes.length > 0) {
+    console.log(
+        "MERAKI: existe un intento pendiente para la reserva",
+        idReserva
+    );
+
+    const intento = intentosPendientes[0];
+
+    if (intento.token_transaccion) {
+        try {
+            const estadoTransbank = await webpay.status(
+                intento.token_transaccion
+            );
+
+            console.log(
+                "MERAKI: estado en Transbank:",
+                estadoTransbank.status
+            );
+            // Verificar que la transacción corresponda al abono original.
+const datosCoinciden =
+    typeof intento.buy_order === "string" &&
+    estadoTransbank.buy_order === intento.buy_order &&
+    estadoTransbank.amount !== null &&
+    estadoTransbank.amount !== undefined &&
+    Number(estadoTransbank.amount) === Number(intento.monto);
+
+console.log(
+    "MERAKI: datos de la transacción coinciden:",
+    datosCoinciden
+);
+// Clasificar el resultado para decidir qué hacer después.
+const estadoPago = estadoTransbank.status;
+
+const requiereRevision =
+    !datosCoinciden ||
+    estadoPago === "INITIALIZED" ||
+    estadoPago === "AUTHORIZED" ||
+    !["INITIALIZED", "AUTHORIZED", "FAILED", "REVERSED"].includes(estadoPago);
+
+console.log(
+    "MERAKI: requiere revisión antes de reintentar:",
+    requiereRevision
+);
+
+
+if (!datosCoinciden) {
+    console.error(
+        "MERAKI: ALERTA - datos inconsistentes en el abono",
+        intento.id_abono
+    );
+}
+
+        } catch (errorTransbank) {
+            console.error(
+                "MERAKI: no fue posible consultar Transbank:",
+                errorTransbank.message
+            );
+        }
+    }
+} 
+
+
+
+// Verificar si existe un pago pendiente o aprobado.
+const pagoBloqueante = existente.rows.find(
+    abono =>
+        abono.estado === "pendiente" ||
+        abono.estado === "aprobado"
+);
+
+if (pagoBloqueante) {
+    await clienteDB.query("ROLLBACK");
+
+    return res.status(409).json({
+        mensaje: pagoBloqueante.estado === "aprobado"
+            ? "Esta reserva ya tiene un pago aprobado"
+            : "Existe un pago pendiente. Debe verificarse antes de otro intento."
+    });
+}
+
+// Permitir reintentos solo después de verificar que
+// las transacciones anteriores no estén pendientes ni aprobadas.
+if (existente.rows.length > 0) {
+    for (const intentoAnterior of existente.rows) {
+
+        // Si hay un pago pendiente o aprobado, no permitir otro.
+        if (
+            intentoAnterior.estado === "pendiente" ||
+            intentoAnterior.estado === "aprobado"
+        ) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "Existe un pago pendiente o aprobado. No se puede reintentar."
+            });
+        }
+
+        // Verificar el resultado histórico en Transbank.
+        if (!intentoAnterior.token_transaccion ||
+            !intentoAnterior.buy_order) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "Una transacción anterior requiere revisión."
+            });
+        }
+
+        const resultadoAnterior = await webpay.status(
+            intentoAnterior.token_transaccion
+        );
+
+        const datosValidos =
+            resultadoAnterior.buy_order === intentoAnterior.buy_order &&
+            resultadoAnterior.amount !== null &&
+            resultadoAnterior.amount !== undefined &&
+            Number(resultadoAnterior.amount) === Number(intentoAnterior.monto);
+
+        if (
+            !datosValidos ||
+            !["FAILED", "REVERSED"].includes(resultadoAnterior.status)
+        ) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "No se puede reintentar. La transacción anterior requiere revisión."
+            });
+        }
+    }
+}
+        // Identificadores únicos para la transacción.
+        const { randomUUID } = require("node:crypto");
+        const identificador = randomUUID().replace(/-/g, "");
+        const buyOrder = `M${idReserva}-${identificador.slice(0, 18)}`;
+        const sessionId = `MERAKI-${identificador.slice(0, 20)}`;
+
+        const returnUrl = process.env.WEBPAY_RETURN_URL;
+
+        if (!returnUrl) {
+            throw new Error("Falta WEBPAY_RETURN_URL");
+        }
+
+        // Solicitar la transacción a Transbank.
+        const transaccion = await webpay.create(
+            buyOrder,
+            sessionId,
+            monto,
+            returnUrl
+        );
+
+        if (!transaccion.token || !transaccion.url) {
+            throw new Error("Respuesta incompleta de Transbank");
+        }
+
+        // Registrar el abono pendiente con la orden de compra exacta.
+await clienteDB.query(`
+    INSERT INTO abono (
+        id_reserva,
+        monto,
+        estado,
+        token_transaccion,
+        buy_order
+    )
+    VALUES ($1, $2, 'pendiente', $3, $4);
+`, [
+    idReserva,
+    monto,
+    transaccion.token,
+    buyOrder
+]);
+
+        await clienteDB.query("COMMIT");
+
+        return res.status(201).json({
+            mensaje: "Transacción iniciada correctamente",
+            id_reserva: idReserva,
+            monto,
+            url: transaccion.url,
+            token: transaccion.token
+        });
+
+    } catch (error) {
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error("Error en rollback:", errorRollback.message);
+            }
+        }
+
+        console.error("Error al iniciar abono:", error.message);
+
+        return res.status(502).json({
+            mensaje: "No se pudo iniciar el abono"
+        });
+
+    } finally {
+        if (clienteDB) {
+            clienteDB.release();
+        }
+    }
+});
+
+// ============================================================
+// WEBPAY PLUS — RETORNO Y VERIFICACIÓN DEL ABONO
+// ============================================================
+
+// Verificar el retorno de Webpay Plus.
+async function procesarRetornoWebpay(req, res) { // Detectar retornos sin token por timeout o interrupción.
+// Identificar los parámetros recibidos desde Webpay Plus.
+const parametros = {
+    ...req.query,
+    ...req.body
+};
+
+const tokenRecibido = parametros.token_ws;
+
+const retornoInterrumpido =
+    !tokenRecibido &&
+    (
+        parametros.TBK_TOKEN ||
+        parametros.TBK_ORDEN_COMPRA ||
+        parametros.TBK_ID_SESION
+    );
+
+// Detectar retornos por abandono, cancelación o tiempo agotado.
+if (retornoInterrumpido) {
+
+    console.warn(
+        "MERAKI: retorno de Webpay sin token de confirmación",
+        {
+            tiene_tbk_token: Boolean(parametros.TBK_TOKEN),
+            tiene_orden: Boolean(parametros.TBK_ORDEN_COMPRA),
+            tiene_sesion: Boolean(parametros.TBK_ID_SESION)
+        }
+    );
+
+    return res.status(200).json({
+        mensaje: "El pago fue interrumpido o terminó sin confirmación. Debes consultar su estado antes de intentar nuevamente.",
+        estado: "requiere_verificacion"
+    });
+}
+    const token = req.body?.token_ws || req.query?.token_ws;
+
+    // Los retornos de abandono o tiempo agotado pueden
+    // llegar sin token_ws. Nunca deben aprobar un pago.
+    if (typeof token !== "string" || !/^[a-zA-Z0-9]{64}$/.test(token)) {
+        return res.status(400).json({
+            mensaje: "No se recibió un token válido de pago"
+        });
+    }
+
+    let clienteDB;
+
+    try {
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
+
+        // Identificar el abono usando el token guardado.
+        // Bloquearlo para evitar procesar dos retornos a la vez.
+        const consulta = await clienteDB.query(`
+            SELECT
+                a.id_abono,
+                a.id_reserva,
+                a.monto,
+                a.estado AS estado_abono,
+                a.buy_order,
+                r.monto_abono,
+                r.estado AS estado_reserva
+            FROM abono a
+            INNER JOIN reserva r
+                ON a.id_reserva = r.id_reserva
+            WHERE a.token_transaccion = $1
+            FOR UPDATE OF a, r;
+        `, [token]);
+
+        if (consulta.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+            return res.status(404).json({
+                mensaje: "No se encontró el abono"
+            });
+        }
+
+        const abono = consulta.rows[0];
+
+        // Evitar procesar nuevamente un abono finalizado.
+        if (abono.estado_abono !== "pendiente") {
+            await clienteDB.query("ROLLBACK");
+            return res.status(409).json({
+                mensaje: "Este abono ya fue procesado"
+            });
+        }
+
+        if (abono.estado_reserva !== "pendiente_abono") {
+            await clienteDB.query("ROLLBACK");
+            return res.status(409).json({
+                mensaje: "La reserva ya no está pendiente de abono"
+            });
+        }
+
+        // Consultar y completar la transacción con Transbank.
+        // El navegador no decide si el pago fue aprobado.
+        const resultado = await webpay.commit(token);
+
+        // Comprobar estado, código de autorización,
+        // monto y asociación con la reserva.
+        // Comprobar si Transbank autorizó la transacción.
+const pagoAutorizado =
+    resultado.status === "AUTHORIZED" &&
+    Number(resultado.response_code) === 0;
+
+// Comprobar que los datos coincidan con Meraki.
+const datosCoinciden =
+    Number(resultado.amount) === Number(abono.monto) &&
+    Number(abono.monto) === Number(abono.monto_abono) &&
+    typeof abono.buy_order === "string" &&
+resultado.buy_order === abono.buy_order;
+
+// La aprobación requiere ambas condiciones.
+const aprobado = pagoAutorizado && datosCoinciden;
+
+// Si Transbank autorizó el pago, pero los datos no coinciden,
+// NO debemos marcarlo como rechazado ni confirmar la reserva.
+if (pagoAutorizado && !datosCoinciden) {
+    await clienteDB.query("ROLLBACK");
+
+    console.error(
+        "ALERTA: Pago autorizado con datos inconsistentes. Reserva:",
+        abono.id_reserva
+    );
+
+    return res.status(409).json({
+        mensaje: "El pago requiere revisión. No intentes pagar nuevamente."
+    });
+}
+
+// Si Transbank devuelve una respuesta incompleta,
+// no podemos determinar si el pago fue rechazado.
+const resultadoConocido =
+    typeof resultado.status === "string" &&
+    resultado.response_code !== null &&
+    resultado.response_code !== undefined &&
+    Number.isInteger(Number(resultado.response_code)) &&
+    resultado.amount !== null &&
+    resultado.amount !== undefined &&
+    Number.isFinite(Number(resultado.amount)) &&
+    typeof resultado.buy_order === "string";
+
+if (!resultadoConocido) {
+    await clienteDB.query("ROLLBACK");
+
+    console.error(
+        "ALERTA: Respuesta incompleta de Transbank. Reserva:",
+        abono.id_reserva
+    );
+
+    return res.status(502).json({
+        mensaje: "No se pudo verificar el resultado del pago. Requiere revisión."
+    });
+}
+
+// Solo consideramos rechazo los estados negativos conocidos.
+const pagoRechazado =
+    resultado.status === "FAILED" ||
+    (
+        resultado.status === "AUTHORIZED" &&
+        Number(resultado.response_code) !== 0
+    );
+
+if (!aprobado && !pagoRechazado) {
+    await clienteDB.query("ROLLBACK");
+
+    console.error(
+        "ALERTA: Estado de pago no concluyente. Reserva:",
+        abono.id_reserva
+    );
+
+    return res.status(502).json({
+        mensaje: "No se pudo determinar el resultado del pago. Requiere revisión."
+    });
+}
+
+        if (!aprobado) {
+            // Rechazar únicamente cuando Transbank devolvió
+            // un resultado de transacción verificable.
+            await clienteDB.query(`
+                UPDATE abono
+                SET estado = 'rechazado'
+                WHERE id_abono = $1
+                  AND estado = 'pendiente';
+            `, [abono.id_abono]);
+
+            await clienteDB.query("COMMIT");
+
+            return res.status(200).json({
+                mensaje: "El abono no fue aprobado",
+                id_reserva: abono.id_reserva,
+                estado_abono: "rechazado"
+            });
+        }
+
+        
+        // Registrar únicamente pagos verificados.
+        // Comprobar que el abono se actualice correctamente.
+
+        const actualizacionAbono = await clienteDB.query(`
+            UPDATE abono
+            SET estado = 'aprobado',
+                codigo_autorizacion = $2,
+                fecha_pago = CURRENT_TIMESTAMP
+            WHERE id_abono = $1
+              AND estado = 'pendiente';
+        `, [
+            abono.id_abono,
+            resultado.authorization_code || null
+        ]);
+
+        if (actualizacionAbono.rowCount !== 1) {
+            throw new Error(
+                "No se pudo actualizar correctamente el abono"
+            );
+        }
+
+        // Confirmar la reserva correspondiente.
+        const actualizacionReserva = await clienteDB.query(`
+            UPDATE reserva
+            SET estado = 'confirmada'
+            WHERE id_reserva = $1
+              AND estado = 'pendiente_abono';
+        `, [abono.id_reserva]);
+
+        if (actualizacionReserva.rowCount !== 1) {
+            throw new Error(
+                "No se pudo confirmar correctamente la reserva"
+            );
+        }
+
+
+        await clienteDB.query("COMMIT");
+
+        return res.status(200).json({
+            mensaje: "Abono aprobado y reserva confirmada",
+            id_reserva: abono.id_reserva,
+            estado_abono: "aprobado",
+            estado_reserva: "confirmada"
+        });
+
+    } catch (error) {
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error("Error en rollback Webpay:", errorRollback.message);
+            }
+        }
+
+        console.error("Error al verificar abono:", error.message);
+
+        return res.status(502).json({
+            mensaje: "No se pudo verificar el pago. Su estado requiere revisión."
+        });
+
+    } finally {
+        if (clienteDB) {
+            clienteDB.release();
+        }
+    }
+}
+
+// Retorno normal de Webpay Plus.
+app.get("/api/abonos/retorno", procesarRetornoWebpay);
+
+// Compatibilidad con retornos POST.
+app.post("/api/abonos/retorno", procesarRetornoWebpay);
+
+// ============================================================
+// WEBPAY PLUS — CONSULTAR Y RECUPERAR ESTADO DE ABONOS
+// ============================================================
+
+
+// Consultar el estado de un abono en Transbank.
+// Solo permite consultar abonos del emprendimiento autenticado.
+// Esta ruta NO modifica PostgreSQL.
+app.get("/api/abonos/:id/estado", verificarSesion, async (req, res) => {
+    try {
+        const idAbono = Number(req.params.id);
+
+        if (!Number.isSafeInteger(idAbono) || idAbono <= 0) {
+            return res.status(400).json({
+                mensaje: "El identificador del abono no es válido"
+            });
+        }
+
+        // Comprobar que el abono pertenezca al emprendimiento.
+        const consulta = await pool.query(`
+            SELECT
+                a.id_abono,
+                a.id_reserva,
+                a.estado AS estado_local,
+                a.monto,
+                a.buy_order,
+                a.token_transaccion
+            FROM abono a
+            INNER JOIN reserva r
+                ON a.id_reserva = r.id_reserva
+            INNER JOIN emprendimiento e
+                ON r.id_emprendimiento = e.id_emprendimiento
+            WHERE a.id_abono = $1
+              AND e.id_emprendedora = $2;
+        `, [
+            idAbono,
+            req.session.idEmprendedora
+        ]);
+
+        if (consulta.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "No se encontró el abono"
+            });
+        }
+
+        const abono = consulta.rows[0];
+
+        if (!abono.token_transaccion) {
+            return res.status(409).json({
+                mensaje: "El abono no tiene una transacción asociada"
+            });
+        }
+
+        // Consultar el estado registrado por Transbank.
+        const resultado = await webpay.status(
+            abono.token_transaccion
+        );
+
+        // Comprobar que el monto y la orden coincidan.
+        const datosCoinciden =
+            Number(resultado.amount) === Number(abono.monto) &&
+            typeof abono.buy_order === "string" &&
+            resultado.buy_order === abono.buy_order;
+
+        return res.status(200).json({
+            mensaje: "Estado consultado correctamente",
+            id_abono: abono.id_abono,
+            id_reserva: abono.id_reserva,
+            estado_local: abono.estado_local,
+            estado_transbank: resultado.status,
+            monto: abono.monto,
+            datos_coinciden: datosCoinciden
+        });
+
+    } catch (error) {
+        console.error(
+            "Error al consultar estado del abono:",
+            error.message
+        );
+
+        return res.status(502).json({
+            mensaje: "No se pudo consultar el estado en Transbank"
+        });
+    }
+});
+
+// ============================================================
+// WEBPAY PLUS — RECUPERAR PAGOS DESDE TRANSBANK
+// ============================================================
+
+// Recuperar pagos autorizados que no quedaron registrados.
+// Ruta protegida para pruebas desde el Back Office.
+app.post("/api/abonos/:id/recuperar", verificarSesion, async (req, res) => {
+    const idAbono = Number(req.params.id);
+
+    if (!Number.isSafeInteger(idAbono) || idAbono <= 0) {
+        return res.status(400).json({
+            mensaje: "El identificador del abono no es válido"
+        });
+    }
+
+    let clienteDB;
+
+    try {
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
+
+        // Buscar el abono y verificar su propietario.
+        const consulta = await clienteDB.query(`
+            SELECT
+                a.id_abono,
+                a.id_reserva,
+                a.monto,
+                a.estado AS estado_abono,
+                a.token_transaccion,
+                a.buy_order,
+                r.monto_abono,
+                r.estado AS estado_reserva
+            FROM abono a
+            INNER JOIN reserva r
+                ON a.id_reserva = r.id_reserva
+            INNER JOIN emprendimiento e
+                ON r.id_emprendimiento = e.id_emprendimiento
+            WHERE a.id_abono = $1
+              AND e.id_emprendedora = $2
+            FOR UPDATE OF a, r;
+        `, [idAbono, req.session.idEmprendedora]);
+
+        if (consulta.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+            return res.status(404).json({
+                mensaje: "No se encontró el abono"
+            });
+        }
+
+        const abono = consulta.rows[0];
+
+        if (
+            abono.estado_abono !== "pendiente" ||
+            abono.estado_reserva !== "pendiente_abono"
+        ) {
+            await clienteDB.query("ROLLBACK");
+            return res.status(409).json({
+                mensaje: "El abono o la reserva ya no están pendientes"
+            });
+        }
+
+        if (
+            !abono.token_transaccion ||
+            !abono.buy_order
+        ) {
+            await clienteDB.query("ROLLBACK");
+            return res.status(409).json({
+                mensaje: "Faltan los identificadores de la transacción"
+            });
+        }
+
+        // Consultar a Transbank sin iniciar otro cobro.
+        const resultado = await webpay.status(
+            abono.token_transaccion
+        );
+
+        // Comprobar la identidad e importe de la transacción.
+        const datosCoinciden =
+            resultado.buy_order === abono.buy_order &&
+            Number(resultado.amount) === Number(abono.monto) &&
+            Number(abono.monto) === Number(abono.monto_abono);
+
+        if (!datosCoinciden) {
+            await clienteDB.query("ROLLBACK");
+
+            console.error(
+                "ALERTA: Datos de pago inconsistentes. Abono:",
+                idAbono
+            );
+
+            return res.status(409).json({
+                mensaje: "Los datos del pago requieren revisión"
+            });
+        }
+
+        // Una transacción iniciada todavía no está pagada.
+        if (resultado.status === "INITIALIZED") {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(200).json({
+                mensaje: "El pago todavía no ha sido completado",
+                estado_transbank: "INITIALIZED",
+                estado_abono: "pendiente"
+            });
+        }
+        // Identificar pagos fallidos sin modificar su estado todavía.
+if (
+    resultado.status === "FAILED" ||
+    resultado.status === "REVERSED"
+) {
+    console.log(
+        "MERAKI: transacción con resultado negativo:",
+        resultado.status,
+        "Abono:",
+        idAbono
+    );
+
+    await clienteDB.query("ROLLBACK");
+
+    return res.status(200).json({
+        mensaje: "Transacción no aprobada. Requiere validar su cierre antes de habilitar otro intento.",
+        estado_transbank: resultado.status,
+        estado_abono: "pendiente"
+    });
+}
+
+        // Exigir autorización y código de respuesta válido.
+        if (
+            resultado.status !== "AUTHORIZED" ||
+            resultado.response_code === null ||
+            resultado.response_code === undefined ||
+            Number(resultado.response_code) !== 0
+        ) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "No existe una autorización válida para recuperar",
+                estado_transbank: resultado.status
+            });
+        }
+
+
+        // Comprobar que la reserva no tenga otro abono aprobado.
+const otroAprobado = await clienteDB.query(`
+    SELECT id_abono
+    FROM abono
+    WHERE id_reserva = $1
+      AND estado = 'aprobado'
+      AND id_abono <> $2;
+`, [abono.id_reserva, idAbono]);
+
+if (otroAprobado.rows.length > 0) {
+    await clienteDB.query("ROLLBACK");
+
+    return res.status(409).json({
+        mensaje: "La reserva ya tiene otro abono aprobado. Requiere revisión."
+    });
+}
+        
+        // Actualizar el abono y la reserva juntos.
+        // Verificar que ambos registros se actualicen.
+
+        const actualizacionAbono = await clienteDB.query(`
+            UPDATE abono
+            SET estado = 'aprobado',
+                codigo_autorizacion = $2,
+                fecha_pago = CURRENT_TIMESTAMP
+            WHERE id_abono = $1
+              AND estado = 'pendiente';
+        `, [
+            idAbono,
+            resultado.authorization_code || null
+        ]);
+
+        if (actualizacionAbono.rowCount !== 1) {
+            throw new Error(
+                "No se pudo actualizar correctamente el abono"
+            );
+        }
+
+        const actualizacionReserva = await clienteDB.query(`
+            UPDATE reserva
+            SET estado = 'confirmada'
+            WHERE id_reserva = $1
+              AND estado = 'pendiente_abono';
+        `, [abono.id_reserva]);
+
+        if (actualizacionReserva.rowCount !== 1) {
+            throw new Error(
+                "No se pudo confirmar correctamente la reserva"
+            );
+        }
+
+
+        await clienteDB.query("COMMIT");
+
+        return res.status(200).json({
+            mensaje: "Pago recuperado y reserva confirmada",
+            id_abono: idAbono,
+            id_reserva: abono.id_reserva,
+            estado_abono: "aprobado",
+            estado_reserva: "confirmada"
+        });
+
+    } catch (error) {
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error("Error en rollback:", errorRollback.message);
+            }
+        }
+
+        console.error("Error al recuperar pago:", error.message);
+
+        return res.status(502).json({
+            mensaje: "No se pudo recuperar el pago. Requiere revisión."
+        });
+
+    } finally {
+        if (clienteDB) {
+            clienteDB.release();
+        }
+    }
+});
+
+
 // Ruta para consultar las reservas de un emprendimiento.
 // Por ahora es una ruta de desarrollo; más adelante
 // estará protegida mediante autenticación y permisos.
@@ -2807,6 +3701,17 @@ app.patch("/api/reservas/:id/confirmar", verificarSesion, async (req, res) => {
             SET estado = 'confirmada'
             WHERE id_reserva = $1
               AND estado = 'pendiente_abono'
+
+            -- Exigir un abono aprobado antes de confirmar.
+              AND EXISTS (
+              SELECT 1
+              FROM abono a
+              WHERE a.id_reserva = reserva.id_reserva
+              AND a.estado = 'aprobado'
+              AND a.monto = reserva.monto_abono
+              AND a.fecha_pago IS NOT NULL
+               )
+
               AND id_emprendimiento IN (
                   SELECT id_emprendimiento
                   FROM emprendimiento

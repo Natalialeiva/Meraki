@@ -293,10 +293,12 @@ CREATE TYPE estado_abono AS ENUM (
 -- Tabla que registra los abonos realizados para confirmar reservas.
 CREATE TABLE abono (
     id_abono INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    id_reserva INTEGER NOT NULL UNIQUE,
+    id_reserva INTEGER NOT NULL,
     monto DECIMAL(10,2) NOT NULL,
     estado estado_abono NOT NULL DEFAULT 'pendiente',
     token_transaccion VARCHAR(255) UNIQUE,
+    -- Identificador único de la orden de compra enviada a Transbank.
+    buy_order VARCHAR(26) UNIQUE,
     codigo_autorizacion VARCHAR(100),
     fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_pago TIMESTAMP,
@@ -306,3 +308,12 @@ CREATE TABLE abono (
         FOREIGN KEY (id_reserva)
         REFERENCES reserva(id_reserva)
 );
+-- Evitar más de un abono aprobado para una misma reserva.
+CREATE UNIQUE INDEX abono_un_aprobado_por_reserva
+ON abono (id_reserva)
+WHERE estado = 'aprobado';
+
+-- Evitar más de un intento de pago pendiente por reserva.
+CREATE UNIQUE INDEX abono_un_pendiente_por_reserva
+ON abono (id_reserva)
+WHERE estado = 'pendiente';
