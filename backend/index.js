@@ -2768,6 +2768,98 @@ app.patch("/api/reservas/:id/confirmar", verificarSesion, async (req, res) => {
 
 
 
+// Marcar una reserva como atendida
+app.patch("/api/reservas/:id/atender", verificarSesion, async (req, res) => {
+    try {
+        const idReserva = Number(req.params.id);
+        const idEmprendedora = req.session.idEmprendedora;
+
+        if (!Number.isInteger(idReserva) || idReserva <= 0) {
+            return res.status(400).json({
+                mensaje: "ID de reserva inválido"
+            });
+        }
+
+        const resultado = await pool.query(
+            `
+            UPDATE reserva AS r
+            SET estado = 'atendida'
+            FROM emprendimiento AS e
+            WHERE r.id_reserva = $1
+              AND r.id_emprendimiento = e.id_emprendimiento
+              AND e.id_emprendedora = $2
+              AND r.estado = 'confirmada'
+              AND r.fecha_hora_fin <= CURRENT_TIMESTAMP
+            RETURNING r.id_reserva, r.estado
+            `,
+            [idReserva, idEmprendedora]
+        );
+
+        if (resultado.rowCount === 0) {
+            return res.status(404).json({
+                mensaje: "Reserva no encontrada o no disponible para marcar como atendida"
+            });
+        }
+
+        return res.json({
+            mensaje: "Reserva marcada como atendida correctamente",
+            reserva: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al marcar reserva como atendida:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo actualizar la reserva"
+        });
+    }
+});
+
+
+// Marcar una reserva como no atendida.
+app.patch("/api/reservas/:id/no-atendida", verificarSesion, async (req, res) => {
+    try {
+        const idReserva = Number(req.params.id);
+        const idEmprendedora = req.session.idEmprendedora;
+
+        if (!Number.isSafeInteger(idReserva) || idReserva <= 0) {
+            return res.status(400).json({
+                mensaje: "El identificador de la reserva no es válido"
+            });
+        }
+
+        const resultado = await pool.query(`
+            UPDATE reserva AS r
+            SET estado = 'no_atendida'
+            FROM emprendimiento AS e
+            WHERE r.id_reserva = $1
+              AND r.id_emprendimiento = e.id_emprendimiento
+              AND e.id_emprendedora = $2
+              AND r.estado = 'confirmada'
+              AND r.fecha_hora_fin <= CURRENT_TIMESTAMP
+            RETURNING r.id_reserva, r.estado;
+        `, [idReserva, idEmprendedora]);
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "Reserva no encontrada o no disponible para marcar como no atendida"
+            });
+        }
+
+        return res.json({
+            mensaje: "Reserva marcada como no atendida correctamente",
+            reserva: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error("Error al marcar reserva como no atendida:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo actualizar la reserva"
+        });
+    }
+});
+
 
 
 
@@ -3078,6 +3170,10 @@ app.post("/api/auth/logout", async (req, res) => {
         });
     }
 });
+
+
+
+
 // Iniciamos el servidor en el puerto 3000.
 app.listen(3000, () => {
     console.log("Servidor de Meraki funcionando en http://localhost:3000");
