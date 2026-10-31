@@ -4353,7 +4353,281 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
 
 
 
+// Ruta pública para mostrar los emprendimientos disponibles.
+// Las clientas no necesitan iniciar sesión.
 
+/* ============================================================
+   CONSULTAR Y BUSCAR EMPRENDIMIENTOS - FRONT OFFICE
+   ============================================================ */
+
+// Ruta pública para mostrar y buscar emprendimientos activos.
+app.get("/api/emprendimientos", async (req, res) => {
+    try {
+        // Recibimos los filtros opcionales de la URL.
+        const { nombre, comuna } = req.query;
+
+        // Validamos que los filtros sean textos.
+        if (
+            (nombre !== undefined && typeof nombre !== "string") ||
+            (comuna !== undefined && typeof comuna !== "string")
+        ) {
+            return res.status(400).json({
+                mensaje: "Los filtros deben ser textos válidos"
+            });
+        }
+
+        // Evitamos búsquedas excesivamente largas.
+        if (
+            (nombre && nombre.length > 150) ||
+            (comuna && comuna.length > 100)
+        ) {
+            return res.status(400).json({
+                mensaje: "Los filtros superan el tamaño permitido"
+            });
+        }
+
+        // Si no se envían filtros, utilizamos textos vacíos.
+        const nombreBuscado = nombre?.trim() || "";
+        const comunaBuscada = comuna?.trim() || "";
+
+        // Consultamos solamente emprendimientos activos.
+        // ILIKE permite buscar sin distinguir mayúsculas y minúsculas.
+        const resultado = await pool.query(`
+            SELECT
+                id_emprendimiento,
+                nombre,
+                descripcion,
+                comuna,
+                direccion,
+                latitud,
+                longitud
+            FROM emprendimiento
+            WHERE estado = TRUE
+              AND nombre ILIKE '%' || $1 || '%'
+              AND COALESCE(comuna, '') ILIKE '%' || $2 || '%'
+            ORDER BY nombre;
+        `, [nombreBuscado, comunaBuscada]);
+
+        // Respondemos con los resultados encontrados.
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        console.error(
+            "Error al buscar emprendimientos:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar los emprendimientos"
+        });
+    }
+});
+
+
+/* ============================================================
+   CONSULTAR TRABAJADORAS - FRONT OFFICE
+   ============================================================ */
+
+// Ruta pública para consultar las trabajadoras de un emprendimiento.
+app.get("/api/emprendimientos/:id/trabajadoras", async (req, res) => {
+    try {
+        // Obtenemos el identificador del emprendimiento.
+        const idEmprendimiento = Number(req.params.id);
+
+        // Comprobamos que sea un número entero positivo.
+        if (
+            !Number.isSafeInteger(idEmprendimiento) ||
+            idEmprendimiento <= 0
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes indicar un emprendimiento válido"
+            });
+        }
+
+        // Comprobamos que el emprendimiento exista y esté activo.
+        const emprendimiento = await pool.query(`
+            SELECT id_emprendimiento
+            FROM emprendimiento
+            WHERE id_emprendimiento = $1
+              AND estado = TRUE;
+        `, [idEmprendimiento]);
+
+        if (emprendimiento.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "El emprendimiento no está disponible"
+            });
+        }
+
+        // Consultamos solamente las trabajadoras activas.
+        // No mostramos información privada de sus cuentas.
+        const resultado = await pool.query(`
+            SELECT
+                id_trabajadora,
+                nombre,
+                apellido,
+                descripcion
+            FROM trabajadora
+            WHERE id_emprendimiento = $1
+              AND activa = TRUE
+            ORDER BY nombre, apellido;
+        `, [idEmprendimiento]);
+
+        // Enviamos los resultados al Front Office.
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        console.error(
+            "Error al consultar trabajadoras públicas:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar las trabajadoras"
+        });
+    }
+});
+
+
+
+/* ============================================================
+   CONSULTAR SERVICIOS POR EMPRENDIMIENTO - FRONT OFFICE
+   ============================================================ */
+
+// Ruta pública para consultar los servicios de un emprendimiento.
+app.get("/api/emprendimientos/:id/servicios", async (req, res) => {
+    try {
+        // Obtenemos el ID del emprendimiento desde la URL.
+        const idEmprendimiento = Number(req.params.id);
+
+        // Validamos que sea un identificador entero positivo.
+        if (
+            !Number.isSafeInteger(idEmprendimiento) ||
+            idEmprendimiento <= 0
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes indicar un emprendimiento válido"
+            });
+        }
+
+        // Verificamos que el emprendimiento exista y esté activo.
+        const emprendimiento = await pool.query(`
+            SELECT id_emprendimiento
+            FROM emprendimiento
+            WHERE id_emprendimiento = $1
+              AND estado = TRUE;
+        `, [idEmprendimiento]);
+
+        if (emprendimiento.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "El emprendimiento no está disponible"
+            });
+        }
+
+        // Consultamos únicamente los servicios activos del negocio.
+        // Incluimos la categoría, precio, duración y abono.
+        const resultado = await pool.query(`
+            SELECT
+                s.id_servicio,
+                s.nombre AS servicio,
+                s.descripcion,
+                c.nombre AS categoria,
+                s.precio,
+                s.duracion_min,
+                s.monto_abono
+            FROM servicio s
+            INNER JOIN categoria c
+                ON s.id_categoria = c.id_categoria
+            WHERE s.id_emprendimiento = $1
+              AND s.activo = TRUE
+            ORDER BY s.nombre;
+        `, [idEmprendimiento]);
+
+        // Devolvemos los servicios al Front Office.
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        console.error(
+            "Error al consultar servicios del emprendimiento:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar los servicios"
+        });
+    }
+});
+
+
+/* ============================================================
+   CONSULTAR TRABAJADORAS POR SERVICIO - FRONT OFFICE
+   ============================================================ */
+
+// Permite consultar quiénes realizan un servicio específico.
+app.get("/api/servicios/:id/trabajadoras", async (req, res) => {
+    try {
+        // Obtenemos el identificador del servicio.
+        const idServicio = Number(req.params.id);
+
+        // Validamos que sea un entero positivo.
+        if (
+            !Number.isSafeInteger(idServicio) ||
+            idServicio <= 0
+        ) {
+            return res.status(400).json({
+                mensaje: "Debes indicar un servicio válido"
+            });
+        }
+
+        // Comprobamos que el servicio y su emprendimiento estén activos.
+        const servicio = await pool.query(`
+            SELECT s.id_servicio
+            FROM servicio s
+            INNER JOIN emprendimiento e
+                ON s.id_emprendimiento = e.id_emprendimiento
+            WHERE s.id_servicio = $1
+              AND s.activo = TRUE
+              AND e.estado = TRUE;
+        `, [idServicio]);
+
+        if (servicio.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "El servicio no está disponible"
+            });
+        }
+
+        // Consultamos las trabajadoras activas asignadas al servicio.
+        // Verificamos que pertenezcan al mismo emprendimiento.
+        const resultado = await pool.query(`
+            SELECT
+                t.id_trabajadora,
+                t.nombre,
+                t.apellido,
+                t.descripcion
+            FROM trabajadora_servicio ts
+            INNER JOIN trabajadora t
+                ON ts.id_trabajadora = t.id_trabajadora
+            INNER JOIN servicio s
+                ON ts.id_servicio = s.id_servicio
+            WHERE ts.id_servicio = $1
+              AND t.id_emprendimiento = s.id_emprendimiento
+              AND t.activa = TRUE
+            ORDER BY t.nombre, t.apellido;
+        `, [idServicio]);
+
+        // Devolvemos las trabajadoras disponibles para ese servicio.
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        console.error(
+            "Error al consultar trabajadoras por servicio:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar las trabajadoras"
+        });
+    }
+});
 
 
 
