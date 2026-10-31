@@ -2576,6 +2576,12 @@ app.post("/api/reservas", async (req, res) => {
         const datos = disponibilidad.rows[0];
 
         // Registramos la reserva como pendiente de abono.
+       
+        // Generamos un token seguro y único para consultar la reserva.
+        const { randomUUID } = require("node:crypto");
+        const tokenConsulta = randomUUID();
+
+        // Registramos la reserva junto con su token de consulta.
         const nuevaReserva = await clienteDB.query(`
             INSERT INTO reserva (
                 id_emprendimiento,
@@ -2586,11 +2592,12 @@ app.post("/api/reservas", async (req, res) => {
                 fecha_hora_fin,
                 estado,
                 precio_servicio,
-                monto_abono
+                monto_abono,
+                token_consulta
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6,
-                'pendiente_abono', $7, $8
+                'pendiente_abono', $7, $8, $9
             )
             RETURNING
                 id_reserva,
@@ -2601,7 +2608,8 @@ app.post("/api/reservas", async (req, res) => {
                 fecha_hora_fin,
                 estado,
                 precio_servicio,
-                monto_abono;
+                monto_abono,
+                token_consulta;
         `, [
             datos.id_emprendimiento,
             idServicio,
@@ -2610,8 +2618,10 @@ app.post("/api/reservas", async (req, res) => {
             datos.fecha_hora_inicio,
             datos.fecha_hora_fin,
             datos.precio,
-            datos.monto_abono
+            datos.monto_abono,
+            tokenConsulta
         ]);
+
 
         // Confirmamos los cambios en PostgreSQL.
         await clienteDB.query("COMMIT");
@@ -2650,6 +2660,189 @@ app.post("/api/reservas", async (req, res) => {
         }
     }
 });
+
+
+
+
+
+/**
+ * MERAKI - Consultar una reserva mediante su token privado.
+ *
+ * No requiere iniciar sesión.
+ * Solo devuelve información necesaria sobre la reserva.
+ */
+app.get("/api/reservas/consulta/:token", async (req, res) => {
+    try {
+        const token = req.params.token;
+
+        // Comprobamos que el token tenga el formato de un UUID.
+        const formatoUUID =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+        if (!formatoUUID.test(token)) {
+            return res.status(400).json({
+                mensaje: "El enlace de consulta no es válido"
+            });
+        }
+
+        // Buscamos la reserva mediante su token privado.
+        const resultado = await pool.query(`
+            SELECT
+                r.id_reserva,
+                r.estado,
+                r.fecha_hora_inicio,
+                r.fecha_hora_fin,
+                s.nombre AS servicio,
+                e.nombre AS emprendimiento
+            FROM reserva r
+            INNER JOIN servicio s
+                ON r.id_servicio = s.id_servicio
+            INNER JOIN emprendimiento e
+                ON r.id_emprendimiento = e.id_emprendimiento
+            WHERE r.token_consulta = $1;
+        `, [token]);
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "No se encontró la reserva"
+            });
+        }
+
+        // No devolvemos datos personales ni el token privado.
+        return res.status(200).json({
+            mensaje: "Reserva encontrada",
+            reserva: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error(
+            "Error al consultar reserva:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudo consultar la reserva"
+        });
+    }
+});
+
+
+
+/**
+ * MERAKI - Cancelar una reserva mediante su token privado.
+ *
+ * No requiere iniciar sesión.
+ * Solo permite cancelar reservas sin intentos de pago
+ * registrados, para evitar conflictos con Webpay.
+ */
+app.patch("/api/reservas/consulta/:token/cancelar", async (req, res) => {
+    let clienteDB;
+
+    try {
+        const token = req.params.token;
+
+        // Validamos el formato del token privado.
+        const formatoUUID =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+        if (!formatoUUID.test(token)) {
+            return res.status(400).json({
+                mensaje: "El enlace de cancelación no es válido"
+            });
+        }
+
+        // Usamos una transacción para proteger la operación.
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
+
+        // Bloqueamos la reserva mientras comprobamos su estado.
+        const resultado = await clienteDB.query(`
+            SELECT id_reserva, estado
+            FROM reserva
+            WHERE token_consulta = $1
+            FOR UPDATE;
+        `, [token]);
+
+        if (resultado.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(404).json({
+                mensaje: "No se encontró la reserva"
+            });
+        }
+
+        const reserva = resultado.rows[0];
+
+        // Solo permitimos cancelar reservas pendientes o confirmadas.
+        if (!["pendiente_abono", "confirmada"].includes(reserva.estado)) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "La reserva no puede cancelarse en su estado actual"
+            });
+        }
+
+        // Comprobamos si existe algún intento de pago.
+        // Por seguridad, impedimos cancelar aunque el abono
+        // esté pendiente o rechazado.
+        const abonos = await clienteDB.query(`
+            SELECT 1
+            FROM abono
+            WHERE id_reserva = $1
+            LIMIT 1;
+        `, [reserva.id_reserva]);
+
+        if (abonos.rows.length > 0) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "La reserva tiene un pago asociado. Contacta al emprendimiento para gestionar la cancelación."
+            });
+        }
+
+        // Cancelamos únicamente si sigue en un estado permitido.
+        const cancelacion = await clienteDB.query(`
+            UPDATE reserva
+            SET estado = 'cancelada'
+            WHERE id_reserva = $1
+              AND estado IN ('pendiente_abono', 'confirmada')
+            RETURNING id_reserva, estado;
+        `, [reserva.id_reserva]);
+
+        await clienteDB.query("COMMIT");
+
+        return res.status(200).json({
+            mensaje: "Reserva cancelada correctamente",
+            reserva: cancelacion.rows[0]
+        });
+
+    } catch (error) {
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error("Error al revertir cancelación:", errorRollback.message);
+            }
+        }
+
+        console.error("Error al cancelar reserva por token:", error.message);
+
+        return res.status(500).json({
+            mensaje: "No se pudo cancelar la reserva"
+        });
+
+    } finally {
+        if (clienteDB) {
+            clienteDB.release();
+        }
+    }
+});
+
+
+
+
+
+
 
 // ============================================================
 // WEBPAY PLUS — INICIAR PAGO DE ABONO
@@ -3676,6 +3869,11 @@ app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
         });
     }
 });
+
+
+
+
+
 
 
 // ============================================================
