@@ -4180,6 +4180,196 @@ app.post("/api/auth/logout", async (req, res) => {
 
 
 
+
+/* ============================================================
+   CONSULTAR MIS EMPRENDIMIENTOS - BACK OFFICE
+   ============================================================ */
+
+// Esta ruta permite que una emprendedora consulte los negocios
+// asociados a su cuenta, incluyendo sus datos de ubicación.
+app.get("/api/mis-emprendimientos", verificarSesion, async (req, res) => {
+    try {
+        // Obtenemos el identificador desde la sesión iniciada.
+        const idEmprendedora = req.session.idEmprendedora;
+
+        // Consultamos solamente los emprendimientos de la cuenta.
+        // $1 evita incorporar directamente datos a la consulta SQL.
+        const resultado = await pool.query(`
+            SELECT
+                id_emprendimiento,
+                nombre,
+                descripcion,
+                direccion,
+                comuna,
+                latitud,
+                longitud,
+                telefono,
+                estado
+            FROM emprendimiento
+            WHERE id_emprendedora = $1
+            ORDER BY id_emprendimiento;
+        `, [idEmprendedora]);
+
+        // Respondemos con los emprendimientos encontrados.
+        return res.status(200).json(resultado.rows);
+
+    } catch (error) {
+        // Registramos el problema sin mostrar información interna.
+        console.error(
+            "Error al consultar mis emprendimientos:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudieron consultar los emprendimientos"
+        });
+    }
+});
+
+
+
+/* ============================================================
+   EDITAR PERFIL DEL EMPRENDIMIENTO - BACK OFFICE
+   ============================================================ */
+
+app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
+    try {
+        // Identificamos el emprendimiento que se desea editar.
+        const idEmprendimiento = Number(req.params.id);
+
+        if (!Number.isSafeInteger(idEmprendimiento) || idEmprendimiento <= 0) {
+            return res.status(400).json({
+                mensaje: "Debes indicar un emprendimiento válido"
+            });
+        }
+
+        // Campos que permitimos modificar en esta primera versión.
+        const camposPermitidos = {
+            nombre: 150,
+            descripcion: 1000,
+            direccion: 200,
+            comuna: 100,
+            telefono: 20
+        };
+
+        const datos = req.body || {};
+        const campos = Object.keys(datos);
+
+        // Exigimos al menos un campo editable.
+        if (campos.length === 0) {
+            return res.status(400).json({
+                mensaje: "Debes indicar al menos un campo para modificar"
+            });
+        }
+
+        // Evitamos que se modifiquen campos protegidos,
+        // como el propietario, el estado o el identificador.
+        for (const campo of campos) {
+            if (!Object.hasOwn(camposPermitidos, campo)) {
+                return res.status(400).json({
+                    mensaje: `No está permitido modificar el campo ${campo}`
+                });
+            }
+
+            const valor = datos[campo];
+
+            // Permitimos null para limpiar los campos opcionales.
+            if (valor === null && campo !== "nombre") {
+                continue;
+            }
+
+            if (
+                typeof valor !== "string" ||
+                valor.trim().length > camposPermitidos[campo] ||
+                (campo === "nombre" && valor.trim() === "")
+            ) {
+                return res.status(400).json({
+                    mensaje: `El campo ${campo} contiene un valor inválido`
+                });
+            }
+        }
+
+        // Construimos solamente los campos enviados.
+        // Los valores se envían mediante parámetros SQL.
+        const asignaciones = [];
+        const valores = [];
+
+        for (const campo of campos) {
+            valores.push(
+                datos[campo] === null ? null : datos[campo].trim()
+            );
+
+            asignaciones.push(`${campo} = $${valores.length}`);
+        }
+
+        // El último parámetro identifica el emprendimiento.
+        valores.push(idEmprendimiento);
+        const posicionId = valores.length;
+
+        // La sesión determina quién puede realizar la modificación.
+        valores.push(req.session.idEmprendedora);
+        const posicionPropietaria = valores.length;
+
+        const resultado = await pool.query(`
+            UPDATE emprendimiento
+            SET ${asignaciones.join(", ")}
+            WHERE id_emprendimiento = $${posicionId}
+              AND id_emprendedora = $${posicionPropietaria}
+            RETURNING
+                id_emprendimiento,
+                nombre,
+                descripcion,
+                direccion,
+                comuna,
+                latitud,
+                longitud,
+                telefono,
+                estado;
+        `, valores);
+
+        // No permitimos editar emprendimientos ajenos.
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: "El emprendimiento no existe"
+            });
+        }
+
+        return res.status(200).json({
+            mensaje: "Perfil del emprendimiento actualizado correctamente",
+            emprendimiento: resultado.rows[0]
+        });
+
+    } catch (error) {
+        console.error(
+            "Error al editar emprendimiento:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: "No se pudo actualizar el emprendimiento"
+        });
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // Iniciamos el servidor en el puerto 3000.
 app.listen(3000, () => {
     console.log("Servidor de Meraki funcionando en http://localhost:3000");
