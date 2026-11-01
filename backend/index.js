@@ -3808,18 +3808,28 @@ app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
 
         // Cancelamos únicamente reservas pendientes o confirmadas.
         // RETURNING nos devuelve la reserva modificada.
+       
+        // Cancelamos reservas propias que no tengan abonos asociados.
         const resultado = await pool.query(`
-           UPDATE reserva
-           SET estado = 'cancelada'
-           WHERE id_reserva = $1
-            AND estado IN ('pendiente_abono', 'confirmada')
+            UPDATE reserva
+            SET estado = 'cancelada'
+            WHERE id_reserva = $1
+              AND estado IN ('pendiente_abono', 'confirmada')
 
-        -- Solo permitimos cancelar reservas de emprendimientos propios.
-           AND id_emprendimiento IN (
-          SELECT id_emprendimiento
-          FROM emprendimiento
-          WHERE id_emprendedora = $2
-  )
+              -- Solo reservas de la emprendedora autenticada.
+              AND id_emprendimiento IN (
+                  SELECT id_emprendimiento
+                  FROM emprendimiento
+                  WHERE id_emprendedora = $2
+              )
+
+              -- Impedimos cancelar reservas con pagos registrados.
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM abono
+                  WHERE abono.id_reserva = reserva.id_reserva
+              )
+
             RETURNING
                 id_reserva,
                 id_clienta,
@@ -3830,7 +3840,10 @@ app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
                     fecha_hora_inicio,
                     'YYYY-MM-DD"T"HH24:MI:SS'
                 ) AS fecha_hora_inicio;
-      `, [idReserva, req.session.idEmprendedora]);
+        `, [idReserva, req.session.idEmprendedora]);
+
+
+
 
         // Si no se modificó ninguna fila, comprobamos si existe.
         if (resultado.rows.length === 0) {
