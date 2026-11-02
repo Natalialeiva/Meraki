@@ -47,6 +47,215 @@ app.get("/", (req, res) => {
 
 // Importamos la conexión con PostgreSQL.
 const pool = require("./db");
+// Función para enviar correos de confirmación de reservas.
+const { enviarConfirmacionReserva } = require("./correo");
+
+/**
+ * Obtiene los datos necesarios para enviar el correo
+ * de confirmación de una reserva de Meraki.
+ */
+async function obtenerDatosCorreoReserva(idReserva) {
+    const resultado = await pool.query(`
+        SELECT
+            c.nombre AS nombre_clienta,
+            c.correo,
+            e.nombre AS emprendimiento,
+            s.nombre AS servicio,
+            TO_CHAR(r.fecha_hora_inicio, 'DD/MM/YYYY') AS fecha,
+            TO_CHAR(r.fecha_hora_inicio, 'HH24:MI') AS hora,
+            r.token_consulta
+        FROM reserva r
+        INNER JOIN clienta c
+            ON r.id_clienta = c.id_clienta
+        INNER JOIN emprendimiento e
+            ON r.id_emprendimiento = e.id_emprendimiento
+        INNER JOIN servicio s
+            ON r.id_servicio = s.id_servicio
+        WHERE r.id_reserva = $1
+          AND r.estado = 'confirmada';
+    `, [idReserva]);
+
+    if (resultado.rows.length === 0) {
+        throw new Error("No se encontró una reserva confirmada");
+    }
+
+    const datos = resultado.rows[0];
+
+    if (!datos.token_consulta || !datos.correo) {
+        throw new Error("Faltan datos para enviar la confirmación");
+    }
+
+    return {
+        correo: datos.correo,
+        nombreClienta: datos.nombre_clienta,
+        emprendimiento: datos.emprendimiento,
+        servicio: datos.servicio,
+        fecha: datos.fecha,
+        hora: datos.hora,
+        enlaceConsulta:
+            `http://localhost:3000/api/reservas/consulta/${datos.token_consulta}`
+    };
+}
+
+
+
+/**
+ * Enviar el correo de una reserva ya confirmada.
+ *
+ * Si ocurre un error con el servicio de correo,
+ * no se modifica el pago ni el estado de la reserva.
+ */
+
+/**
+ * Envía el correo de una reserva confirmada.
+ *
+ * Utiliza PostgreSQL para impedir que dos solicitudes
+ * envíen simultáneamente la misma notificación.
+ */
+async function notificarReservaConfirmada(idReserva) {
+    try {
+        // Reclamar exclusivamente una notificación pendiente.
+        const reclamo = await pool.query(`
+            UPDATE notificacion_correo
+            SET estado = 'enviando',
+                intentos = intentos + 1,
+                ultimo_error = NULL
+            WHERE id_reserva = $1
+              AND tipo = 'confirmacion_reserva'
+              AND estado = 'pendiente'
+            RETURNING id_notificacion;
+        `, [idReserva]);
+
+        // Si no hay una notificación pendiente,
+        // evitamos generar otro envío.
+        if (reclamo.rows.length === 0) {
+            return {
+                enviado: false,
+                motivo: "No hay una notificación pendiente"
+            };
+        }
+
+        const idNotificacion = reclamo.rows[0].id_notificacion;
+
+        try {
+            // Obtener los datos de la reserva confirmada.
+            const datosCorreo = await obtenerDatosCorreoReserva(idReserva);
+
+            // Enviar el correo mediante Nodemailer.
+            const resultado = await enviarConfirmacionReserva(datosCorreo);
+
+            // Registrar que el envío se completó.
+            await pool.query(`
+                UPDATE notificacion_correo
+                SET estado = 'enviado',
+                    fecha_envio = CURRENT_TIMESTAMP,
+                    ultimo_error = NULL
+                WHERE id_notificacion = $1
+                  AND estado = 'enviando';
+            `, [idNotificacion]);
+
+            console.log(
+                "MERAKI: correo enviado para reserva",
+                idReserva
+            );
+
+            return {
+                enviado: true,
+                vistaPrevia: resultado.vistaPrevia
+            };
+
+        } catch (errorEnvio) {
+            // Guardar el fallo para poder revisarlo.
+            await pool.query(`
+                UPDATE notificacion_correo
+                SET estado = 'fallido',
+                    ultimo_error = $2
+                WHERE id_notificacion = $1
+                  AND estado = 'enviando';
+            `, [idNotificacion, errorEnvio.message]);
+
+            console.error(
+                "MERAKI: fallo al enviar correo:",
+                errorEnvio.message
+            );
+
+            return {
+                enviado: false
+            };
+        }
+
+    } catch (error) {
+        console.error(
+            "MERAKI: error al gestionar notificación:",
+            error.message
+        );
+
+        return {
+            enviado: false
+        };
+    }
+}
+
+
+
+/**
+ * MERAKI - Recuperación de notificaciones fallidas.
+ *
+ * Permite volver a dejar pendiente una notificación
+ * cuyo envío anterior falló.
+ *
+ * No modifica reservas ni abonos.
+ */
+async function recuperarNotificacionFallida(idReserva) {
+    const resultado = await pool.query(`
+        UPDATE notificacion_correo
+        SET estado = 'pendiente',
+            ultimo_error = NULL
+        WHERE id_reserva = $1
+          AND tipo = 'confirmacion_reserva'
+          AND estado = 'fallido'
+        RETURNING id_notificacion;
+    `, [idReserva]);
+
+    return {
+        recuperada: resultado.rows.length === 1
+    };
+}
+
+
+
+/**
+ * Registra una notificación pendiente para una reserva confirmada.
+ *
+ * Si ya existe una notificación del mismo tipo,
+ * no crea otro registro.
+ */
+async function registrarNotificacionConfirmacion(idReserva) {
+    const resultado = await pool.query(`
+        INSERT INTO notificacion_correo (
+            id_reserva,
+            tipo,
+            estado
+        )
+        SELECT
+            id_reserva,
+            'confirmacion_reserva',
+            'pendiente'
+        FROM reserva
+        WHERE id_reserva = $1
+          AND estado = 'confirmada'
+        ON CONFLICT (id_reserva, tipo)
+        DO NOTHING
+        RETURNING id_notificacion;
+    `, [idReserva]);
+
+    return {
+        creada: resultado.rows.length === 1
+    };
+}
+
+
+
 
 // Comprobamos que exista la clave privada de sesiones.
 if (!process.env.SESSION_SECRET) {
@@ -3396,13 +3605,22 @@ const parametros = {
 
 const tokenRecibido = parametros.token_ws;
 
+// Diagnóstico seguro del retorno de Webpay.
+// Solo registra si los parámetros existen, nunca sus valores.
+console.log("MERAKI: diagnóstico retorno Webpay", {
+    metodo: req.method,
+    tiene_token_ws: Boolean(parametros.token_ws),
+    tiene_TBK_TOKEN: Boolean(parametros.TBK_TOKEN),
+    tiene_TBK_ORDEN_COMPRA: Boolean(parametros.TBK_ORDEN_COMPRA),
+    tiene_TBK_ID_SESION: Boolean(parametros.TBK_ID_SESION)
+});
+
+// Detectar retornos de interrupción o abandono.
+// Estos parámetros no deben procesarse mediante commit.
 const retornoInterrumpido =
-    !tokenRecibido &&
-    (
-        parametros.TBK_TOKEN ||
-        parametros.TBK_ORDEN_COMPRA ||
-        parametros.TBK_ID_SESION
-    );
+    Boolean(parametros.TBK_TOKEN) ||
+    Boolean(parametros.TBK_ORDEN_COMPRA) ||
+    Boolean(parametros.TBK_ID_SESION);
 
 // Detectar retornos por abandono, cancelación o tiempo agotado.
 if (retornoInterrumpido) {
@@ -3617,14 +3835,35 @@ if (!aprobado && !pagoRechazado) {
         }
 
 
-        await clienteDB.query("COMMIT");
+        // Confirmar definitivamente el pago y la reserva.
+await clienteDB.query("COMMIT");
 
-        return res.status(200).json({
-            mensaje: "Abono aprobado y reserva confirmada",
-            id_reserva: abono.id_reserva,
-            estado_abono: "aprobado",
-            estado_reserva: "confirmada"
-        });
+// El pago ya está confirmado en PostgreSQL.
+// Un fallo de correo no debe modificar su resultado.
+try {
+    // Crear la notificación pendiente si todavía no existe.
+    await registrarNotificacionConfirmacion(abono.id_reserva);
+
+    // Enviar el correo y registrar su resultado.
+    await notificarReservaConfirmada(abono.id_reserva);
+
+} catch (errorCorreo) {
+    console.error(
+        "MERAKI: error al gestionar correo de reserva",
+        abono.id_reserva,
+        errorCorreo.message
+    );
+}
+
+// Informar el resultado real del pago, independientemente
+// de que el correo se haya podido enviar.
+return res.status(200).json({
+    mensaje: "Abono aprobado y reserva confirmada",
+    id_reserva: abono.id_reserva,
+    estado_abono: "aprobado",
+    estado_reserva: "confirmada"
+});
+
 
     } catch (error) {
         if (clienteDB) {
