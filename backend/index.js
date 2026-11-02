@@ -115,16 +115,19 @@ async function obtenerDatosCorreoReserva(idReserva) {
 async function notificarReservaConfirmada(idReserva) {
     try {
         // Reclamar exclusivamente una notificación pendiente.
-        const reclamo = await pool.query(`
-            UPDATE notificacion_correo
-            SET estado = 'enviando',
-                intentos = intentos + 1,
-                ultimo_error = NULL
-            WHERE id_reserva = $1
-              AND tipo = 'confirmacion_reserva'
-              AND estado = 'pendiente'
-            RETURNING id_notificacion;
-        `, [idReserva]);
+        
+const reclamo = await pool.query(`
+    UPDATE notificacion_correo
+    SET estado = 'enviando',
+        intentos = intentos + 1,
+        fecha_inicio_envio = CURRENT_TIMESTAMP,
+        ultimo_error = NULL
+    WHERE id_reserva = $1
+      AND tipo = 'confirmacion_reserva'
+      AND estado = 'pendiente'
+      AND intentos < 3
+    RETURNING id_notificacion;
+`, [idReserva]);
 
         // Si no hay una notificación pendiente,
         // evitamos generar otro envío.
@@ -196,6 +199,125 @@ async function notificarReservaConfirmada(idReserva) {
     }
 }
 
+/**
+ * MERAKI - Reintento controlado de correo.
+ *
+ * Solo intenta recuperar notificaciones fallidas
+ * de reservas confirmadas y con menos de 3 intentos.
+ *
+ * No modifica pagos ni reservas.
+ */
+async function reintentarCorreoFallido(idReserva) {
+    try {
+        // Comprobar si la notificación puede recuperarse.
+        const recuperacion = await recuperarNotificacionFallida(idReserva);
+
+        if (!recuperacion.recuperada) {
+            return {
+                reintentado: false,
+                motivo: "La notificación no cumple las condiciones de reintento"
+            };
+        }
+
+        // La notificación ya está pendiente.
+        // Intentar enviarla nuevamente.
+        const resultado = await notificarReservaConfirmada(idReserva);
+
+        return {
+            reintentado: true,
+            enviado: resultado.enviado
+        };
+
+    } catch (error) {
+        console.error(
+            "MERAKI: error al reintentar correo:",
+            error.message
+        );
+
+        return {
+            reintentado: false,
+            enviado: false
+        };
+    }
+}
+
+
+/**
+ * MERAKI - Detectar notificaciones con envío interrumpido.
+ *
+ * Busca correos que llevan más de 10 minutos
+ * en estado "enviando".
+ *
+ * No modifica datos ni reenvía mensajes.
+ */
+async function detectarCorreosInterrumpidos() {
+    const resultado = await pool.query(`
+        SELECT
+            id_notificacion,
+            id_reserva,
+            estado,
+            intentos,
+            fecha_inicio_envio
+        FROM notificacion_correo
+        WHERE estado = 'enviando'
+          AND fecha_inicio_envio IS NOT NULL
+          AND fecha_inicio_envio <
+              CURRENT_TIMESTAMP - INTERVAL '10 minutes'
+        ORDER BY fecha_inicio_envio;
+    `);
+
+    return resultado.rows;
+}
+/**
+ * MERAKI - Revisar correos posiblemente interrumpidos.
+ *
+ * Muestra las notificaciones que necesitan revisión.
+ * No modifica estados ni vuelve a enviar correos.
+ */
+async function revisarCorreosInterrumpidos() {
+    try {
+        const notificaciones = await detectarCorreosInterrumpidos();
+
+        if (notificaciones.length === 0) {
+            console.log(
+                "MERAKI: no hay correos interrumpidos pendientes de revisión"
+            );
+
+            return {
+                cantidad: 0
+            };
+        }
+
+        for (const notificacion of notificaciones) {
+            console.warn(
+                "MERAKI: posible correo interrumpido",
+                {
+                    id_notificacion: notificacion.id_notificacion,
+                    id_reserva: notificacion.id_reserva,
+                    intentos: notificacion.intentos,
+                    fecha_inicio_envio: notificacion.fecha_inicio_envio
+                }
+            );
+        }
+
+        return {
+            cantidad: notificaciones.length
+        };
+
+    } catch (error) {
+        console.error(
+            "MERAKI: error al revisar correos interrumpidos:",
+            error.message
+        );
+
+        return {
+            cantidad: 0,
+            error: true
+        };
+    }
+}
+
+
 
 
 /**
@@ -206,21 +328,37 @@ async function notificarReservaConfirmada(idReserva) {
  *
  * No modifica reservas ni abonos.
  */
+
+/**
+ * MERAKI - Recuperación de notificaciones fallidas.
+ *
+ * Permite preparar un nuevo intento solamente cuando:
+ * - La notificación está fallida.
+ * - La reserva continúa confirmada.
+ * - Se han realizado menos de 3 intentos.
+ *
+ * No modifica reservas ni abonos.
+ */
 async function recuperarNotificacionFallida(idReserva) {
     const resultado = await pool.query(`
-        UPDATE notificacion_correo
+        UPDATE notificacion_correo n
         SET estado = 'pendiente',
             ultimo_error = NULL
-        WHERE id_reserva = $1
-          AND tipo = 'confirmacion_reserva'
-          AND estado = 'fallido'
-        RETURNING id_notificacion;
+        FROM reserva r
+        WHERE n.id_reserva = r.id_reserva
+          AND n.id_reserva = $1
+          AND n.tipo = 'confirmacion_reserva'
+          AND n.estado = 'fallido'
+          AND n.intentos < 3
+          AND r.estado = 'confirmada'
+        RETURNING n.id_notificacion;
     `, [idReserva]);
 
     return {
         recuperada: resultado.rows.length === 1
     };
 }
+
 
 
 
@@ -5359,6 +5497,10 @@ app.get("/api/servicios/:id/trabajadoras", async (req, res) => {
         });
     }
 });
+
+
+
+
 
 
 
