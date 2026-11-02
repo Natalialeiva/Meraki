@@ -3131,6 +3131,258 @@ await clienteDB.query(`
 });
 
 // ============================================================
+// WEBPAY PLUS — INICIAR ABONO DESDE EL FRONT OFFICE
+// ============================================================
+
+// Esta ruta permitirá que una clienta pague utilizando
+// el token privado de su reserva, sin iniciar sesión.
+
+
+
+
+/**
+ * MERAKI - Inicio de abono para clientas.
+ *
+ * Permite iniciar un pago utilizando el token privado de la reserva.
+ * Verifica los pagos anteriores y evita crear abonos duplicados.
+ *
+ * Utiliza Webpay Plus en el ambiente configurado para Meraki.
+ */
+app.post("/api/abonos/cliente/iniciar", async (req, res) => {
+    const tokenConsulta = req.body?.token_consulta;
+
+    // Comprobar que el token tenga un formato UUID válido.
+    const formatoUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (
+        typeof tokenConsulta !== "string" ||
+        !formatoUUID.test(tokenConsulta)
+    ) {
+        return res.status(400).json({
+            mensaje: "El token de la reserva no es válido"
+        });
+    }
+
+    let clienteDB;
+
+    try {
+        // Obtener una conexión exclusiva con PostgreSQL.
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
+
+        // Buscar la reserva mediante el token privado.
+        // FOR UPDATE impide que otra operación la modifique
+        // simultáneamente mientras iniciamos el pago.
+        const consulta = await clienteDB.query(`
+            SELECT
+                id_reserva,
+                estado,
+                monto_abono
+            FROM reserva
+            WHERE token_consulta = $1
+            FOR UPDATE;
+        `, [tokenConsulta]);
+
+        if (consulta.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(404).json({
+                mensaje: "No se encontró la reserva"
+            });
+        }
+
+        const reserva = consulta.rows[0];
+
+        // Solo se permiten pagos para reservas pendientes de abono.
+        if (reserva.estado !== "pendiente_abono") {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "La reserva no está pendiente de abono"
+            });
+        }
+
+        // Obtener el monto desde PostgreSQL, nunca desde el cliente.
+        const monto = Number(reserva.monto_abono);
+
+        if (!Number.isSafeInteger(monto) || monto <= 0) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(400).json({
+                mensaje: "El monto del abono no es válido"
+            });
+        }
+
+        // Obtener todos los intentos de pago anteriores.
+        const abonosExistentes = await clienteDB.query(`
+            SELECT
+                id_abono,
+                estado,
+                monto,
+                token_transaccion,
+                buy_order
+            FROM abono
+            WHERE id_reserva = $1
+            ORDER BY id_abono DESC;
+        `, [reserva.id_reserva]);
+
+        // Comprobar si existe un abono pendiente o aprobado.
+        const pagoBloqueante = abonosExistentes.rows.find(
+            abono =>
+                abono.estado === "pendiente" ||
+                abono.estado === "aprobado"
+        );
+
+        if (pagoBloqueante) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "La reserva tiene un abono pendiente o aprobado. No se puede iniciar otro pago."
+            });
+        }
+
+        // Verificar los intentos anteriores antes de permitir otro pago.
+        for (const intentoAnterior of abonosExistentes.rows) {
+
+            // Si faltan los identificadores, el intento requiere revisión.
+            if (
+                !intentoAnterior.token_transaccion ||
+                !intentoAnterior.buy_order
+            ) {
+                await clienteDB.query("ROLLBACK");
+
+                return res.status(409).json({
+                    mensaje: "Una transacción anterior requiere revisión."
+                });
+            }
+
+            // Consultar el estado del intento en Transbank.
+            const resultadoAnterior = await webpay.status(
+                intentoAnterior.token_transaccion
+            );
+
+            // Comprobar que Transbank devuelve los datos del mismo abono.
+            const datosValidos =
+                resultadoAnterior.buy_order === intentoAnterior.buy_order &&
+                resultadoAnterior.amount !== null &&
+                resultadoAnterior.amount !== undefined &&
+                Number(resultadoAnterior.amount) === Number(intentoAnterior.monto);
+
+            // Solo permitir otro intento cuando el anterior
+            // está rechazado o revertido y los datos coinciden.
+            if (
+                !datosValidos ||
+                !["FAILED", "REVERSED"].includes(resultadoAnterior.status)
+            ) {
+                await clienteDB.query("ROLLBACK");
+
+                return res.status(409).json({
+                    mensaje: "No se puede reintentar. La transacción anterior requiere revisión."
+                });
+            }
+        }
+
+        // Generar identificadores únicos para la nueva transacción.
+        const { randomUUID } = require("node:crypto");
+        const identificador = randomUUID().replace(/-/g, "");
+
+        const idReserva = reserva.id_reserva;
+        const buyOrder = `M${idReserva}-${identificador.slice(0, 18)}`;
+        const sessionId = `MERAKI-${identificador.slice(0, 20)}`;
+
+        // Utilizar la dirección de retorno configurada para Webpay.
+        const returnUrl = process.env.WEBPAY_RETURN_URL;
+
+        if (!returnUrl) {
+            throw new Error("Falta WEBPAY_RETURN_URL");
+        }
+
+        // Crear la transacción en Webpay Plus.
+        const transaccion = await webpay.create(
+            buyOrder,
+            sessionId,
+            monto,
+            returnUrl
+        );
+
+        // Verificar que Transbank entregue la URL y el token de pago.
+        if (!transaccion.token || !transaccion.url) {
+            throw new Error("Respuesta incompleta de Transbank");
+        }
+
+        // Registrar el intento de pago en PostgreSQL.
+        const nuevoAbono = await clienteDB.query(`
+            INSERT INTO abono (
+                id_reserva,
+                monto,
+                estado,
+                token_transaccion,
+                buy_order
+            )
+            VALUES ($1, $2, 'pendiente', $3, $4)
+            RETURNING id_abono;
+        `, [
+            idReserva,
+            monto,
+            transaccion.token,
+            buyOrder
+        ]);
+
+        // Confirmar los cambios en PostgreSQL.
+        await clienteDB.query("COMMIT");
+
+        // Enviar los datos necesarios para continuar el pago.
+        return res.status(201).json({
+            mensaje: "Transacción iniciada correctamente",
+            id_reserva: idReserva,
+            id_abono: nuevoAbono.rows[0].id_abono,
+            monto,
+            url: transaccion.url,
+            token: transaccion.token
+        });
+
+    } catch (error) {
+
+        // Revertir cambios si ocurre un error.
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error(
+                    "Error al revertir inicio de pago:",
+                    errorRollback.message
+                );
+            }
+        }
+
+        console.error(
+            "Error al iniciar pago de clienta:",
+            error.message
+        );
+
+        return res.status(502).json({
+            mensaje: "No se pudo iniciar el abono"
+        });
+
+    } finally {
+
+        // Liberar la conexión de PostgreSQL.
+        if (clienteDB) {
+            clienteDB.release();
+        }
+    }
+});
+
+
+
+
+
+
+
+
+
+// ============================================================
 // WEBPAY PLUS — RETORNO Y VERIFICACIÓN DEL ABONO
 // ============================================================
 
@@ -3790,46 +4042,80 @@ if (propiedad.rows.length === 0) {
         });
     }
 });
+
+
+
+
 // Ruta para cancelar una reserva.
 // Es provisional para desarrollo local: requiere autenticación
 // y autorización antes de publicar el sistema.
 // Solo las emprendedoras autenticadas pueden solicitar cancelaciones.
 app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
-    try {
-        // Obtenemos el identificador de la reserva.
-        const idReserva = Number(req.params.id);
+    const idReserva = Number(req.params.id);
 
-        // Validamos que sea un número entero positivo.
-        if (!Number.isSafeInteger(idReserva) || idReserva <= 0) {
-            return res.status(400).json({
-                mensaje: "El identificador de la reserva no es válido"
+    if (!Number.isSafeInteger(idReserva) || idReserva <= 0) {
+        return res.status(400).json({
+            mensaje: "El identificador de la reserva no es válido"
+        });
+    }
+
+    let clienteDB;
+
+    try {
+        clienteDB = await pool.connect();
+        await clienteDB.query("BEGIN");
+
+        // Comprobar que la reserva pertenece a la emprendedora.
+        // Bloquear la fila para impedir modificaciones simultáneas.
+        const consulta = await clienteDB.query(`
+            SELECT r.id_reserva, r.estado
+            FROM reserva r
+            INNER JOIN emprendimiento e
+                ON r.id_emprendimiento = e.id_emprendimiento
+            WHERE r.id_reserva = $1
+              AND e.id_emprendedora = $2
+            FOR UPDATE OF r;
+        `, [idReserva, req.session.idEmprendedora]);
+
+        if (consulta.rows.length === 0) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(404).json({
+                mensaje: "La reserva no existe"
             });
         }
 
-        // Cancelamos únicamente reservas pendientes o confirmadas.
-        // RETURNING nos devuelve la reserva modificada.
-       
-        // Cancelamos reservas propias que no tengan abonos asociados.
-        const resultado = await pool.query(`
+        // Solo se permiten estados pendientes o confirmados.
+        if (!["pendiente_abono", "confirmada"].includes(consulta.rows[0].estado)) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "La reserva no puede cancelarse en su estado actual"
+            });
+        }
+
+        // Revisar los abonos después de bloquear la reserva.
+        const abonos = await clienteDB.query(`
+            SELECT 1
+            FROM abono
+            WHERE id_reserva = $1
+            LIMIT 1;
+        `, [idReserva]);
+
+        if (abonos.rows.length > 0) {
+            await clienteDB.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensaje: "La reserva tiene un pago asociado. Debes gestionar el abono antes de cancelarla."
+            });
+        }
+
+        // Actualizar el estado mientras seguimos en la transacción.
+        const resultado = await clienteDB.query(`
             UPDATE reserva
             SET estado = 'cancelada'
             WHERE id_reserva = $1
               AND estado IN ('pendiente_abono', 'confirmada')
-
-              -- Solo reservas de la emprendedora autenticada.
-              AND id_emprendimiento IN (
-                  SELECT id_emprendimiento
-                  FROM emprendimiento
-                  WHERE id_emprendedora = $2
-              )
-
-              -- Impedimos cancelar reservas con pagos registrados.
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM abono
-                  WHERE abono.id_reserva = reserva.id_reserva
-              )
-
             RETURNING
                 id_reserva,
                 id_clienta,
@@ -3840,46 +4126,41 @@ app.patch("/api/reservas/:id/cancelar", verificarSesion, async (req, res) => {
                     fecha_hora_inicio,
                     'YYYY-MM-DD"T"HH24:MI:SS'
                 ) AS fecha_hora_inicio;
-        `, [idReserva, req.session.idEmprendedora]);
+        `, [idReserva]);
 
-
-
-
-        // Si no se modificó ninguna fila, comprobamos si existe.
-        if (resultado.rows.length === 0) {
-            // Comprobamos si la reserva existe dentro de un emprendimiento propio.
-    const existente = await pool.query(`
-       SELECT r.estado
-       FROM reserva r
-       INNER JOIN emprendimiento e
-        ON r.id_emprendimiento = e.id_emprendimiento
-       WHERE r.id_reserva = $1
-        AND e.id_emprendedora = $2
-`, [idReserva, req.session.idEmprendedora]);
-
-            if (existente.rows.length === 0) {
-                return res.status(404).json({
-                    mensaje: "La reserva no existe"
-                });
-            }
-
-            return res.status(409).json({
-                mensaje: "La reserva no puede cancelarse en su estado actual"
-            });
+        if (resultado.rowCount !== 1) {
+            throw new Error("No se pudo actualizar la reserva");
         }
 
-        // Respondemos con la reserva actualizada.
-        return res.json({
+        await clienteDB.query("COMMIT");
+
+        return res.status(200).json({
             mensaje: "Reserva cancelada correctamente",
             reserva: resultado.rows[0]
         });
 
     } catch (error) {
+        if (clienteDB) {
+            try {
+                await clienteDB.query("ROLLBACK");
+            } catch (errorRollback) {
+                console.error(
+                    "Error al revertir cancelación:",
+                    errorRollback.message
+                );
+            }
+        }
+
         console.error("Error al cancelar reserva:", error.message);
 
         return res.status(500).json({
             mensaje: "No se pudo cancelar la reserva"
         });
+
+    } finally {
+        if (clienteDB) {
+            clienteDB.release();
+        }
     }
 });
 
