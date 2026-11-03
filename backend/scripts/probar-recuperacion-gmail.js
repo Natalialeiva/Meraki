@@ -38,7 +38,7 @@ async function main() {
         await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(Number(base.port || 80),base.hostname,resolve);});
         await admin.query('CREATE SCHEMA '+schema); creada=true;
         pool = new Pool({...config,options:'-c search_path='+schema+',public'});
-        for (const file of ['schema.sql','002_agregar_token_consulta.sql','003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql','seed.sql']) {
+        for (const file of ['schema.sql','002_agregar_token_consulta.sql','003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql','006_correccion_correo_reserva.sql','seed.sql']) {
             await pool.query(fs.readFileSync(path.join(__dirname,'../../database',file),'utf8'));
         }
         const clave = crypto.randomBytes(24).toString('hex');
@@ -95,4 +95,3 @@ async function main() {
     }
 }
 main().catch(()=>{console.error('No se pudo iniciar la prueba. Revisar configuración local.');process.exitCode=1;});
-

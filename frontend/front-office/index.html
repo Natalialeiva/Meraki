@@ -1,1 +1,22 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meraki | Belleza y bienestar</title><style>body{font:17px system-ui;max-width:1000px;margin:auto;padding:2rem;background:#faf6f3;color:#382a34}input,button,select{font:inherit;padding:.6rem;margin:.4rem}article,section{background:white;padding:1.5rem;margin:1rem 0;border-radius:12px}label{display:inline-block}button{cursor:pointer}</style><header><h1>Meraki</h1><p>Encuentra tu próximo momento de bienestar.</p><a href="/back-office/">Acceso emprendedoras</a></header><main><form id="buscar"><label>Nombre <input name="nombre"></label><label>Comuna <input name="comuna"></label><button>Buscar</button></form><p id="estado" role="status"></p><div id="resultados"></div><section id="reserva" hidden><h2>Reserva tu hora</h2><form id="formReserva"><label>Servicio <select id="servicio" required></select></label><label>Profesional <select id="profesional" required></select></label><label>Fecha <input id="fecha" type="date" required></label><button id="disponibilidad" type="button">Consultar horas</button><label>Hora <select id="hora" required></select></label><p><label>Nombre <input name="nombre" required maxlength="100"></label><label>Correo <input name="correo" type="email" required maxlength="150"></label><label>Teléfono <input name="telefono" maxlength="20"></label></p><button>Crear reserva</button></form><a id="consulta" hidden>Consultar reserva y pagar abono</a></section></main><script src="front.js"></script></html>
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meraki | Belleza y bienestar</title>
+<style>body{font:17px system-ui;max-width:1000px;margin:auto;padding:2rem;background:#faf6f3;color:#382a34}input,button,select{font:inherit;padding:.6rem;margin:.4rem}article,section{background:white;padding:1.5rem;margin:1rem 0;border-radius:12px}label{display:inline-block}button{cursor:pointer}button:disabled{cursor:default}fieldset{border:0;padding:0;margin:0}small{display:block;color:#5d4c58}#resumen{border-left:4px solid #9c607d;padding:1rem;background:#faf6f3}a{color:#6c3657}</style>
+<header><h1>Meraki</h1><p>Encuentra tu próximo momento de bienestar.</p><a href="/back-office/">Acceso emprendedoras</a></header>
+<main>
+<form id="buscar"><label>Nombre del emprendimiento <input name="nombre" maxlength="150" placeholder="Ej.: Camila"></label><label>Comuna <input name="comuna" maxlength="100" placeholder="Ej.: Santiago"></label><button>Buscar</button><button id="limpiarBusqueda" type="button">Ver todos</button><small>Busca por el nombre del negocio. Los servicios se eligen después. Si completas ambos filtros, deben coincidir los dos.</small></form>
+<p id="estado" role="status" aria-live="polite"></p><div id="resultados"></div>
+<section id="reserva" hidden><h2 id="tituloReserva">Reserva tu hora</h2>
+<form id="formReserva"><fieldset id="camposReserva">
+<label>Servicio <select id="servicio" required></select></label><p id="avisoServicio" role="status"></p>
+<label>Profesional <select id="profesional" required></select></label><label>Fecha <input id="fecha" type="date" required></label><button id="disponibilidad" type="button">Consultar horas</button><label>Hora <select id="hora" required></select></label>
+<p><label>Tu nombre <input name="nombre" required maxlength="100" autocomplete="name"></label><label>Tu correo <input name="correo" type="email" required maxlength="150" autocomplete="email"></label><label>Teléfono (opcional) <input name="telefono" maxlength="20" autocomplete="tel"></label></p>
+<h3>Revisa antes de reservar</h3><div id="resumen" aria-live="polite"></div>
+<label><input id="confirmarDatos" type="checkbox" required> Reservar y continuar al pago.</label>
+<p>Crear la reserva no genera un cobro. Después podrás continuar con el abono por Webpay. La confirmación por correo se envía cuando el pago queda aprobado.</p>
+<button id="crearReserva" disabled>Crear reserva y continuar</button>
+</fieldset></form>
+<p><a id="consulta" hidden>Consultar reserva y pagar abono</a></p><button id="nuevaReserva" type="button" hidden>Comenzar otra reserva</button>
+</section></main><script src="front.js"></script>
+</html>

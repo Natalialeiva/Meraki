@@ -1,0 +1,89 @@
+
+> backend@1.0.0 test
+> node --test test/*.test.js
+
+✔ Agenda combina fecha y estado sin desplazar el día de Chile (5.3521ms)
+✔ Agenda usa permisos del servidor para pagos y cierre de atención (0.4416ms)
+✔ Agenda muestra estados comprensibles y ausencia de abono (0.2235ms)
+✔ Consulta de prueba oculta acciones antes de utilizarlas (10.8712ms)
+✔ Rechazo 405 de texto muestra explicación y conserva reserva (3.9314ms)
+✔ Error HTML del servidor no se expone como error de JSON (2.994ms)
+✔ Reserva con pago asociado no ofrece cancelación y explica la gestión (4.692ms)
+✔ Cancelación permitida actualiza estado y oculta las acciones (3.0614ms)
+✔ Ethereal nunca recibe el enlace auténtico (1.5274ms)
+✔ Gmail utiliza el enlace real y no genera vista previa (0.8511ms)
+✔ Configuración incompleta no cae en Ethereal (0.9291ms)
+✔ Enlace usa fragmento y exige HTTPS salvo localhost (0.2486ms)
+✔ Proveedor desconocido falla sin enviar (0.1622ms)
+✔ Gmail autentica con OAuth2 sin contraseña de app (0.1936ms)
+✔ Contraseña de app no sustituye credenciales OAuth (0.5946ms)
+✔ Gmail admite el enlace de consulta de la API existente (0.3206ms)
+✔ Front Office selecciona servicio reservable y explica filtros (37.8074ms)
+✔ Ver todos borra ambos filtros y vuelve a consultar (4.3774ms)
+✔ Disponibilidad requiere fecha y cambiarla invalida hora y revisión (6.3176ms)
+✔ Creación exige revisión y evita duplicación por doble envío (6.4258ms)
+✔ Respuesta antigua de profesionales no reemplaza la selección nueva (4.8929ms)
+◇ injected env (7) from .env
+MERAKI: configuración de sesiones cargada
+Iniciando Backend de Meraki
+▶ Integración PostgreSQL, sesión, recuperación y notificaciones
+  ✔ Anónimo no lista ni reintenta (37.6148ms)
+MERAKI: solicitud de login recibida
+Tue, 03 Nov 2026 07:28:58 GMT router deprecated handlers that are Promise-like are deprecated, use a native Promise instead at node_modules\router\lib\route.js:157:13
+  ✔ Login real crea sesión PostgreSQL (35.3188ms)
+ALERTA: Datos de pago inconsistentes. Abono: 1
+  ✔ Webpay inconsistente no confirma ni envía (11.4263ms)
+  ✔ INITIALIZED e incompleto no recuperan pago (13.1427ms)
+Error al recuperar pago: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_bloqueo»
+  ✔ Fallo al guardar outbox revierte pago y reserva (13.3361ms)
+  ✔ Consulta Webpay solo habilita recuperación de una autorización válida y coincidente (27.7954ms)
+  ✔ Pago autorizado recupera, confirma y envía una sola vez (20.7937ms)
+  ✔ Reclamo concurrente solo realiza un envío (158.7308ms)
+  ✔ Timeout conserva enviando y bloquea reintento (10.6988ms)
+  ✔ Revisión exige antigüedad, cabecera y evidencia (17.8805ms)
+  ✔ Reintento auditado respeta máximo tres (21.032ms)
+  ✔ Catálogo distingue servicios sin profesional y permite nueva reserva con correo existente (24.8745ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+Error al verificar abono: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_retorno»
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+  ✔ Front Office: catálogo, disponibilidad, reserva y pago; fallo SMTP no revierte pago (65.5653ms)
+  ✔ Cancelación: reservas sin abonos, estados y permisos por token (101.0017ms)
+  ✔ Agenda privada: pagos, cierre de atención y cancelación por propietaria (44.2373ms)
+  ✔ Corrección de destinatario conserva pago, invalida enlace y no duplica envío (19.6803ms)
+  ✔ Propietaria ajena no puede ver ni modificar notificación (34.5164ms)
+  ✔ Consulta privada no expone token y no se almacena en caché (18.2783ms)
+✔ Integración PostgreSQL, sesión, recuperación y notificaciones (1114.4752ms)
+✔ Pago iniciado no se presenta como aprobado ni permite recuperación (24.52ms)
+✔ AUTHORIZED requiere permiso explícito del servidor para recuperar (0.774ms)
+✔ Inconsistencia impide recuperación incluso si otro campo la habilita (0.3953ms)
+✔ Pago registrado no invita a repetir recuperación (0.5713ms)
+✔ Recuperación completada distingue confirmación de reserva y estado del correo (0.3721ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 45
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1573.4139

@@ -1,0 +1,82 @@
+
+> backend@1.0.0 test
+> node --test test/*.test.js
+
+✔ Agenda combina fecha y estado sin desplazar el día de Chile (12.9085ms)
+✔ Agenda usa permisos del servidor para pagos y cierre de atención (0.4958ms)
+✔ Agenda muestra estados comprensibles y ausencia de abono (0.2561ms)
+✔ Consulta de prueba oculta acciones antes de utilizarlas (19.4169ms)
+✔ Rechazo 405 de texto muestra explicación y conserva reserva (17.3495ms)
+✔ Error HTML del servidor no se expone como error de JSON (7.7034ms)
+✔ Reserva con pago asociado no ofrece cancelación y explica la gestión (11.7528ms)
+✔ Cancelación permitida actualiza estado y oculta las acciones (4.3213ms)
+✔ Ethereal nunca recibe el enlace auténtico (2.8244ms)
+✔ Gmail utiliza el enlace real y no genera vista previa (1.321ms)
+✔ Configuración incompleta no cae en Ethereal (1.3997ms)
+✔ Enlace usa fragmento y exige HTTPS salvo localhost (0.6473ms)
+✔ Proveedor desconocido falla sin enviar (0.577ms)
+✔ Gmail autentica con OAuth2 sin contraseña de app (0.5028ms)
+✔ Contraseña de app no sustituye credenciales OAuth (1.3711ms)
+✔ Gmail admite el enlace de consulta de la API existente (0.8604ms)
+◇ injected env (7) from .env
+MERAKI: configuración de sesiones cargada
+Iniciando Backend de Meraki
+▶ Integración PostgreSQL, sesión, recuperación y notificaciones
+  ✔ Anónimo no lista ni reintenta (52.318ms)
+MERAKI: solicitud de login recibida
+Tue, 03 Nov 2026 06:12:30 GMT router deprecated handlers that are Promise-like are deprecated, use a native Promise instead at node_modules\router\lib\route.js:157:13
+  ✔ Login real crea sesión PostgreSQL (60.9185ms)
+ALERTA: Datos de pago inconsistentes. Abono: 1
+  ✔ Webpay inconsistente no confirma ni envía (22.5869ms)
+  ✔ INITIALIZED e incompleto no recuperan pago (25.0907ms)
+Error al recuperar pago: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_bloqueo»
+  ✔ Fallo al guardar outbox revierte pago y reserva (29.5563ms)
+  ✔ Consulta Webpay solo habilita recuperación de una autorización válida y coincidente (49.7292ms)
+  ✔ Pago autorizado recupera, confirma y envía una sola vez (44.938ms)
+  ✔ Reclamo concurrente solo realiza un envío (162.1917ms)
+  ✔ Timeout conserva enviando y bloquea reintento (25.1788ms)
+  ✔ Revisión exige antigüedad, cabecera y evidencia (40.9071ms)
+  ✔ Reintento auditado respeta máximo tres (48.0085ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+Error al verificar abono: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_retorno»
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+  ✔ Front Office: catálogo, disponibilidad, reserva y pago; fallo SMTP no revierte pago (156.4304ms)
+  ✔ Cancelación: reservas sin abonos, estados y permisos por token (194.366ms)
+  ✔ Agenda privada: pagos, cierre de atención y cancelación por propietaria (94.8865ms)
+  ✔ Propietaria ajena no puede ver ni modificar notificación (68.5271ms)
+  ✔ Consulta privada no expone token y no se almacena en caché (34.4086ms)
+✔ Integración PostgreSQL, sesión, recuperación y notificaciones (2071.8282ms)
+✔ Pago iniciado no se presenta como aprobado ni permite recuperación (52.7546ms)
+✔ AUTHORIZED requiere permiso explícito del servidor para recuperar (1.1746ms)
+✔ Inconsistencia impide recuperación incluso si otro campo la habilita (0.5352ms)
+✔ Pago registrado no invita a repetir recuperación (0.4552ms)
+✔ Recuperación completada distingue confirmación de reserva y estado del correo (0.3085ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3146.8484

@@ -67,3 +67,48 @@ Se integraron 19 archivos de implementación en Documents/GitHub/Meraki y se con
 Las 28 verificaciones pasan desde el repositorio original: cancelación pendiente/confirmada sin abonos; token inválido/inexistente; cancelación repetida; bloqueo con abono pendiente, rechazado o aprobado; estado terminal; carrera entre cancelar e iniciar pago; frontend sin acciones incompatibles y manejo de respuestas no JSON. Se confirmó también rollback si falla el registro de notificación en el retorno normal de Webpay.
 
 El cambio de cancelaciones aplica la regla existente: cualquier intento de pago asociado bloquea la cancelación pública y orienta al emprendimiento. No implementa devolución de dinero ni modifica pagos. Los cambios quedaron sin commit para revisión. El equipo de Natalia continúa pendiente de acceso.
+
+## Agenda operativa del Back Office
+
+32 verificaciones aprobadas. Se incorporaron filtros por fecha/estado, contador de resultados, estado y número del último abono, selección del abono desde la reserva, cancelación permitida y cierre como atendida/no atendida. El servidor calcula puede_cancelar y puede_cerrar; las acciones no aparecen si no corresponden. Cerrar una atención exige reserva confirmada y hora de fin pasada, según las reglas existentes. No se agrega una confirmación manual que omita Webpay.
+
+Pruebas aisladas: acciones de la propietaria, bloqueo para otra propietaria, atención futura rechazada, atención pasada válida y estados terminales sin acciones repetidas. La API de agenda no expone tokens privados. La prueba visual usó una vista sin DB, Gmail ni Webpay, con datos marcados DEMO: se verificó selección de abono 801 desde reserva 901 y filtro pendiente de abono con resultado 1 de 3. Captura agenda-back-office.png. Ninguna reserva real fue cancelada o marcada atendida.
+
+Acceso local: con autorización del usuario se restableció la contraseña de la cuenta de prueba camila@meraki.test y se cerraron sus sesiones anteriores. No se modificaron reservas ni pagos. La contraseña no se registra en estas evidencias.
+
+
+## Revisión de pagos comprensible y recuperación condicionada
+
+38 verificaciones aprobadas en esquema aislado. El formulario explica que consultar no cobra ni modifica la reserva y que registrar exige un pago autorizado previo. Los resultados muestran abono, reserva, monto y estados en lenguaje claro, sin JSON crudo. La consulta API devuelve puede_recuperar únicamente para AUTHORIZED, response_code exactamente 0, monto/orden coincidentes y estados locales pendientes.
+
+El botón Registrar pago ya aprobado comienza deshabilitado y requiere una consulta válida del abono seleccionado. Cambiar la selección invalida la consulta; las respuestas antiguas no habilitan acciones sobre otro abono. La recuperación vuelve a validar todo en el servidor. Los fallos al recargar agenda/notificaciones no sustituyen el resultado exitoso del pago por un error genérico.
+
+Prueba visual con respuestas ficticias: abono 9 / reserva 20, estado INITIALIZED, texto El pago todavía no se ha completado y registro deshabilitado. Esto NO es una consulta al abono 9 real. Captura revision-pagos.png. No se realizaron cobros ni modificaciones de pagos reales.
+
+La revisión de pagos se aplicó al repositorio original con respaldo. Las 38 verificaciones volvieron a pasar desde ese repositorio; git diff --check sin errores. Meraki reiniciado en puerto 3000. No se modificaron credenciales ni registros de pagos/reservas reales.
+
+
+## Webpay Integration sin simulación: retorno aprobado de reserva 21
+
+El usuario completó Webpay y compartió el retorno Abono aprobado y reserva confirmada para reserva 21. Se verificó en modo solo lectura: reserva 21 confirmada, abono 10 aprobado por $5.000, fecha_pago registrada, notificación enviada con un intento e identificador de mensaje presente. No se repitió commit, consulta a Transbank ni envío de correo.
+
+El backend está configurado para Transbank Environment.Integration. Este caso valida un pago en el sandbox real de Webpay, con retorno normal, a diferencia de la prueba anterior con respuesta Webpay simulada. No es un cobro de producción y no valida por sí solo una recuperación después de interrupción. Pendiente confirmación del usuario de recepción del correo correspondiente a la reserva 21 y apertura de su enlace.
+
+## Corrección autorizada del destinatario de reserva 21
+
+El usuario proporcionó un correo corregido para reserva 21. Se aplicó migración aditiva 006 con comprobación de que las reservas y abonos previos no cambiaron durante la migración. El comando permanente corregir-correo-reserva.js configuró correo_confirmacion solo en reserva 21 y renovó su token. No modifica el perfil compartido de clienta ni el abono aprobado.
+
+La notificación anterior se conserva archivada; se registró correccion_correo_reserva y nueva notificación 4. Gmail aceptó el nuevo mensaje en un intento: <d7c399f7-7b8c-34e7-e6f0-c0c5c81d6780@gmail.com>. El enlace anterior quedó invalidado. El usuario debe abrir el enlace del nuevo correo. No se volvió a cobrar ni se llamó al commit Webpay.
+
+La batería aislada completó 39 resultados aprobados (38 casos y un contenedor). El caso nuevo valida conservación de pago, destinatario por reserva, token anterior 404, token nuevo 200, historial anterior preservado e idempotencia si se solicita otra vez el mismo correo. Pendiente recepción del nuevo mensaje por el usuario.
+
+Segunda corrección de destinatario de reserva 21 solicitada explícitamente por el usuario: notificación nueva 5 aceptada por Gmail en un intento. ID <3685d6bb-09fc-45c5-46e9-22966066c341@gmail.com>. Se renovó el enlace y se invalidó el anterior. Pago y estado de reserva conservados. Pendiente confirmación de recepción del último mensaje.
+
+
+## Front Office guiado
+
+45 resultados aprobados (44 casos y un contenedor). Se aclararon los filtros por nombre de emprendimiento/comuna y se agregó Ver todos. El catálogo marca servicios sin profesionales activos como no reservables y selecciona primero un servicio disponible. El formulario muestra un resumen de emprendimiento, servicio, precio, abono, profesional, fecha/hora y correo, con revisión obligatoria antes de crear. La fecha mínima usa America/Santiago. Crear no realiza un cobro.
+
+Se invalidan horas y revisión al cambiar criterios. Respuestas antiguas no reemplazan la selección nueva. Se impiden dobles envíos de creación y el formulario queda bloqueado tras crear; Comenzar otra reserva habilita un flujo nuevo. El servidor permite reutilizar un correo registrado sin sobrescribir nombre/teléfono ni duplicar clientas.
+
+Pruebas de frontend ejecutan el script real con DOM y fetch simulados; cubren selección reservable, limpiar filtros, fecha obligatoria, invalidación de horas, revisión y doble envío, y respuestas de profesionales fuera de orden. PostgreSQL aislado comprueba la disponibilidad según profesionales activos y la reutilización no destructiva de clienta. Ninguna reserva o pago real se modificó durante estas pruebas.

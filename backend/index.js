@@ -2344,6 +2344,7 @@ app.post("/api/clientas", async (req, res) => {
         const resultado = await pool.query(`
             INSERT INTO clienta (nombre, correo, telefono)
             VALUES ($1, $2, $3)
+            ON CONFLICT (LOWER(TRIM(correo))) DO NOTHING
             RETURNING id_clienta;
         `, [
             nombreLimpio,
@@ -2351,9 +2352,16 @@ app.post("/api/clientas", async (req, res) => {
             telefonoLimpio
         ]);
 
-        return res.status(201).json({
-            mensaje: "Clienta registrada correctamente",
-            id_clienta: resultado.rows[0].id_clienta
+        // Una clienta puede reservar de nuevo sin duplicar su perfil.
+        // No sobrescribimos su nombre ni teléfono desde una solicitud pública.
+        const clienta = resultado.rows[0] || (await pool.query(
+            "SELECT id_clienta FROM clienta WHERE LOWER(TRIM(correo)) = $1",
+            [correoLimpio]
+        )).rows[0];
+        if (!clienta) throw new Error("No se pudieron recuperar los datos de la clienta");
+        return res.status(resultado.rows.length ? 201 : 200).json({
+            mensaje: "Datos de clienta recibidos correctamente",
+            id_clienta: clienta.id_clienta
         });
 
     } catch (error) {
@@ -3723,6 +3731,7 @@ app.get("/api/abonos/:id/estado", verificarSesion, async (req, res) => {
                 a.id_abono,
                 a.id_reserva,
                 a.estado AS estado_local,
+                r.estado AS estado_reserva,
                 a.monto,
                 a.buy_order,
                 a.token_transaccion
@@ -3770,7 +3779,10 @@ app.get("/api/abonos/:id/estado", verificarSesion, async (req, res) => {
             estado_local: abono.estado_local,
             estado_transbank: resultado.status,
             monto: abono.monto,
-            datos_coinciden: datosCoinciden
+            datos_coinciden: datosCoinciden,
+            puede_recuperar: datosCoinciden && resultado.status === "AUTHORIZED" &&
+                resultado.response_code === 0 && abono.estado_local === "pendiente" &&
+                abono.estado_reserva === "pendiente_abono"
         });
 
     } catch (error) {
@@ -4059,7 +4071,11 @@ if (propiedad.rows.length === 0) {
                TO_CHAR(r.fecha_hora_fin, 'YYYY-MM-DD"T"HH24:MI:SS') AS fecha_hora_fin,
                 r.estado,
                 r.precio_servicio,
-                r.monto_abono
+                r.monto_abono,
+                ultimo.id_abono,
+                ultimo.estado AS estado_abono,
+                (ultimo.id_abono IS NULL AND r.estado IN ('pendiente_abono','confirmada')) AS puede_cancelar,
+                (r.estado='confirmada' AND r.fecha_hora_fin<=CURRENT_TIMESTAMP) AS puede_cerrar
             FROM reserva r
             INNER JOIN clienta c
                 ON r.id_clienta = c.id_clienta
@@ -4071,6 +4087,11 @@ if (propiedad.rows.length === 0) {
            -- Relacionamos la reserva con su emprendimiento.
            INNER JOIN emprendimiento e
                 ON r.id_emprendimiento = e.id_emprendimiento
+
+           LEFT JOIN LATERAL (
+               SELECT a.id_abono,a.estado FROM abono a
+               WHERE a.id_reserva=r.id_reserva ORDER BY a.id_abono DESC LIMIT 1
+           ) ultimo ON TRUE
 
            -- Verificamos el emprendimiento y su propietaria.
            WHERE r.id_emprendimiento = $1
@@ -5073,7 +5094,13 @@ app.get("/api/emprendimientos/:id/servicios", async (req, res) => {
                 c.nombre AS categoria,
                 s.precio,
                 s.duracion_min,
-                s.monto_abono
+                s.monto_abono,
+                EXISTS (
+                    SELECT 1 FROM trabajadora_servicio ts
+                    JOIN trabajadora t ON t.id_trabajadora=ts.id_trabajadora
+                    WHERE ts.id_servicio=s.id_servicio AND t.activa=TRUE
+                      AND t.id_emprendimiento=s.id_emprendimiento
+                ) AS reservable
             FROM servicio s
             INNER JOIN categoria c
                 ON s.id_categoria = c.id_categoria
