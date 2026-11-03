@@ -1,0 +1,18 @@
+{
+  "fecha": "2026-11-03T05:08:25.309Z",
+  "webpay": "simulado",
+  "gmail": "real",
+  "esquemaAislado": true,
+  "pago": "aprobado",
+  "reserva": "confirmada",
+  "correo": "enviado",
+  "idMensaje": "<262cb08f-ae78-848c-6967-0e2b698470c3@gmail.com>",
+  "intentos": 1,
+  "consultaPrivada": "HTTP 200; confirmada; no-store; sin token en respuesta",
+  "repeticion": "HTTP 409; sin segundo envío",
+  "consultaDisponible": false,
+  "urlBase": "http://localhost:3000",
+  "cierreProgramado": "2026-11-03T05:38:28.290Z",
+  "fechaCierre": "2026-11-03T05:22:57.998Z",
+  "limpiezaComprobada": true
+}

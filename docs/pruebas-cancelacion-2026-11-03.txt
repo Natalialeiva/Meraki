@@ -1,0 +1,72 @@
+
+> backend@1.0.0 test
+> node --test test/*.test.js
+
+✔ Consulta de prueba oculta acciones antes de utilizarlas (13.1138ms)
+✔ Rechazo 405 de texto muestra explicación y conserva reserva (9.898ms)
+✔ Error HTML del servidor no se expone como error de JSON (3.2458ms)
+✔ Reserva con pago asociado no ofrece cancelación y explica la gestión (10.7933ms)
+✔ Cancelación permitida actualiza estado y oculta las acciones (6.006ms)
+✔ Ethereal nunca recibe el enlace auténtico (1.42ms)
+✔ Gmail utiliza el enlace real y no genera vista previa (0.5968ms)
+✔ Configuración incompleta no cae en Ethereal (0.574ms)
+✔ Enlace usa fragmento y exige HTTPS salvo localhost (0.3838ms)
+✔ Proveedor desconocido falla sin enviar (0.2897ms)
+✔ Gmail autentica con OAuth2 sin contraseña de app (0.3267ms)
+✔ Contraseña de app no sustituye credenciales OAuth (0.9241ms)
+✔ Gmail admite el enlace de consulta de la API existente (0.6668ms)
+◇ injected env (7) from .env
+MERAKI: configuración de sesiones cargada
+Iniciando Backend de Meraki
+▶ Integración PostgreSQL, sesión, recuperación y notificaciones
+  ✔ Anónimo no lista ni reintenta (30.4937ms)
+MERAKI: solicitud de login recibida
+Tue, 03 Nov 2026 05:20:19 GMT router deprecated handlers that are Promise-like are deprecated, use a native Promise instead at node_modules\router\lib\route.js:157:13
+  ✔ Login real crea sesión PostgreSQL (22.5241ms)
+ALERTA: Datos de pago inconsistentes. Abono: 1
+  ✔ Webpay inconsistente no confirma ni envía (12.3934ms)
+  ✔ INITIALIZED e incompleto no recuperan pago (16.129ms)
+Error al recuperar pago: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_bloqueo»
+  ✔ Fallo al guardar outbox revierte pago y reserva (11.6979ms)
+  ✔ Pago autorizado recupera, confirma y envía una sola vez (20.4313ms)
+  ✔ Reclamo concurrente solo realiza un envío (84.2014ms)
+  ✔ Timeout conserva enviando y bloquea reintento (13.2864ms)
+  ✔ Revisión exige antigüedad, cabecera y evidencia (21.931ms)
+  ✔ Reintento auditado respeta máximo tres (26.8743ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+Error al verificar abono: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_retorno»
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+  ✔ Front Office: catálogo, disponibilidad, reserva y pago; fallo SMTP no revierte pago (84.2364ms)
+  ✔ Cancelación: reservas sin abonos, estados y permisos por token (116.2873ms)
+  ✔ Propietaria ajena no puede ver ni modificar notificación (15.4782ms)
+  ✔ Consulta privada no expone token y no se almacena en caché (17.9483ms)
+✔ Integración PostgreSQL, sesión, recuperación y notificaciones (831.1383ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1260.8449
