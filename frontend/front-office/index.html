@@ -1,22 +1,48 @@
 <!doctype html>
 <html lang="es">
+<head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Meraki | Belleza y bienestar</title>
-<style>body{font:17px system-ui;max-width:1000px;margin:auto;padding:2rem;background:#faf6f3;color:#382a34}input,button,select{font:inherit;padding:.6rem;margin:.4rem}article,section{background:white;padding:1.5rem;margin:1rem 0;border-radius:12px}label{display:inline-block}button{cursor:pointer}button:disabled{cursor:default}fieldset{border:0;padding:0;margin:0}small{display:block;color:#5d4c58}#resumen{border-left:4px solid #9c607d;padding:1rem;background:#faf6f3}a{color:#6c3657}</style>
-<header><h1>Meraki</h1><p>Encuentra tu próximo momento de bienestar.</p><a href="/back-office/">Acceso emprendedoras</a></header>
+<style>
+:root{color-scheme:light;--tinta:#382a34;--acento:#78425f;--fondo:#faf6f3;--borde:#dfcfd6}*{box-sizing:border-box}
+body{font:17px/1.5 system-ui;margin:0;background:var(--fondo);color:var(--tinta)}header,main{max-width:1080px;margin:auto;padding:1.5rem}header{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+h1,h2,h3{line-height:1.2}h1{margin-bottom:.4rem}a{color:var(--acento)}input,select,button{font:inherit;padding:.75rem;border:1px solid var(--borde);border-radius:8px;max-width:100%}
+input,select{width:100%;min-width:0;background:white;color:var(--tinta)}button{cursor:pointer;background:var(--acento);color:white}button.secundario{background:white;color:var(--acento)}button:disabled{cursor:default;opacity:.6}
+:focus-visible{outline:3px solid #b46c90;outline-offset:3px}label{display:flex;flex-direction:column;gap:.35rem;min-width:0}fieldset{border:0;padding:0;margin:0;min-width:0}
+section,article,.panel{background:white;padding:1.5rem;border:1px solid var(--borde);border-radius:12px;margin:1rem 0}.rejilla{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.acciones{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:1rem}
+.ayuda{color:#685561;font-size:.92rem}small{display:block}.errorCampo{color:#9c233f;min-height:1.4em;font-size:.9rem}[aria-invalid="true"]{border-color:#9c233f}
+#estado{padding:.85rem;border-radius:8px;overflow-wrap:anywhere}#estado:empty{display:none}#estado[data-tipo="carga"]{background:#f0e8ef}#estado[data-tipo="error"]{background:#fce9ed;color:#8a2039}#estado[data-tipo="exito"]{background:#e7f3ec;color:#24563a}
+#listaServicios{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}#listaServicios article{margin:0;display:flex;flex-direction:column;align-items:flex-start;min-width:0;overflow-wrap:anywhere}#listaServicios article[data-seleccionado="true"]{border:2px solid var(--acento)}#listaServicios h3{margin-top:0}#listaServicios p{margin:.35rem 0}#listaServicios button{margin-top:auto}
+#resumen{border-left:4px solid #9c607d;padding:1rem;background:var(--fondo);overflow-wrap:anywhere}#resumen p{margin:.4rem 0}#consulta{display:inline-block;padding:.8rem;background:#f0e8ef;border-radius:8px}
+[hidden]{display:none!important}@media(max-width:640px){header,main{padding:1rem}.rejilla,#listaServicios{grid-template-columns:1fr}section,article,.panel{padding:1rem}.acciones>*{width:100%}button{min-height:44px}}
+</style>
+</head><body>
+<header><div><h1>Meraki</h1><p>Encuentra tu próximo momento de bienestar.</p></div><a href="/back-office/">Acceso emprendedoras</a></header>
 <main>
-<form id="buscar"><label>Nombre del emprendimiento <input name="nombre" maxlength="150" placeholder="Ej.: Camila"></label><label>Comuna <input name="comuna" maxlength="100" placeholder="Ej.: Santiago"></label><button>Buscar</button><button id="limpiarBusqueda" type="button">Ver todos</button><small>Busca por el nombre del negocio. Los servicios se eligen después. Si completas ambos filtros, deben coincidir los dos.</small></form>
-<p id="estado" role="status" aria-live="polite"></p><div id="resultados"></div>
-<section id="reserva" hidden><h2 id="tituloReserva">Reserva tu hora</h2>
+<form id="buscar" class="panel" aria-labelledby="tituloBusqueda">
+<h2 id="tituloBusqueda">Encuentra un emprendimiento</h2>
+<div class="rejilla"><label>Nombre del emprendimiento <input name="nombre" maxlength="150" placeholder="Ej.: Camila"></label><label>Comuna <input name="comuna" maxlength="100" placeholder="Ej.: Santiago"></label></div>
+<div class="acciones"><button>Buscar</button><button id="limpiarBusqueda" class="secundario" type="button">Ver todos</button></div>
+<small class="ayuda">Busca por el nombre del negocio. Los servicios se eligen después. Si completas ambos filtros, deben coincidir los dos.</small>
+</form>
+<p id="estado" role="status" aria-live="polite" aria-atomic="true"></p><div id="resultados" aria-label="Emprendimientos encontrados"></div>
+<section id="reserva" hidden aria-labelledby="tituloReserva">
+<h2 id="tituloReserva">Reserva tu hora</h2><h3>1. Elige un servicio</h3><div id="listaServicios"></div>
 <form id="formReserva"><fieldset id="camposReserva">
-<label>Servicio <select id="servicio" required></select></label><p id="avisoServicio" role="status"></p>
-<label>Profesional <select id="profesional" required></select></label><label>Fecha <input id="fecha" type="date" required></label><button id="disponibilidad" type="button">Consultar horas</button><label>Hora <select id="hora" required></select></label>
-<p><label>Tu nombre <input name="nombre" required maxlength="100" autocomplete="name"></label><label>Tu correo <input name="correo" type="email" required maxlength="150" autocomplete="email"></label><label>Teléfono (opcional) <input name="telefono" maxlength="20" autocomplete="tel"></label></p>
-<h3>Revisa antes de reservar</h3><div id="resumen" aria-live="polite"></div>
-<label><input id="confirmarDatos" type="checkbox" required> Reservar y continuar al pago.</label>
-<p>Crear la reserva no genera un cobro. Después podrás continuar con el abono por Webpay. La confirmación por correo se envía cuando el pago queda aprobado.</p>
-<button id="crearReserva" disabled>Crear reserva y continuar</button>
+<label>Servicio seleccionado <select id="servicio" required aria-describedby="avisoServicio"></select></label><p id="avisoServicio" role="status"></p>
+<h3>2. Elige profesional, fecha y hora</h3>
+<div class="rejilla"><label>Profesional <select id="profesional" required aria-describedby="seleccionProfesional"></select></label><label>Fecha <input id="fecha" type="date" required aria-describedby="errorFecha"><small id="errorFecha" class="errorCampo"></small></label></div>
+<p id="seleccionProfesional" class="ayuda" role="status">Selecciona una profesional.</p>
+<div class="acciones"><button id="disponibilidad" class="secundario" type="button">Consultar horas disponibles</button></div>
+<label>Hora disponible <select id="hora" required aria-describedby="ayudaHora"></select></label><small id="ayudaHora" class="ayuda">Selecciona una profesional y una fecha; después consulta las horas disponibles.</small>
+<h3>3. Completa tus datos</h3><div class="rejilla">
+<label>Tu nombre <input name="nombre" required maxlength="100" autocomplete="name" aria-describedby="errorNombre"><small id="errorNombre" class="errorCampo"></small></label>
+<label>Tu correo <input name="correo" type="email" required maxlength="150" autocomplete="email" aria-describedby="errorCorreo"><small id="errorCorreo" class="errorCampo"></small></label>
+<label>Teléfono (opcional) <input name="telefono" type="tel" maxlength="20" autocomplete="tel" aria-describedby="errorTelefono"><small id="errorTelefono" class="errorCampo"></small></label></div>
+<h3>4. Revisa tu reserva</h3><div id="resumen" aria-live="polite" aria-atomic="true"></div>
+<p class="ayuda">Crear la reserva no genera un cobro. Después podrás continuar con el abono por Webpay. La reserva se confirma y se envía el correo cuando el pago queda aprobado.</p>
+<button id="crearReserva" disabled>Crear reserva y continuar al abono</button>
 </fieldset></form>
-<p><a id="consulta" hidden>Consultar reserva y pagar abono</a></p><button id="nuevaReserva" type="button" hidden>Comenzar otra reserva</button>
-</section></main><script src="front.js?v=nombre-reserva-1"></script>
-</html>
+<p><a id="consulta" hidden>Consultar reserva y pagar abono</a></p><button id="nuevaReserva" class="secundario" type="button" hidden>Comenzar otra reserva</button>
+</section></main><script src="front.js?v=fase-a-1"></script>
+</body></html>
