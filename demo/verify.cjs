@@ -38,7 +38,12 @@ async function get(ruta){const r=await fetch('http://localhost:3001'+ruta);asser
     assert.equal(sus.length,1);assert.equal(sus[0].renovacion_automatica,false);assert.equal(sus[0].tarjeta_cifrada,null);assert.equal(sus[0].usuario_oneclick,null);
     const despues=await huellas(main),demoDespues=await huellas(lector);
     assert.deepEqual(antes,despues);assert.deepEqual(demoAntes,demoDespues);
-    const auditoria=JSON.parse(fs.readFileSync(archivo+'.audit.json'));assert.deepEqual(auditoria.antes,despues);
-    const resultado={basePrincipalIntactaDesdePreparacion:true,demoSinEscrituras:true,reservasPrincipal:despues.reserva.filas,abonosPrincipal:despues.abono.filas,clientasPrincipal:despues.clienta.filas,servicioReservable:true,profesionales:profesionales.length,horariosDisponibles:horas.length,fechaComprobada:fecha,rutasBloqueadas:bloqueadas,intentosExternos:estado.intentosExternos,lectorSinAccesoATablasPrincipales:true};
+    const auditoria=JSON.parse(fs.readFileSync(archivo+'.audit.json'));
+    // La cuenta normal puede renovar sus sesiones entre demostraciones. Eso no
+    // equivale a modificar reservas, clientas, pagos ni configuración del negocio.
+    const sinSesiones=datos=>Object.fromEntries(Object.entries(datos).filter(([tabla])=>tabla!=='sesion_meraki'));
+    assert.deepEqual(sinSesiones(auditoria.antes),sinSesiones(despues));
+    const sesionesHistoricasCoinciden=JSON.stringify(auditoria.antes.sesion_meraki)===JSON.stringify(despues.sesion_meraki);
+    const resultado={datosPrincipalIntactosDuranteVerificacion:true,datosNegocioIntactosDesdePreparacion:true,sesionesHistoricasCoinciden,demoSinEscrituras:true,reservasPrincipal:despues.reserva.filas,abonosPrincipal:despues.abono.filas,clientasPrincipal:despues.clienta.filas,servicioReservable:true,profesionales:profesionales.length,horariosDisponibles:horas.length,fechaComprobada:fecha,rutasBloqueadas:bloqueadas,intentosExternos:estado.intentosExternos,lectorSinAccesoATablasPrincipales:true};
     fs.writeFileSync(archivo+'.verify.json',JSON.stringify(resultado,null,2));console.log(JSON.stringify(resultado));
 })().catch(e=>{console.error(e.message);process.exitCode=1;}).finally(async()=>{await main.end();await lector.end();});

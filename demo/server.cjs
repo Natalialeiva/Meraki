@@ -15,7 +15,9 @@ const rutasConsulta = [
     /^\/api\/categorias$/,
     /^\/api\/disponibilidad$/,
     /^\/front-office\/?$/,
-    /^\/front-office\/front\.js$/
+    /^\/front-office\/front\.js$/,
+    /^\/front-office\/styles\.css$/,
+    /^\/front-office\/assets\/(banner-meraki|logo-meraki|banner-meraki-nuevo|logo-meraki-transparente)\.png$/
 ];
 function permitida(method, ruta) { return method === 'GET' && rutasConsulta.some(r => r.test(ruta)); }
 function cargarBackend(pool, config, intentos) {

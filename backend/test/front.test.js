@@ -8,8 +8,13 @@ class Elemento {
     set value(v) { this._value = String(v); }
     get value() { return this._value ?? (this.tag === 'select' ? this.children.find(c => !c.disabled)?.value || '' : ''); }
     get selectedOptions() { return this.children.filter(c => c.value === this.value); }
-    append(...hijos) { this.children.push(...hijos); }
-    replaceChildren() { this.children = []; if (this.tag === 'select') this._value = undefined; }
+    append(...hijos) {
+        for(const hijo of hijos){
+            if(hijo.parentElement)hijo.parentElement.children=hijo.parentElement.children.filter(c=>c!==hijo);
+            hijo.parentElement=this;this.children.push(hijo);
+        }
+    }
+    replaceChildren() { for(const hijo of this.children)hijo.parentElement=null; this.children = []; if (this.tag === 'select') this._value = undefined; }
     setAttribute(k, v) { this.attributes[k] = v; }
     focus() { this.focused = true; }
     requestSubmit() { return this.onsubmit({preventDefault() {}, target:this}); }
@@ -70,7 +75,7 @@ test('Front Office usa mensajes neutrales para todos los servicios no reservable
 test('Tarjetas muestran datos reales y distinguen servicios reservables', async () => {
     const p = iniciar(); await p.seleccionar(); const tarjetas = p.elementos['#listaServicios'].children;
     assert.equal(tarjetas[0].children.at(-1).disabled,true); assert.equal(tarjetas[1].children.at(-1).disabled,false);
-    for (const texto of ['Servicio 2','Belleza Camila','Belleza','Descripción real','60 minutos','20.000','5.000','Disponible para reservar']) assert(textos(tarjetas[1]).includes(texto));
+    for (const texto of ['Servicio 2','Belleza Camila','Santiago','Belleza','Descripción real','60 minutos','20.000','5.000','Disponible para reservar']) assert(textos(tarjetas[1]).includes(texto));
     assert.equal(p.elementos['#servicio'].value,'2'); assert.equal(p.elementos['#servicio'].children[1].disabled,true);
 });
 test('Profesional y hora requieren selección explícita, sin elegir la primera automáticamente', async () => {
@@ -130,7 +135,7 @@ test('Sin horas se explica cómo continuar y no se inventan opciones', async () 
 });
 test('Resumen incluye todos los datos y se actualiza al editar correo y hora', async () => {
     const p=iniciar(); await p.preparar(); let texto=textos(p.elementos['#resumen']);
-    for(const valor of ['Belleza Camila','Servicio 2','Camila','2030-11-04','11:00','Precio total','20.000','Abono requerido','5.000','prueba@example.com']) assert(texto.includes(valor));
+    for(const valor of ['Belleza Camila','Servicio 2','Camila','4 de noviembre de 2030','11:00','Precio total','20.000','Abono requerido','5.000','prueba@example.com']) assert(texto.includes(valor));
     p.correo.value='otro@example.com'; p.correo.oninput(); p.elementos['#hora'].value='12:00:00'; p.elementos['#hora'].onchange(); texto=textos(p.elementos['#resumen']); assert(texto.includes('otro@example.com')); assert(texto.includes('12:00'));
 });
 test('Validación bloquea nombre vacío, correo inválido y teléfono demasiado largo', async () => {
@@ -173,4 +178,60 @@ test('Un error actual de profesionales se muestra y bloquea la disponibilidad', 
     const p=iniciar({profesionales:async()=>{throw Error('No se pudieron consultar profesionales');}}); await p.seleccionar();
     assert.equal(p.elementos['#estado'].dataset.tipo,'error'); assert.match(p.elementos['#avisoServicio'].textContent,/No se pudieron consultar/);
     assert.equal(p.elementos['#disponibilidad'].disabled,true); assert.equal(p.elementos['#crearReserva'].disabled,true);
+});
+test('Identidad visual conserva los archivos oficiales byte por byte', () => {
+    const {createHash}=require('node:crypto');
+    const originales={
+        'banner-meraki.png':'0c7372461c90e55a55c9a3466c1b1efec4fda9f38e435cc2e4b7ac46b159c568',
+        'logo-meraki.png':'cd4ffd031131710d20a45ee590d67d25428223a582a7c3e55e807ae2b49b29cd',
+        'banner-meraki-nuevo.png':'26bf7e8ecd8790ce0ac47b2d187011ecbe22300ea008134da07f12b3ea373b70',
+        'logo-meraki-transparente.png':'bb9e55a3e6eb37013fe497a8975e2f02705c074271f0b5303c1b48b56e7fc99d'
+    };
+    for(const [archivo,huella] of Object.entries(originales)){
+        const bytes=fs.readFileSync(path.join(__dirname,'../../frontend/front-office/assets',archivo));
+        assert.equal(createHash('sha256').update(bytes).digest('hex'),huella);
+    }
+});
+test('Banner y logo usan rutas relativas, texto accesible y no duplican las frases visibles', () => {
+    assert.match(html,/<img[^>]*src="assets\/logo-meraki-transparente\.png"[^>]*alt="Logo oficial de Meraki"/);
+    assert.match(html,/<img[^>]*src="assets\/banner-meraki-nuevo\.png"[^>]*alt="Encuentra el cuidado que buscas, cerca de ti\. Descubre servicios de cuidado personal ofrecidos por emprendedoras"/);
+    assert(!html.includes('hero-arte'));
+    const visible=html.replace(/<[^>]*>/g,'');
+    assert(!visible.includes('Encuentra el cuidado que buscas, cerca de ti'));
+    assert(!visible.includes('Descubre servicios de cuidado personal ofrecidos por emprendedoras'));
+    assert.match(html,/href="styles\.css\?v=/);
+});
+test('Navegación y etiquetas de campos conservan destinos y ayudas accesibles', () => {
+    const ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));
+    for(const match of html.matchAll(/href="#([^"]+)"/g))assert(ids.has(match[1]),match[1]);
+    for(const match of html.matchAll(/aria-(?:labelledby|describedby)="([^"]+)"/g))for(const id of match[1].split(' '))assert(ids.has(id),id);
+    assert.match(html,/href="\/back-office\/"/);assert(!html.includes('confirmarDatos'));
+});
+test('La fecha del resumen se presenta en español sin modificar la fecha de la API',async()=>{
+    const p=iniciar();await p.preparar();
+    assert.match(textos(p.elementos['#resumen']),/lunes, 4 de noviembre de 2030/);
+    assert.equal(p.elementos['#fecha'].value,'2030-11-04');
+    await p.elementos['#formReserva'].requestSubmit();
+    assert.equal(p.peticiones.find(r=>r.url==='/api/reservas').body.fecha,'2030-11-04');
+});
+test('Los mensajes de reserva permanecen dentro de la reserva y los de búsqueda en el catálogo',async()=>{
+    const p=iniciar();await pausa();assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoCatalogo']);
+    await p.preparar();assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoReserva']);
+    await p.elementos['#formReserva'].requestSubmit();assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoReserva']);
+    assert.match(p.elementos['#estado'].textContent,/pendiente de abono/);
+    await p.elementos['#buscar'].requestSubmit();assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoCatalogo']);
+    assert.doesNotMatch(p.elementos['#estado'].textContent,/pendiente de abono/);
+});
+
+
+test('Errores aparecen solo en campos interactuados o al intentar continuar', async () => {
+    const p = iniciar(); await p.seleccionar();
+    for (const id of ['#errorNombre', '#errorCorreo', '#errorTelefono', '#errorFecha']) assert.equal(p.elementos[id].textContent, '');
+    p.nombre.value = 'Clienta'; p.nombre.oninput();
+    assert.equal(p.elementos['#errorCorreo'].textContent, '');
+    assert.equal(p.elementos['#errorFecha'].textContent, '');
+    p.correo.onblur(); assert.match(p.elementos['#errorCorreo'].textContent, /Escribe tu correo/);
+    p.correo.value = 'clienta@example.com'; p.correo.oninput(); assert.equal(p.elementos['#errorCorreo'].textContent, '');
+    await p.elementos['#formReserva'].requestSubmit(); assert.match(p.elementos['#errorFecha'].textContent, /Selecciona una fecha/);
+    assert.equal(p.creadas(), 0);
 });

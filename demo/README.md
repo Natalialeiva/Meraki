@@ -69,8 +69,10 @@ sobre las tablas de `meraki_db`. Tiene `default_transaction_read_only=on`.
 ## Protecciones
 
 - Servidor ligado a localhost; no se publica en la red.
-- Lista cerrada de GET para catálogo, categorías, profesionales, disponibilidad
-  y los dos archivos del Front Office. Las demás rutas devuelven HTTP 405.
+- Lista cerrada de GET para catálogo, categorías, profesionales, disponibilidad,
+  HTML, JavaScript, CSS y cuatro PNG oficiales del Front Office (banner y logo
+  actuales más sus dos versiones anteriores conservadas). Ningún otro
+  recurso queda permitido por extensión. Las demás rutas devuelven HTTP 405.
 - Todas las escrituras se bloquean antes de llegar al backend, incluso clientas,
   reservas, configuración, autenticación, abonos, notificaciones y suscripciones.
 - También se bloquean los retornos GET de Webpay y Oneclick.
@@ -104,6 +106,11 @@ de lectura, falta de acceso del rol demo a las tablas principales, vigencia sin
 tarjetas y ausencia de cambios en ambas bases. Solo intenta un UPDATE sin filas
 afectables en la demo para confirmar que PostgreSQL lo rechaza. No ejecuta escrituras
 en `meraki_db` ni operaciones reales de proveedores.
+
+La comparación antes/después de cada ejecución incluye todas las tablas. Para la
+comparación histórica desde la preparación, la tabla `sesion_meraki` se informa
+por separado: el uso normal del Back Office puede cambiar sus sesiones. El resto
+de los datos sigue sujeto a la comparación histórica estricta.
 
 Resultados de preparación en Adriana, 4 de noviembre de 2026:
 

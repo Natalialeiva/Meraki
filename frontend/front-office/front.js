@@ -10,6 +10,13 @@ const dinero = valor => new Intl.NumberFormat('es-CL', {style:'currency', curren
 const servicioActual = () => servicios.find(s => String(s.id_servicio) === $('#servicio').value);
 const contexto = () => [$('#servicio').value, $('#profesional').value, $('#fecha').value].join('|');
 function informar(texto, tipo = 'info') { estado.textContent = texto; estado.dataset.tipo = tipo; }
+// Solo presentación: la API y el campo date conservan siempre AAAA-MM-DD.
+function fechaLegible(valor) {
+    if (!valor) return 'Sin seleccionar';
+    const fecha = new Date(valor + 'T12:00:00Z');
+    if (Number.isNaN(fecha.getTime())) return 'Sin seleccionar';
+    return new Intl.DateTimeFormat('es-CL', {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC'}).format(fecha);
+}
 async function api(url, method = 'GET', datos) {
     const respuesta = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:datos ? JSON.stringify(datos) : undefined});
     let d; try { d = JSON.parse(await respuesta.text()); } catch { throw Error('No se pudo leer la respuesta del servidor. Intenta nuevamente.'); }
@@ -33,6 +40,7 @@ function limpiarHoras() {
     resumen();
 }
 function errorCampo(campo, destino, texto) { campo.setAttribute('aria-invalid', texto ? 'true' : 'false'); $(destino).textContent = texto; }
+const camposInteractuados = new Set();
 function validar(mostrar = false) {
     const n = nombre.value.trim(), c = correo.value.trim(), t = telefono.value.trim();
     const errores = {
@@ -41,9 +49,8 @@ function validar(mostrar = false) {
         telefono: t.length > 20 ? 'Usa como máximo 20 caracteres.' : '',
         fecha: !$('#fecha').value ? 'Selecciona una fecha.' : $('#fecha').value < $('#fecha').min ? 'Elige hoy o una fecha posterior.' : ''
     };
-    if (mostrar) {
-        errorCampo(nombre, '#errorNombre', errores.nombre); errorCampo(correo, '#errorCorreo', errores.correo);
-        errorCampo(telefono, '#errorTelefono', errores.telefono); errorCampo($('#fecha'), '#errorFecha', errores.fecha);
+    for (const [clave, campo, destino] of [['nombre', nombre, '#errorNombre'], ['correo', correo, '#errorCorreo'], ['telefono', telefono, '#errorTelefono'], ['fecha', $('#fecha'), '#errorFecha']]) {
+        if (mostrar || camposInteractuados.has(campo)) errorCampo(campo, destino, errores[clave]);
     }
     return !Object.values(errores).some(Boolean);
 }
@@ -52,16 +59,20 @@ function resumen() {
     $('#seleccionProfesional').textContent = $('#profesional').value ? 'Profesional seleccionada: ' + profesional : 'Selecciona una profesional.';
     const panel = $('#resumen'); panel.replaceChildren();
     const lineas = [
-        'Emprendimiento: ' + (negocio?.nombre || 'Selecciona un emprendimiento'),
-        'Servicio: ' + (s?.servicio || 'Selecciona un servicio disponible'),
-        'Profesional: ' + ($('#profesional').value ? profesional : 'Sin seleccionar'),
-        'Fecha: ' + ($('#fecha').value || 'Sin seleccionar'),
-        'Hora: ' + ($('#hora').value ? $('#hora').value.slice(0, 5) : 'Sin seleccionar'),
-        'Precio total: ' + (s ? dinero(s.precio) : 'Pendiente de selección'),
-        'Abono requerido: ' + (s ? dinero(s.monto_abono) : 'Pendiente de selección'),
-        'Correo de confirmación: ' + (correo.value.trim() || 'Escribe tu correo')
+        ['Emprendimiento', negocio?.nombre || 'Selecciona un emprendimiento', 'negocio'],
+        ['Servicio', s?.servicio || 'Selecciona un servicio disponible', 'servicio'],
+        ['Profesional', $('#profesional').value ? profesional : 'Sin seleccionar', 'profesional'],
+        ['Fecha', fechaLegible($('#fecha').value), 'fecha'],
+        ['Hora', $('#hora').value ? $('#hora').value.slice(0, 5) : 'Sin seleccionar', 'hora'],
+        ['Precio total', s ? dinero(s.precio) : 'Pendiente de selección', 'precio'],
+        ['Abono requerido', s ? dinero(s.monto_abono) : 'Pendiente de selección', 'abono'],
+        ['Correo de confirmación', correo.value.trim() || 'Escribe tu correo', 'correo']
     ];
-    for (const texto of lineas) { const p = document.createElement('p'); p.textContent = texto; panel.append(p); }
+    for (const [etiqueta, valor, campo] of lineas) {
+        const fila = document.createElement('div'), titulo = document.createElement('dt'), dato = document.createElement('dd');
+        fila.className = 'resumen-fila resumen-' + campo; titulo.textContent = etiqueta; dato.textContent = valor;
+        fila.append(titulo, dato); panel.append(fila);
+    }
     const horaValida = contextoHoras === contexto() && horas.includes($('#hora').value);
     $('#crearReserva').disabled = creada || enviando || !s || s.reservable === false || !$('#profesional').value || !horaValida || !validar();
 }
@@ -69,14 +80,31 @@ function tarjetasServicios() {
     const lista = $('#listaServicios'); lista.replaceChildren();
     for (const s of servicios) {
         const tarjeta = document.createElement('article'), h = document.createElement('h3');
+        tarjeta.className = 'servicio-card';
         tarjeta.dataset.seleccionado = String(String(s.id_servicio) === $('#servicio').value);
+        tarjeta.dataset.disponible = String(s.reservable !== false);
         h.textContent = s.servicio; tarjeta.append(h);
-        const detalles = [negocio.nombre, s.categoria, s.descripcion,
-            s.precio != null ? 'Precio total: ' + dinero(s.precio) : '',
-            s.duracion_min != null ? 'Duración: ' + s.duracion_min + ' minutos' : '',
-            s.monto_abono != null ? 'Abono requerido: ' + dinero(s.monto_abono) : '',
-            s.reservable === false ? noDisponible : 'Disponible para reservar'];
-        for (const texto of detalles.filter(Boolean)) { const p = document.createElement('p'); p.textContent = texto; tarjeta.append(p); }
+        const detalles = [
+            [negocio.nombre, 'servicio-negocio'],
+            [negocio.comuna, 'servicio-comuna'],
+            [s.categoria, 'servicio-categoria'],
+            [s.descripcion, 'servicio-descripcion'],
+            [s.precio != null ? 'Precio total: ' + dinero(s.precio) : '', 'servicio-precio'],
+            [s.duracion_min != null ? 'Duración: ' + s.duracion_min + ' minutos' : '', 'servicio-duracion'],
+            [s.monto_abono != null ? 'Abono requerido: ' + dinero(s.monto_abono) : '', 'servicio-abono'],
+            [s.reservable === false ? noDisponible : 'Disponible para reservar', 'servicio-estado']
+        ];
+        for (const [texto, clase] of detalles) {
+            if (!texto) continue;
+            const p = document.createElement('p'); p.className = clase;
+            if (clase === 'servicio-precio' || clase === 'servicio-abono') {
+                const etiqueta = document.createElement('span'), importe = document.createElement('strong');
+                etiqueta.textContent = clase === 'servicio-precio' ? 'Precio total' : 'Abono requerido';
+                importe.textContent = dinero(clase === 'servicio-precio' ? s.precio : s.monto_abono);
+                p.append(etiqueta, importe);
+            } else p.textContent = texto;
+            tarjeta.append(p);
+        }
         const elegir = document.createElement('button'); elegir.type = 'button'; elegir.disabled = s.reservable === false || enviando || creada;
         elegir.textContent = s.reservable === false ? 'No disponible por el momento' : 'Elegir ' + s.servicio;
         elegir.onclick = () => {
@@ -117,6 +145,7 @@ async function seleccionar(dato) {
         opciones($('#servicio'), datos, 'id_servicio', s => s.servicio + ' · ' + dinero(s.precio) + (s.reservable === false ? ' · No disponible por el momento' : ''), 'Selecciona un servicio');
         const primera = datos.find(s => s.reservable !== false); $('#servicio').value = primera ? String(primera.id_servicio) : '';
         $('#tituloReserva').textContent = 'Reserva en ' + dato.nombre; $('#reserva').hidden = false;
+        $('#estadoReserva').append(estado);
         informar(primera ? 'Elige profesional, fecha y hora.' : datos.length ? noDisponible : 'No hay servicios publicados por el momento.');
         await profesionales();
     } catch (error) { if (version === versionSeleccion) informar(error.message, 'error'); }
@@ -125,12 +154,14 @@ $('#buscar').onsubmit = async evento => {
     evento.preventDefault(); if (enviando) return;
     const version = ++versionBusqueda; versionSeleccion++; versionProfesional++; limpiarHoras();
     $('#reserva').hidden = true; $('#resultados').replaceChildren(); informar('Buscando emprendimientos…', 'carga');
+    $('#estadoCatalogo').append(estado);
     try {
         const filtros = new URLSearchParams(new FormData(evento.target));
         const datos = await api('/api/emprendimientos?' + filtros);
         if (version !== versionBusqueda) return;
         for (const d of datos) {
-            const a = document.createElement('article'), h = document.createElement('h2'), p = document.createElement('p'), b = document.createElement('button');
+            const a = document.createElement('article'), h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
+            a.className = 'negocio-card';
             h.textContent = d.nombre; p.textContent = [d.descripcion, d.comuna, d.direccion].filter(Boolean).join(' · ');
             b.type = 'button'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
             a.append(h, p, b); $('#resultados').append(a);
@@ -143,7 +174,9 @@ $('#servicio').onchange = profesionales;
 $('#profesional').onchange = () => { limpiarHoras(); $('#disponibilidad').disabled = !$('#profesional').value; };
 $('#fecha').onchange = () => { limpiarHoras(); errorCampo($('#fecha'), '#errorFecha', !$('#fecha').value ? 'Selecciona una fecha.' : $('#fecha').value < $('#fecha').min ? 'Elige hoy o una fecha posterior.' : ''); };
 $('#hora').onchange = () => { resumen(); if ($('#hora').value) informar('Revisa el resumen y completa tus datos para crear la reserva.'); };
-for (const campo of [nombre, correo, telefono]) campo.oninput = () => { validar(true); resumen(); };
+for (const campo of [nombre, correo, telefono]) {
+    campo.oninput = campo.onblur = () => { camposInteractuados.add(campo); validar(); resumen(); };
+}
 $('#disponibilidad').onclick = async () => {
     limpiarHoras();
     const s = servicioActual();
@@ -179,6 +212,6 @@ $('#formReserva').onsubmit = async evento => {
     } catch (error) { informar(error.message, 'error'); $('#camposReserva').disabled = false; }
     finally { enviando = false; tarjetasServicios(); resumen(); }
 };
-$('#nuevaReserva').onclick = () => { if (enviando) return; $('#formReserva').reset(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
+$('#nuevaReserva').onclick = () => { if (enviando) return; $('#formReserva').reset(); camposInteractuados.clear(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
 $('#fecha').min = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Santiago', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
 opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional'); limpiarHoras(); $('#buscar').requestSubmit();
