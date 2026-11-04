@@ -10,7 +10,7 @@ class Elemento {
     focus(){}
 }
 const servicio={id_servicio:3,id_emprendimiento:1,id_categoria:1,servicio:'Manicure',categoria:'Uñas',precio:'20000',duracion_min:60,monto_abono:'5000',descripcion:null,activo:true};
-function pantalla(responder,confirmar=()=>true){
+function pantalla(responder,confirmar=()=>true,puedeConfigurar=()=>true){
     const campos=Object.fromEntries(['nombre','descripcion','id_categoria','precio','duracion_min','monto_abono'].map(k=>[k,new Elemento()]));
     const grupo=new Elemento(),nuevo=new Elemento(),titulo=new Elemento(),lista=new Elemento(),estado=new Elemento(),selector=new Elemento(),actualizar=new Elemento();
     const form={elements:{namedItem:k=>campos[k]},querySelector:s=>s==='fieldset'?grupo:s==='[data-nuevo-servicio]'?nuevo:titulo,
@@ -23,7 +23,7 @@ function pantalla(responder,confirmar=()=>true){
         if(url==='/api/categorias')return [{id_categoria:1,nombre:'Uñas'},{id_categoria:2,nombre:'Cabello'}];
         return {servicio};
     };
-    const gestion=montar({form,lista,estado,selector,actualizar,api,documento:{createElement:()=>new Elemento()},confirmar});
+    const gestion=montar({form,lista,estado,selector,actualizar,api,documento:{createElement:()=>new Elemento()},confirmar,puedeConfigurar});
     return {gestion,campos,lista,estado,grupo,selector,actualizar,llamadas,nuevo,titulo,
         guardar:()=>form.onsubmit({preventDefault(){}}),completar(){Object.assign(campos.nombre,{value:' Servicio nuevo '});campos.precio.value='18000';campos.duracion_min.value='45';campos.monto_abono.value='4000';}};
 }
@@ -63,4 +63,9 @@ test('Servicios ignora carga anterior al cambiar de negocio',async()=>{
     const anterior=p.gestion.cargar(1);await p.gestion.cargar(2);terminar([servicio]);await anterior;
     assert.equal(p.lista.children.length,1);assert.equal(p.lista.children[0].children[0].textContent,'Cabello ajeno');
     p.completar();await p.guardar();assert.equal(p.llamadas.find(x=>x.method==='POST').datos.id_emprendimiento,2);
+});
+test('Servicios sin vigencia permite consultar pero bloquea cambios hasta restaurar acceso',async()=>{
+    let vigente=false;const p=pantalla(undefined,()=>true,()=>vigente);await p.gestion.cargar(1);
+    assert.equal(p.lista.children.length,1);assert.equal(p.grupo.disabled,true);p.completar();await p.guardar();assert(!p.llamadas.some(x=>x.method));
+    vigente=true;p.gestion.actualizarPermisos();assert.equal(p.grupo.disabled,false);await p.guardar();assert(p.llamadas.some(x=>x.method==='POST'));
 });

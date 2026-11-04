@@ -1,5 +1,5 @@
 (function (raiz) {
-    function montar({form, lista, estado, selector, actualizar, api, documento = document, confirmar = confirm}) {
+    function montar({form, lista, estado, selector, actualizar, api, documento = document, confirmar = confirm, puedeConfigurar = ()=>true}) {
         const grupo = form.querySelector('fieldset');
         const nuevo = form.querySelector('[data-nuevo-servicio]');
         const titulo = form.querySelector('[data-titulo-servicio]');
@@ -13,13 +13,13 @@
             titulo.textContent = 'Nuevo servicio';
         }
         function controles() {
-            grupo.disabled = ocupado || !listo;
+            grupo.disabled = ocupado || !listo || !puedeConfigurar();
             selector.disabled = ocupado;
             actualizar.disabled = ocupado || !negocio;
-            for (const boton of lista.querySelectorAll('button')) boton.disabled = ocupado;
+            for (const boton of lista.querySelectorAll('button')) boton.disabled = ocupado || !puedeConfigurar();
         }
         function editar(servicio) {
-            if (ocupado || !listo) return;
+            if (ocupado || !puedeConfigurar() || !listo) return;
             edicion = servicio.id_servicio;
             titulo.textContent = 'Editar servicio: ' + servicio.servicio;
             for (const k of Object.keys(campos)) campos[k].value = (k === 'nombre' ? servicio.servicio : servicio[k]) ?? '';
@@ -78,12 +78,12 @@
             finally {ocupado=false;controles();}
         }
         async function desactivar(servicio) {
-            if (ocupado || !confirmar('¿Desactivar '+servicio.servicio+'? Dejará de ofrecerse para nuevas reservas. Las reservas existentes se conservan.')) return;
+            if (ocupado || !puedeConfigurar() || !confirmar('¿Desactivar '+servicio.servicio+'? Dejará de ofrecerse para nuevas reservas. Las reservas existentes se conservan.')) return;
             await ejecutar('/api/servicios/'+servicio.id_servicio+'/desactivar','PATCH',undefined,'Servicio desactivado correctamente.');
         }
         form.onsubmit=async evento=>{
             evento.preventDefault();
-            if (ocupado || !listo || !form.reportValidity()) return;
+            if (ocupado || !puedeConfigurar() || !listo || !form.reportValidity()) return;
             const datos={nombre:campos.nombre.value.trim(),descripcion:campos.descripcion.value.trim()||null,
                 id_categoria:Number(campos.id_categoria.value),precio:Number(campos.precio.value),
                 duracion_min:Number(campos.duracion_min.value),monto_abono:Number(campos.monto_abono.value)};
@@ -97,7 +97,7 @@
         nuevo.onclick=()=>{if(!ocupado){limpiar();estado.textContent='Completa los datos del nuevo servicio.';}};
         actualizar.onclick=()=>{if(!ocupado)cargar(negocio);};
         controles();
-        return {cargar};
+        return {cargar,actualizarPermisos:controles};
     }
     if (typeof module!=='undefined' && module.exports) module.exports={montar};
     else raiz.MerakiServicios={montar};

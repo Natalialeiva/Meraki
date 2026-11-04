@@ -111,6 +111,10 @@ function verificarSesion(req, res, next) {
 
 // Ruta para comprobar que el Backend puede consultar PostgreSQL.
 montarRutas(app,pool,verificarSesion,notificarReservaConfirmada);
+const {crearSuscripciones,montarRutasSuscripcion,iniciarPlanificador}=require('./suscripciones');
+const suscripciones=crearSuscripciones({pool});
+montarRutasSuscripcion(app,suscripciones,verificarSesion);
+require('./acceso-suscripcion').montarRestricciones(app,pool,verificarSesion);
 const path=require('path');
 app.use('/front-office',express.static(path.join(__dirname,'../frontend/front-office')));
 app.use('/back-office',express.static(path.join(__dirname,'../frontend/back-office')));
@@ -356,6 +360,9 @@ app.get("/api/trabajadoras/:id/servicios", verificarSesion, async (req, res) => 
 
 app.post("/api/trabajadoras/:id/servicios", verificarSesion, async (req, res) => {
     try {
+        if (Object.keys(req.body || {}).some(campo => campo !== 'id_servicio')) {
+            return res.status(400).json({mensaje:'La asignación solo admite el identificador del servicio'});
+        }
         const idTrabajadora = Number(req.params.id);
         const { id_servicio } = req.body || {};
         const idServicio = Number(id_servicio);
@@ -572,6 +579,10 @@ app.get("/api/mis-horarios", verificarSesion, async (req, res) => {
 // Solo las emprendedoras autenticadas pueden registrar horarios.
 app.post("/api/horarios", verificarSesion, async (req, res) => {
     try {
+        const permitidos=['id_trabajadora','dia_semana','hora_inicio','hora_fin'];
+        if(Object.keys(req.body||{}).some(campo=>!permitidos.includes(campo))){
+            return res.status(400).json({mensaje:'La solicitud contiene campos de horario no permitidos'});
+        }
         // Recibimos los datos del horario.
         const {
             id_trabajadora,
@@ -746,6 +757,10 @@ return res.status(201).json({
 // Ruta para editar horarios de atención del Back Office.
 app.patch("/api/horarios/:id", verificarSesion, async (req, res) => {
     try {
+        const campos=Object.keys(req.body||{});
+        if(!campos.length||campos.some(campo=>!['dia_semana','hora_inicio','hora_fin'].includes(campo))){
+            return res.status(400).json({mensaje:'Indica al menos un campo editable del horario'});
+        }
         // Identificamos el horario que se desea modificar.
         const idHorario = Number(req.params.id);
 
@@ -1061,6 +1076,9 @@ return res.status(200).json({
 // Registrar bloqueos de horarios del Back Office.
 // Utiliza la misma protección de concurrencia que las reservas.
 app.post("/api/bloqueos", verificarSesion, async (req, res) => {
+    if(Object.keys(req.body||{}).some(campo=>!['id_trabajadora','fecha_inicio','fecha_fin','motivo'].includes(campo))){
+        return res.status(400).json({mensaje:'La solicitud contiene campos de bloqueo no permitidos'});
+    }
     const { id_trabajadora, fecha_inicio, fecha_fin, motivo } = req.body || {};
 
     const idTrabajadora = Number(id_trabajadora);
@@ -1349,6 +1367,10 @@ app.delete("/api/bloqueos/:id", verificarSesion, async (req, res) => {
 // Solo las emprendedoras autenticadas pueden registrar trabajadoras.
 app.post("/api/trabajadoras", verificarSesion, async (req, res) => {
     try {
+        const permitidos = ['id_emprendimiento','nombre','apellido','descripcion'];
+        if (Object.keys(req.body || {}).some(campo => !permitidos.includes(campo))) {
+            return res.status(400).json({mensaje:'La solicitud contiene campos de trabajadora no permitidos'});
+        }
 
         // Recibimos los datos de la trabajadora.
         const {
@@ -1483,6 +1505,10 @@ return res.status(201).json({
 // Solo las emprendedoras autenticadas pueden modificar trabajadoras.
 app.patch("/api/trabajadoras/:id", verificarSesion, async (req, res) => {
     try {
+        const permitidos = ['nombre','apellido','descripcion'];
+        if (Object.keys(req.body || {}).some(campo => !permitidos.includes(campo))) {
+            return res.status(400).json({mensaje:'La solicitud contiene campos de trabajadora no permitidos'});
+        }
         // Obtenemos el identificador de la trabajadora.
         const idTrabajadora = Number(req.params.id);
 
@@ -2567,6 +2593,11 @@ app.post("/api/reservas", async (req, res) => {
               AND s.id_servicio = $4
               AND h.dia_semana = $2
               AND horas.hora = $1::DATE + $5::TIME
+              AND EXISTS (
+                  SELECT 1 FROM suscripcion plan
+                  WHERE plan.id_emprendedora=e.id_emprendedora
+                    AND plan.acceso_hasta>(CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date
+              )
               AND t.id_emprendimiento = e.id_emprendimiento
               AND t.activa = TRUE
               AND h.activo = TRUE
@@ -5132,6 +5163,10 @@ app.get("/api/emprendimientos/:id/servicios", async (req, res) => {
                     JOIN trabajadora t ON t.id_trabajadora=ts.id_trabajadora
                     WHERE ts.id_servicio=s.id_servicio AND t.activa=TRUE
                       AND t.id_emprendimiento=s.id_emprendimiento
+                ) AND EXISTS (
+                    SELECT 1 FROM emprendimiento negocio JOIN suscripcion plan ON plan.id_emprendedora=negocio.id_emprendedora
+                    WHERE negocio.id_emprendimiento=s.id_emprendimiento
+                      AND plan.acceso_hasta>(CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date
                 ) AS reservable
             FROM servicio s
             INNER JOIN categoria c
@@ -5250,6 +5285,8 @@ app.get("/api/servicios/:id/trabajadoras", async (req, res) => {
 // Iniciamos el servidor en el puerto 3000.
 if (require.main === module) app.listen(Number(process.env.PORT || 3000), () => {
     console.log(`Servidor de Meraki funcionando en http://localhost:${Number(process.env.PORT || 3000)}`);
+    // El servidor revisa vencimientos; no existe un endpoint público para disparar cargos.
+    if(process.env.MERAKI_SUSCRIPCIONES_AUTOMATICAS!=='0')iniciarPlanificador(suscripciones);
 });
 console.log("Iniciando Backend de Meraki");
 

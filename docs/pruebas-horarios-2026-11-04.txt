@@ -1,0 +1,154 @@
+
+> backend@1.0.0 test
+> node --test test/*.test.js
+
+✔ Agenda combina fecha y estado sin desplazar el día de Chile (2.2828ms)
+✔ Agenda usa permisos del servidor para pagos y cierre de atención (0.4295ms)
+✔ Agenda muestra estados comprensibles y ausencia de abono (0.309ms)
+✔ Consulta de prueba oculta acciones antes de utilizarlas (14.2431ms)
+✔ Rechazo 405 de texto muestra explicación y conserva reserva (3.0838ms)
+✔ Error HTML del servidor no se expone como error de JSON (3.1103ms)
+✔ Reserva con pago asociado no ofrece cancelación y explica la gestión (8.09ms)
+✔ Cancelación permitida actualiza estado y oculta las acciones (3.1563ms)
+✔ Ethereal nunca recibe el enlace auténtico (1.9116ms)
+✔ Gmail utiliza el enlace real y no genera vista previa (0.6974ms)
+✔ Configuración incompleta no cae en Ethereal (0.5718ms)
+✔ Enlace usa fragmento y exige HTTPS salvo localhost (0.4242ms)
+✔ Proveedor desconocido falla sin enviar (0.2921ms)
+✔ Gmail autentica con OAuth2 sin contraseña de app (0.3177ms)
+✔ Contraseña de app no sustituye credenciales OAuth (0.9434ms)
+✔ Gmail admite el enlace de consulta de la API existente (0.4054ms)
+✔ Front Office selecciona servicio reservable y explica filtros (62.9119ms)
+✔ Ver todos borra ambos filtros y vuelve a consultar (3.4615ms)
+✔ Disponibilidad requiere fecha y cambiarla invalida hora y revisión (13.5167ms)
+✔ Creación exige revisión y evita duplicación por doble envío (6.3781ms)
+✔ Respuesta antigua de profesionales no reemplaza la selección nueva (5.3577ms)
+✔ Horarios carga solo el negocio elegido y deshabilita sin trabajadora (3.5259ms)
+✔ Horarios crea y edita horas sin desplazamiento de zona horaria (5.3251ms)
+✔ Horarios rechaza rango invertido y conserva formulario ante error (1.5529ms)
+✔ Bloqueos envía fechas locales literales y valida orden (1.2415ms)
+✔ Horarios y bloqueos solicitan confirmación antes de retirar (1.2159ms)
+✔ Horarios conserva gestión de bajas pero no permite altas en trabajadora inactiva (0.4146ms)
+✔ Horarios bloquea doble envío y distingue recarga fallida del guardado (0.668ms)
+✔ Horarios ignora una carga antigua al cambiar de negocio (1.66ms)
+◇ injected env (14) from .env
+▶ Integración PostgreSQL, sesión, recuperación y notificaciones
+  ✔ Aislamiento: las consultas y sesiones solo resuelven el esquema temporal (33.42ms)
+MERAKI: configuración de sesiones cargada
+Iniciando Backend de Meraki
+  ✔ Anónimo no lista ni reintenta (30.6938ms)
+MERAKI: solicitud de login recibida
+Wed, 04 Nov 2026 03:51:09 GMT router deprecated handlers that are Promise-like are deprecated, use a native Promise instead at node_modules\router\lib\route.js:157:13
+  ✔ Login real crea sesión PostgreSQL (29.2085ms)
+  ✔ Perfil: autenticación, campos protegidos y validaciones (43.6822ms)
+  ✔ Perfil: guarda datos públicos, limpia opcionales y mantiene reservas y coordenadas (20.9437ms)
+MERAKI: solicitud de login recibida
+  ✔ Perfil: no permite editar el emprendimiento de otra propietaria (18.9582ms)
+  ✔ Servicios: autenticación, campos protegidos y valores inválidos (129.7594ms)
+  ✔ Servicios: crear, editar categoría y precio conserva reservas existentes (23.875ms)
+  ✔ Servicios: ediciones simultáneas no dejan abono superior al precio (40.8824ms)
+MERAKI: solicitud de login recibida
+  ✔ Servicios: otra propietaria no puede crear, editar ni desactivar (27.3006ms)
+  ✔ Servicios: desactivación conserva historial y retira del catálogo público (18.2276ms)
+  ✔ Trabajadoras: autenticación y validación de campos (52.8244ms)
+  ✔ Trabajadoras: creación y edición con limpieza de opcionales (21.1332ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+  ✔ Asignaciones: habilita profesional y evita duplicados concurrentes (36.6283ms)
+MERAKI: solicitud de login recibida
+  ✔ Trabajadoras y asignaciones: impide acceso ajeno y cruce de negocios (42.4786ms)
+  ✔ Asignaciones: retirar conserva reservas y retira disponibilidad profesional (13.7927ms)
+  ✔ Trabajadoras: desactivar conserva historial y excluye nuevas reservas (30.1237ms)
+  ✔ Horarios y bloqueos: autenticación y validaciones (61.543ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+  ✔ Horarios: concurrencia rechaza superposición y permite tramos contiguos (32.6965ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+  ✔ Bloqueos: protege reservas activas, modifica disponibilidad y permite retirar (57.5345ms)
+  ✔ Bloqueos: carrera con nueva reserva nunca ocupa dos veces el período (44.5525ms)
+MERAKI: solicitud de login recibida
+  ✔ Horarios y bloqueos: otra propietaria no consulta ni modifica datos ajenos (48.1852ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+  ✔ Horarios: desactivación conserva citas y excluye nuevas horas (35.8442ms)
+ALERTA: Datos de pago inconsistentes. Abono: 1
+  ✔ Webpay inconsistente no confirma ni envía (5.8382ms)
+  ✔ INITIALIZED e incompleto no recuperan pago (7.9812ms)
+Error al recuperar pago: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_bloqueo»
+  ✔ Fallo al guardar outbox revierte pago y reserva (13.0234ms)
+  ✔ Consulta Webpay solo habilita recuperación de una autorización válida y coincidente (18.8071ms)
+  ✔ Pago autorizado recupera, confirma y envía una sola vez (16.2135ms)
+  ✔ Reclamo concurrente solo realiza un envío (51.401ms)
+  ✔ Timeout conserva enviando y bloquea reintento (7.8923ms)
+  ✔ Revisión exige antigüedad, cabecera y evidencia (16.2896ms)
+  ✔ Reintento auditado respeta máximo tres (15.4915ms)
+  ✔ Catálogo distingue servicios sin profesional y permite nueva reserva con correo existente (18.9348ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+Error al verificar abono: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_retorno»
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+  ✔ Front Office: catálogo, disponibilidad, reserva y pago; fallo SMTP no revierte pago (55.6879ms)
+  ✔ Cancelación: reservas sin abonos, estados y permisos por token (73.7722ms)
+  ✔ Agenda privada: pagos, cierre de atención y cancelación por propietaria (34.1455ms)
+  ✔ Corrección de destinatario conserva pago, invalida enlace y no duplica envío (14.5531ms)
+  ✔ Propietaria ajena no puede ver ni modificar notificación (28.5503ms)
+  ✔ Consulta privada no expone token y no se almacena en caché (16.7143ms)
+✔ Integración PostgreSQL, sesión, recuperación y notificaciones (1612.0511ms)
+✔ Pago iniciado no se presenta como aprobado ni permite recuperación (34.061ms)
+✔ AUTHORIZED requiere permiso explícito del servidor para recuperar (0.5636ms)
+✔ Inconsistencia impide recuperación incluso si otro campo la habilita (0.3185ms)
+✔ Pago registrado no invita a repetir recuperación (0.347ms)
+✔ Recuperación completada distingue confirmación de reserva y estado del correo (0.2253ms)
+✔ Perfil sin emprendimiento deshabilita edición y no envía solicitudes (1.821ms)
+✔ Perfil carga datos, permite restaurar y cambia al negocio seleccionado (0.4159ms)
+✔ Perfil guarda solo campos editables, recorta espacios y limpia opcionales (1.8145ms)
+✔ Perfil rechaza nombre con espacios antes de enviar (0.4248ms)
+✔ Perfil conserva edición ante error y libera controles para reintentar (5.7928ms)
+✔ Perfil bloquea doble envío y cambio de negocio mientras guarda (0.4803ms)
+✔ Servicios carga categorías y lista solo el negocio seleccionado (33.5107ms)
+✔ Servicios crea con datos normalizados y permite comenzar otro (7.2389ms)
+✔ Servicios edita categoría, precio y duración sin enviar propietario ni estado (1.487ms)
+✔ Servicios rechaza abono mayor al precio y conserva datos ante fallo al guardar (0.7968ms)
+✔ Servicios distingue guardado correcto de falla posterior al recargar (0.8569ms)
+✔ Servicios desactiva solo tras confirmación y usa la ruta correspondiente (0.8953ms)
+✔ Servicios evita doble envío y bloquea controles mientras guarda (0.9896ms)
+✔ Servicios ignora carga anterior al cambiar de negocio (1.0347ms)
+✔ Trabajadoras muestra solo su negocio y deshabilita sin selección (2.6266ms)
+✔ Trabajadoras crea, edita y normaliza opcionales sin campos protegidos (5.1243ms)
+✔ Trabajadoras valida nombre y conserva edición ante error (1.0013ms)
+✔ Asignaciones ofrece solo servicios activos propios sin asignar (1.0187ms)
+✔ Asignaciones permite retirar con confirmación y bloquea alta en trabajadora inactiva (0.8623ms)
+✔ Trabajadoras evita doble envío y distingue fallo de recarga posterior (0.9724ms)
+✔ Trabajadoras desactiva únicamente tras confirmación (0.7707ms)
+✔ Asignaciones ignora una respuesta antigua al cambiar de negocio (0.8736ms)
+ℹ tests 96
+ℹ suites 0
+ℹ pass 96
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2018.1712

@@ -10,7 +10,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   // La extensión debe estar instalada previamente: las pruebas no la instalan en la base principal.
   assert.equal((await admin.query("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='btree_gist') AS instalada")).rows[0].instalada,true);
   await admin.query('CREATE SCHEMA '+schema);pool=new Pool({...config,options:'-c search_path='+schema+',public'});
-  for(const file of ['schema.sql','002_agregar_token_consulta.sql','003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql','006_correccion_correo_reserva.sql','007_nombre_reserva.sql','seed.sql'])await pool.query(fs.readFileSync(path.join(__dirname,'../../database',file),'utf8'));
+  for(const file of ['schema.sql','002_agregar_token_consulta.sql','003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql','006_correccion_correo_reserva.sql','007_nombre_reserva.sql','008_suscripcion_oneclick.sql','seed.sql'])await pool.query(fs.readFileSync(path.join(__dirname,'../../database',file),'utf8'));
   // public se usa solo al construir las tablas para resolver la extensión btree_gist.
   // Las consultas del servidor y sus sesiones nunca pueden recurrir a tablas de public.
   await pool.end();pool=new Pool({...config,options:'-c search_path='+schema});
@@ -19,6 +19,8 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.equal(contexto.esquema,schema);assert.deepEqual(contexto.rutas,[schema]);
   });
   await pool.query('UPDATE emprendedora SET password_hash=$1',[await bcrypt.hash('clave-prueba',4)]);
+  // Las pruebas operativas parten de un plan vigente, sin inventar pagos en Transbank.
+  await pool.query("INSERT INTO suscripcion(id_emprendedora,fecha_inicio,monto_mensual,estado,acceso_hasta) SELECT id_emprendedora,CURRENT_DATE,9990,'prueba',DATE '2099-01-01' FROM emprendedora");
   await pool.query("UPDATE reserva SET token_consulta='11111111-1111-4111-8111-111111111111',estado='pendiente_abono'");
   await pool.query("INSERT INTO abono(id_reserva,monto,token_transaccion,buy_order) VALUES(1,5000,'token-prueba','orden-test')");
   const enviar=async()=>{enviados++;if(modo!=='ok'){const e=new Error('fallo simulado');e.code=modo;throw e;}return{idMensaje:'mensaje-test'};};
@@ -52,6 +54,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   await t.test('Perfil: no permite editar el emprendimiento de otra propietaria',async()=>{
    const otra=request.agent(app);
    const cuenta=(await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Perfil','Ajeno','perfil-ajeno','perfil@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)])).rows[0];
+   await pool.query("INSERT INTO suscripcion(id_emprendedora,fecha_inicio,monto_mensual,estado,acceso_hasta) VALUES($1,CURRENT_DATE,9990,'prueba',DATE '2099-01-01')",[cuenta.id_emprendedora]);
    await otra.post('/api/auth/login').send({correo:'perfil@meraki.test',password:'clave-prueba'}).expect(200);
    const antes=(await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0];
    await otra.patch('/api/emprendimientos/1').send({nombre:'Cambio ajeno'}).expect(404);
@@ -110,6 +113,163 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.equal((await agent.get('/api/mis-servicios').expect(200)).body.find(s=>s.id_servicio===servicioGestion.id_servicio).activo,false);
    assert(!(await request(app).get('/api/servicios').expect(200)).body.some(s=>s.id_servicio===servicioGestion.id_servicio));
    assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,antes);
+  });
+  let trabajadoraGestion,servicioTrabajadora;
+  const datosTrabajadora={id_emprendimiento:1,nombre:' Profesional prueba ',apellido:' Apellido ',descripcion:' Descripción '};
+  await t.test('Trabajadoras: autenticación y validación de campos',async()=>{
+   await request(app).get('/api/mis-trabajadoras').expect(401);
+   await request(app).post('/api/trabajadoras').send(datosTrabajadora).expect(401);
+   await request(app).patch('/api/trabajadoras/1').send({nombre:'Prueba'}).expect(401);
+   for(const cambio of [{nombre:''},{nombre:'x'.repeat(101)},{apellido:4},{descripcion:4},{descripcion:'x'.repeat(1001)},{activa:false}]){
+    await agent.post('/api/trabajadoras').send({...datosTrabajadora,...cambio}).expect(400);
+   }
+   for(const cambio of [{},{nombre:null},{nombre:' '},{apellido:'x'.repeat(101)},{descripcion:4},{activa:false},{nombre:'Prueba',id_emprendimiento:2}]){
+    await agent.patch('/api/trabajadoras/1').send(cambio).expect(400);
+   }
+  });
+  await t.test('Trabajadoras: creación y edición con limpieza de opcionales',async()=>{
+   trabajadoraGestion=(await agent.post('/api/trabajadoras').send(datosTrabajadora).expect(201)).body.trabajadora;
+   assert.equal(trabajadoraGestion.nombre,'Profesional prueba');assert.equal(trabajadoraGestion.apellido,'Apellido');assert.equal(trabajadoraGestion.activa,true);
+   const t=(await agent.patch('/api/trabajadoras/'+trabajadoraGestion.id_trabajadora).send({nombre:' Profesional editada ',apellido:null,descripcion:null}).expect(200)).body.trabajadora;
+   assert.equal(t.nombre,'Profesional editada');assert.equal(t.apellido,null);assert.equal(t.descripcion,null);
+   assert((await agent.get('/api/mis-trabajadoras').expect(200)).body.some(x=>x.id_trabajadora===t.id_trabajadora));
+   servicioTrabajadora=(await agent.post('/api/servicios').send({...datosServicio,nombre:'Z servicio para asignar'}).expect(201)).body.servicio;
+  });
+  await t.test('Asignaciones: habilita profesional y evita duplicados concurrentes',async()=>{
+   const ruta='/api/trabajadoras/'+trabajadoraGestion.id_trabajadora+'/servicios';
+   await request(app).get(ruta).expect(401);await request(app).post(ruta).send({id_servicio:servicioTrabajadora.id_servicio}).expect(401);
+   await agent.post(ruta).send({id_servicio:servicioTrabajadora.id_servicio,activa:true}).expect(400);
+   const antes=(await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body.find(s=>s.id_servicio===servicioTrabajadora.id_servicio);assert.equal(antes.reservable,false);
+   const respuestas=await Promise.all([agent.post(ruta).send({id_servicio:servicioTrabajadora.id_servicio}),agent.post(ruta).send({id_servicio:servicioTrabajadora.id_servicio})]);
+   assert.deepEqual(respuestas.map(r=>r.status).sort(),[201,409]);
+   assert.equal((await agent.get(ruta).expect(200)).body.length,1);
+   assert.equal((await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body.find(s=>s.id_servicio===servicioTrabajadora.id_servicio).reservable,true);
+   const profesionales=(await request(app).get('/api/servicios/'+servicioTrabajadora.id_servicio+'/trabajadoras').expect(200)).body;assert(profesionales.some(t=>t.id_trabajadora===trabajadoraGestion.id_trabajadora));
+   // Una asignación no inventa un horario de atención.
+   await request(app).get('/api/disponibilidad').query({id_servicio:servicioTrabajadora.id_servicio,id_trabajadora:trabajadoraGestion.id_trabajadora,fecha:'2030-11-04'}).expect(200,[]);
+  });
+  await t.test('Trabajadoras y asignaciones: impide acceso ajeno y cruce de negocios',async()=>{
+   const otra=request.agent(app);await otra.post('/api/auth/login').send({correo:'perfil@meraki.test',password:'clave-prueba'}).expect(200);
+   await otra.get('/api/mis-trabajadoras').expect(200,[]);await otra.post('/api/trabajadoras').send(datosTrabajadora).expect(403);
+   const base='/api/trabajadoras/'+trabajadoraGestion.id_trabajadora;
+   await otra.patch(base).send({nombre:'Ajena'}).expect(404);await otra.patch(base+'/desactivar').expect(404);await otra.get(base+'/servicios').expect(404);
+   await otra.post(base+'/servicios').send({id_servicio:servicioTrabajadora.id_servicio}).expect(404);
+   await otra.delete(base+'/servicios/'+servicioTrabajadora.id_servicio).expect(404);
+   const dueña=(await pool.query("SELECT id_emprendedora FROM emprendedora WHERE correo='perfil@meraki.test'")).rows[0].id_emprendedora;
+   const negocioAjeno=(await pool.query("INSERT INTO emprendimiento(id_emprendedora,nombre) VALUES($1,'Negocio ajeno') RETURNING id_emprendimiento",[dueña])).rows[0].id_emprendimiento;
+   const ajeno=(await pool.query("INSERT INTO servicio(id_emprendimiento,id_categoria,nombre,precio,duracion_min,monto_abono) VALUES($1,1,'Servicio ajeno',20000,60,5000) RETURNING id_servicio",[negocioAjeno])).rows[0].id_servicio;
+   await agent.post(base+'/servicios').send({id_servicio:ajeno}).expect(404);
+   await agent.post(base+'/servicios').send({id_servicio:servicioGestion.id_servicio}).expect(404);
+   await otra.post('/api/auth/logout').expect(200);
+  });
+  await t.test('Asignaciones: retirar conserva reservas y retira disponibilidad profesional',async()=>{
+   const reservas=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   const ruta='/api/trabajadoras/'+trabajadoraGestion.id_trabajadora+'/servicios/'+servicioTrabajadora.id_servicio;
+   await request(app).delete(ruta).expect(401);await agent.delete(ruta).expect(200);await agent.delete(ruta).expect(404);
+   assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,reservas);
+   assert.equal((await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body.find(s=>s.id_servicio===servicioTrabajadora.id_servicio).reservable,false);
+  });
+  await t.test('Trabajadoras: desactivar conserva historial y excluye nuevas reservas',async()=>{
+   const base='/api/trabajadoras/'+trabajadoraGestion.id_trabajadora;
+   await agent.post(base+'/servicios').send({id_servicio:servicioTrabajadora.id_servicio}).expect(201);
+   const reservas=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   await request(app).patch(base+'/desactivar').expect(401);await agent.patch(base+'/desactivar').expect(200);await agent.patch(base+'/desactivar').expect(409);
+   assert.equal((await agent.get('/api/mis-trabajadoras').expect(200)).body.find(t=>t.id_trabajadora===trabajadoraGestion.id_trabajadora).activa,false);
+   assert.equal((await agent.get(base+'/servicios').expect(200)).body.length,1);
+   await agent.post(base+'/servicios').send({id_servicio:1}).expect(404);
+   assert(!(await request(app).get('/api/servicios/'+servicioTrabajadora.id_servicio+'/trabajadoras').expect(200)).body.length);
+   assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,reservas);
+  });
+  let profesionalHorario,horarioPrincipal,horarioContiguo,bloqueoPrueba;
+  const fechaHorario='2030-11-04';
+  const horasPrueba=async()=> (await request(app).get('/api/disponibilidad').query({id_servicio:1,id_trabajadora:profesionalHorario,fecha:fechaHorario}).expect(200)).body;
+  await t.test('Horarios y bloqueos: autenticación y validaciones',async()=>{
+   profesionalHorario=(await agent.post('/api/trabajadoras').send({...datosTrabajadora,nombre:'Profesional horarios'}).expect(201)).body.trabajadora.id_trabajadora;
+   await agent.post('/api/trabajadoras/'+profesionalHorario+'/servicios').send({id_servicio:1}).expect(201);
+   await request(app).get('/api/mis-horarios').expect(401);await request(app).get('/api/mis-bloqueos').expect(401);
+   const horario={id_trabajadora:profesionalHorario,dia_semana:'lunes',hora_inicio:'09:00',hora_fin:'12:00'};
+   await request(app).post('/api/horarios').send(horario).expect(401);
+   for(const cambio of [{dia_semana:'feriado'},{hora_inicio:'25:00'},{hora_fin:'08:00'},{hora_fin:'09:00'},{activo:false}])await agent.post('/api/horarios').send({...horario,...cambio}).expect(400);
+   await agent.patch('/api/horarios/1').send({}).expect(400);await agent.patch('/api/horarios/1').send({id_trabajadora:profesionalHorario}).expect(400);
+   const bloqueo={id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T10:00',fecha_fin:fechaHorario+'T11:00'};
+   await request(app).post('/api/bloqueos').send(bloqueo).expect(401);
+   for(const cambio of [{fecha_inicio:'2030-02-30T10:00'},{fecha_inicio:fechaHorario+'T10:00Z'},{fecha_fin:fechaHorario+'T09:00'},{motivo:'x'.repeat(256)},{activo:false}])await agent.post('/api/bloqueos').send({...bloqueo,...cambio}).expect(400);
+  });
+  await t.test('Horarios: concurrencia rechaza superposición y permite tramos contiguos',async()=>{
+   const datos={id_trabajadora:profesionalHorario,dia_semana:'lunes',hora_inicio:'09:00',hora_fin:'12:00'};
+   const respuestas=await Promise.all([agent.post('/api/horarios').send(datos),agent.post('/api/horarios').send(datos)]);
+   assert.deepEqual(respuestas.map(r=>r.status).sort(),[201,409]);horarioPrincipal=respuestas.find(r=>r.status===201).body.horario.id_horario;
+   horarioContiguo=(await agent.post('/api/horarios').send({...datos,hora_inicio:'12:00',hora_fin:'13:00'}).expect(201)).body.horario.id_horario;
+   await agent.patch('/api/horarios/'+horarioContiguo).send({hora_inicio:'11:00'}).expect(409);
+   await agent.patch('/api/horarios/'+horarioPrincipal).send({hora_inicio:'10:00'}).expect(200);
+   assert.deepEqual((await horasPrueba()).map(h=>h.hora_inicio.slice(0,5)),['10:00','11:00','12:00']);
+  });
+  await t.test('Bloqueos: protege reservas activas, modifica disponibilidad y permite retirar',async()=>{
+   await request(app).post('/api/reservas').send({id_clienta:1,id_trabajadora:profesionalHorario,id_servicio:1,fecha:fechaHorario,hora:'10:00'}).expect(201);
+   const antes=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   await agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T10:00',fecha_fin:fechaHorario+'T11:00'}).expect(409);
+   bloqueoPrueba=(await agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T11:00',fecha_fin:fechaHorario+'T12:00',motivo:' Ausencia '}).expect(201)).body.bloqueo.id_bloqueo;
+   await agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T11:30',fecha_fin:fechaHorario+'T12:30'}).expect(409);
+   assert.deepEqual((await horasPrueba()).map(h=>h.hora_inicio.slice(0,5)),['12:00']);
+   const registrado=(await agent.get('/api/mis-bloqueos').expect(200)).body.find(b=>b.id_bloqueo===bloqueoPrueba);assert.equal(registrado.fecha_inicio,fechaHorario+'T11:00:00');assert.equal(registrado.motivo,'Ausencia');
+   await request(app).delete('/api/bloqueos/'+bloqueoPrueba).expect(401);await agent.delete('/api/bloqueos/'+bloqueoPrueba).expect(200);await agent.delete('/api/bloqueos/'+bloqueoPrueba).expect(404);
+   assert.deepEqual((await horasPrueba()).map(h=>h.hora_inicio.slice(0,5)),['11:00','12:00']);
+   assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,antes);
+  });
+  await t.test('Bloqueos: carrera con nueva reserva nunca ocupa dos veces el período',async()=>{
+   const respuestas=await Promise.all([
+    request(app).post('/api/reservas').send({id_clienta:1,id_trabajadora:profesionalHorario,id_servicio:1,fecha:fechaHorario,hora:'11:00'}),
+    agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T11:00',fecha_fin:fechaHorario+'T12:00'})
+   ]);assert.deepEqual(respuestas.map(r=>r.status).sort(),[201,409]);
+  });
+  await t.test('Horarios y bloqueos: otra propietaria no consulta ni modifica datos ajenos',async()=>{
+   const otra=request.agent(app);await otra.post('/api/auth/login').send({correo:'perfil@meraki.test',password:'clave-prueba'}).expect(200);
+   await otra.get('/api/mis-horarios').expect(200,[]);await otra.get('/api/mis-bloqueos').expect(200,[]);
+   await otra.post('/api/horarios').send({id_trabajadora:profesionalHorario,dia_semana:'martes',hora_inicio:'09:00',hora_fin:'12:00'}).expect(404);
+   await otra.patch('/api/horarios/'+horarioPrincipal).send({hora_inicio:'09:00'}).expect(404);await otra.patch('/api/horarios/'+horarioPrincipal+'/desactivar').expect(404);
+   const b=(await agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T15:00',fecha_fin:fechaHorario+'T16:00'}).expect(201)).body.bloqueo.id_bloqueo;
+   await otra.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T16:00',fecha_fin:fechaHorario+'T17:00'}).expect(404);await otra.delete('/api/bloqueos/'+b).expect(404);
+   await otra.post('/api/auth/logout').expect(200);
+  });
+  await t.test('Horarios: desactivación conserva citas y excluye nuevas horas',async()=>{
+   const antes=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   await request(app).patch('/api/horarios/'+horarioPrincipal+'/desactivar').expect(401);
+   await agent.patch('/api/horarios/'+horarioPrincipal+'/desactivar').expect(200);await agent.patch('/api/horarios/'+horarioPrincipal+'/desactivar').expect(409);
+   await agent.patch('/api/horarios/'+horarioPrincipal).send({hora_inicio:'08:00'}).expect(409);
+   await agent.patch('/api/horarios/'+horarioContiguo+'/desactivar').expect(200);
+   assert.deepEqual(await horasPrueba(),[]);assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,antes);
+   await agent.post('/api/horarios').send({id_trabajadora:trabajadoraGestion.id_trabajadora,dia_semana:'martes',hora_inicio:'09:00',hora_fin:'12:00'}).expect(409);
+   // El resto de la batería conserva su escenario original de una sola profesional activa para este servicio.
+   await agent.patch('/api/trabajadoras/'+profesionalHorario+'/desactivar').expect(200);
+  });
+  await t.test('Suscripción vencida bloquea configuración y reservas nuevas, conserva agenda y pagos existentes',async()=>{
+   const pagos=(await pool.query('SELECT * FROM abono ORDER BY id_abono')).rows;
+   await pool.query("UPDATE suscripcion SET estado='vencida',acceso_hasta=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date WHERE id_emprendedora=1");
+   assert.equal((await agent.get('/api/suscripcion').expect(200)).body.capacidades.configurar,false);
+   for(const [metodo,ruta,datos] of [
+    ['post','/api/servicios',datosServicio],['patch','/api/servicios/1',{precio:10000}],['patch','/api/servicios/1/desactivar',{}],
+    ['post','/api/trabajadoras',datosTrabajadora],['patch','/api/trabajadoras/1',{nombre:'Otro'}],['patch','/api/trabajadoras/1/desactivar',{}],
+    ['post','/api/trabajadoras/1/servicios',{id_servicio:1}],['delete','/api/trabajadoras/1/servicios/1',{}],
+    ['post','/api/horarios',{id_trabajadora:1,dia_semana:'lunes',hora_inicio:'09:00',hora_fin:'12:00'}],['patch','/api/horarios/1',{hora_inicio:'09:00'}],
+    ['patch','/api/horarios/1/desactivar',{}],['post','/api/bloqueos',{id_trabajadora:1,fecha_inicio:'2030-11-04T10:00',fecha_fin:'2030-11-04T11:00'}],['delete','/api/bloqueos/1',{}]
+   ])await agent[metodo](ruta).send(datos).expect(402);
+   for(const ruta of ['/api/reservas?id_emprendimiento=1','/api/mis-servicios','/api/mis-trabajadoras','/api/mis-horarios','/api/mis-bloqueos','/api/notificaciones','/api/abonos/1/estado'])await agent.get(ruta).expect(200);
+   await request(app).post('/api/reservas').send({id_clienta:1,id_servicio:1,id_trabajadora:1,fecha:'2030-11-04',hora:'10:00'}).expect(409);
+   await request(app).get('/api/disponibilidad').query({id_servicio:1,id_trabajadora:1,fecha:'2030-11-04'}).expect(200,[]);
+   const catalogo=(await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body;assert(catalogo.every(s=>s.reservable===false));
+   await request(app).get('/api/reservas/consulta/11111111-1111-4111-8111-111111111111').expect(200);
+   assert.deepEqual((await pool.query('SELECT * FROM abono ORDER BY id_abono')).rows,pagos);
+   const cita=(await pool.query(`INSERT INTO reserva(id_emprendimiento,id_servicio,id_trabajadora,id_clienta,fecha_hora_inicio,fecha_hora_fin,estado,precio_servicio,monto_abono,token_consulta)
+    VALUES(1,1,1,1,'2020-01-01 10:00','2020-01-01 11:00','confirmada',20000,5000,$1) RETURNING id_reserva`,[require('crypto').randomUUID()])).rows[0].id_reserva;
+   await agent.patch('/api/reservas/'+cita+'/atender').expect(200);
+   await pool.query("UPDATE suscripcion SET estado='prueba',acceso_hasta=DATE '2099-01-01' WHERE id_emprendedora=1");
+  });
+  await t.test('Cancelación con período vigente conserva configuración y una vigencia restaurada desbloquea',async()=>{
+   await pool.query("UPDATE suscripcion SET estado='cancelada',renovacion_automatica=FALSE WHERE id_emprendedora=1");
+   assert.equal((await agent.get('/api/suscripcion').expect(200)).body.capacidades.configurar,true);
+   const s=(await pool.query('SELECT nombre FROM servicio WHERE id_servicio=1')).rows[0];await agent.patch('/api/servicios/1').send({nombre:s.nombre}).expect(200);
+   assert.equal((await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body.find(s=>s.id_servicio===1).reservable,true);
+   await pool.query("UPDATE suscripcion SET estado='prueba' WHERE id_emprendedora=1");
   });
   await t.test('Webpay inconsistente no confirma ni envía',async()=>{status.amount=99;await agent.post('/api/abonos/1/recuperar').expect(409);assert.equal(enviados,0);status.amount=5000;});
   await t.test('INITIALIZED e incompleto no recuperan pago',async()=>{
@@ -237,7 +397,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.equal((await pool.query('SELECT correo FROM clienta WHERE id_clienta=(SELECT id_clienta FROM reserva WHERE id_reserva=$1)',[id])).rows[0].correo,original);
    assert.equal((await pool.query('SELECT * FROM notificacion_correo WHERE id_reserva=$1',[id])).rows.length,2);
   });
-  await t.test('Propietaria ajena no puede ver ni modificar notificación',async()=>{const r=await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Otra','Prueba','otro','otra@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)]);await pool.query('UPDATE emprendimiento SET id_emprendedora=$1',[r.rows[0].id_emprendedora]);await agent.get('/api/notificaciones').expect(200,[]);await agent.get('/api/reservas?id_emprendimiento=1').expect(403);await agent.get('/api/abonos/1/estado').expect(404);for(const accion of ['atender','no-atendida','cancelar'])await agent.patch('/api/reservas/1/'+accion).expect(404);await agent.post('/api/notificaciones/'+notificacionId+'/reintentar').set('X-Meraki-Action','1').send({evidencia:'Configuración revisada por operadora'}).expect(404);});
+  await t.test('Propietaria ajena no puede ver ni modificar notificación',async()=>{const r=await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Otra','Prueba','otro','otra@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)]);await pool.query('UPDATE emprendimiento SET id_emprendedora=$1 WHERE id_emprendimiento=1',[r.rows[0].id_emprendedora]);await agent.get('/api/notificaciones').expect(200,[]);await agent.get('/api/reservas?id_emprendimiento=1').expect(403);await agent.get('/api/abonos/1/estado').expect(404);for(const accion of ['atender','no-atendida','cancelar'])await agent.patch('/api/reservas/1/'+accion).expect(404);await agent.post('/api/notificaciones/'+notificacionId+'/reintentar').set('X-Meraki-Action','1').send({evidencia:'Configuración revisada por operadora'}).expect(404);});
   await t.test('Consulta privada no expone token y no se almacena en caché',async()=>{const r=await request(app).get('/api/reservas/consulta/11111111-1111-4111-8111-111111111111').expect(200);assert.equal(r.headers['cache-control'],'no-store');assert(!JSON.stringify(r.body).includes('11111111'));await request(app).get('/consulta/').expect(200);await request(app).get('/front-office/').expect(200);await request(app).get('/back-office/').expect(200);});
  }finally{
   if(pool)await pool.end();await admin.query('DROP SCHEMA '+schema+' CASCADE');await admin.end();

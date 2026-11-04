@@ -1,0 +1,131 @@
+
+> backend@1.0.0 test
+> node --test test/*.test.js
+
+✔ Agenda combina fecha y estado sin desplazar el día de Chile (2.3847ms)
+✔ Agenda usa permisos del servidor para pagos y cierre de atención (0.4261ms)
+✔ Agenda muestra estados comprensibles y ausencia de abono (0.2229ms)
+✔ Consulta de prueba oculta acciones antes de utilizarlas (14.3504ms)
+✔ Rechazo 405 de texto muestra explicación y conserva reserva (3.4773ms)
+✔ Error HTML del servidor no se expone como error de JSON (2.8106ms)
+✔ Reserva con pago asociado no ofrece cancelación y explica la gestión (4.5859ms)
+✔ Cancelación permitida actualiza estado y oculta las acciones (3.1466ms)
+✔ Ethereal nunca recibe el enlace auténtico (2.0188ms)
+✔ Gmail utiliza el enlace real y no genera vista previa (0.6316ms)
+✔ Configuración incompleta no cae en Ethereal (0.4641ms)
+✔ Enlace usa fragmento y exige HTTPS salvo localhost (0.2373ms)
+✔ Proveedor desconocido falla sin enviar (0.1864ms)
+✔ Gmail autentica con OAuth2 sin contraseña de app (0.2942ms)
+✔ Contraseña de app no sustituye credenciales OAuth (0.7851ms)
+✔ Gmail admite el enlace de consulta de la API existente (0.3998ms)
+✔ Front Office selecciona servicio reservable y explica filtros (43.8562ms)
+✔ Ver todos borra ambos filtros y vuelve a consultar (5.1996ms)
+✔ Disponibilidad requiere fecha y cambiarla invalida hora y revisión (6.943ms)
+✔ Creación exige revisión y evita duplicación por doble envío (5.9315ms)
+✔ Respuesta antigua de profesionales no reemplaza la selección nueva (3.6668ms)
+◇ injected env (14) from .env
+▶ Integración PostgreSQL, sesión, recuperación y notificaciones
+  ✔ Aislamiento: las consultas y sesiones solo resuelven el esquema temporal (36.5482ms)
+MERAKI: configuración de sesiones cargada
+Iniciando Backend de Meraki
+  ✔ Anónimo no lista ni reintenta (31.2559ms)
+MERAKI: solicitud de login recibida
+Wed, 04 Nov 2026 03:42:51 GMT router deprecated handlers that are Promise-like are deprecated, use a native Promise instead at node_modules\router\lib\route.js:157:13
+  ✔ Login real crea sesión PostgreSQL (28.3409ms)
+  ✔ Perfil: autenticación, campos protegidos y validaciones (44.0711ms)
+  ✔ Perfil: guarda datos públicos, limpia opcionales y mantiene reservas y coordenadas (24.1273ms)
+MERAKI: solicitud de login recibida
+  ✔ Perfil: no permite editar el emprendimiento de otra propietaria (15.9811ms)
+  ✔ Servicios: autenticación, campos protegidos y valores inválidos (111.3262ms)
+  ✔ Servicios: crear, editar categoría y precio conserva reservas existentes (22.4023ms)
+  ✔ Servicios: ediciones simultáneas no dejan abono superior al precio (151.1833ms)
+MERAKI: solicitud de login recibida
+  ✔ Servicios: otra propietaria no puede crear, editar ni desactivar (27.3651ms)
+  ✔ Servicios: desactivación conserva historial y retira del catálogo público (22.0359ms)
+  ✔ Trabajadoras: autenticación y validación de campos (46.4588ms)
+  ✔ Trabajadoras: creación y edición con limpieza de opcionales (15.7472ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+  ✔ Asignaciones: habilita profesional y evita duplicados concurrentes (35.0422ms)
+MERAKI: solicitud de login recibida
+  ✔ Trabajadoras y asignaciones: impide acceso ajeno y cruce de negocios (43.4568ms)
+  ✔ Asignaciones: retirar conserva reservas y retira disponibilidad profesional (14.4245ms)
+  ✔ Trabajadoras: desactivar conserva historial y excluye nuevas reservas (27.617ms)
+ALERTA: Datos de pago inconsistentes. Abono: 1
+  ✔ Webpay inconsistente no confirma ni envía (4.4377ms)
+  ✔ INITIALIZED e incompleto no recuperan pago (10.5514ms)
+Error al recuperar pago: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_bloqueo»
+  ✔ Fallo al guardar outbox revierte pago y reserva (8.0895ms)
+  ✔ Consulta Webpay solo habilita recuperación de una autorización válida y coincidente (15.7785ms)
+  ✔ Pago autorizado recupera, confirma y envía una sola vez (18.8012ms)
+  ✔ Reclamo concurrente solo realiza un envío (66.2833ms)
+  ✔ Timeout conserva enviando y bloquea reintento (8.9333ms)
+  ✔ Revisión exige antigüedad, cabecera y evidencia (14.9071ms)
+  ✔ Reintento auditado respeta máximo tres (17.0867ms)
+  ✔ Catálogo distingue servicios sin profesional y permite nueva reserva con correo existente (20.7802ms)
+Fecha solicitada: 2030-11-04
+Día solicitado: lunes
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+Error al verificar abono: el nuevo registro para la relación «notificacion_correo» viola la restricción «check» «prueba_retorno»
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+MERAKI: diagnóstico retorno Webpay {
+  metodo: 'POST',
+  tiene_token_ws: true,
+  tiene_TBK_TOKEN: false,
+  tiene_TBK_ORDEN_COMPRA: false,
+  tiene_TBK_ID_SESION: false
+}
+  ✔ Front Office: catálogo, disponibilidad, reserva y pago; fallo SMTP no revierte pago (57.8111ms)
+  ✔ Cancelación: reservas sin abonos, estados y permisos por token (86.0856ms)
+  ✔ Agenda privada: pagos, cierre de atención y cancelación por propietaria (37.6303ms)
+  ✔ Corrección de destinatario conserva pago, invalida enlace y no duplica envío (16.4424ms)
+  ✔ Propietaria ajena no puede ver ni modificar notificación (26.7518ms)
+  ✔ Consulta privada no expone token y no se almacena en caché (13.802ms)
+✔ Integración PostgreSQL, sesión, recuperación y notificaciones (1460.5347ms)
+✔ Pago iniciado no se presenta como aprobado ni permite recuperación (28.5704ms)
+✔ AUTHORIZED requiere permiso explícito del servidor para recuperar (0.5247ms)
+✔ Inconsistencia impide recuperación incluso si otro campo la habilita (0.3649ms)
+✔ Pago registrado no invita a repetir recuperación (0.3255ms)
+✔ Recuperación completada distingue confirmación de reserva y estado del correo (0.2192ms)
+✔ Perfil sin emprendimiento deshabilita edición y no envía solicitudes (1.7841ms)
+✔ Perfil carga datos, permite restaurar y cambia al negocio seleccionado (0.4705ms)
+✔ Perfil guarda solo campos editables, recorta espacios y limpia opcionales (1.5375ms)
+✔ Perfil rechaza nombre con espacios antes de enviar (0.3258ms)
+✔ Perfil conserva edición ante error y libera controles para reintentar (3.1094ms)
+✔ Perfil bloquea doble envío y cambio de negocio mientras guarda (0.4011ms)
+✔ Servicios carga categorías y lista solo el negocio seleccionado (27.152ms)
+✔ Servicios crea con datos normalizados y permite comenzar otro (2.5848ms)
+✔ Servicios edita categoría, precio y duración sin enviar propietario ni estado (1.2156ms)
+✔ Servicios rechaza abono mayor al precio y conserva datos ante fallo al guardar (0.6659ms)
+✔ Servicios distingue guardado correcto de falla posterior al recargar (0.5439ms)
+✔ Servicios desactiva solo tras confirmación y usa la ruta correspondiente (0.7291ms)
+✔ Servicios evita doble envío y bloquea controles mientras guarda (0.6268ms)
+✔ Servicios ignora carga anterior al cambiar de negocio (0.6009ms)
+✔ Trabajadoras muestra solo su negocio y deshabilita sin selección (2.0027ms)
+✔ Trabajadoras crea, edita y normaliza opcionales sin campos protegidos (3.8425ms)
+✔ Trabajadoras valida nombre y conserva edición ante error (1.0934ms)
+✔ Asignaciones ofrece solo servicios activos propios sin asignar (1.1467ms)
+✔ Asignaciones permite retirar con confirmación y bloquea alta en trabajadora inactiva (0.9726ms)
+✔ Trabajadoras evita doble envío y distingue fallo de recarga posterior (0.9357ms)
+✔ Trabajadoras desactiva únicamente tras confirmación (0.6905ms)
+✔ Asignaciones ignora una respuesta antigua al cambiar de negocio (0.6224ms)
+ℹ tests 82
+ℹ suites 0
+ℹ pass 82
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1815.7388
