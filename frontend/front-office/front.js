@@ -89,7 +89,7 @@ $('#formReserva').onsubmit=async evento=>{
     enviando=true;$('#camposReserva').disabled=true;
     try{
         const cliente=await api('/api/clientas','POST',datos);
-        const d=await api('/api/reservas','POST',{...reserva,id_clienta:cliente.id_clienta});
+        const d=await api('/api/reservas','POST',{...reserva,id_clienta:cliente.id_clienta,nombre_clienta:datos.nombre});
         creada=true;$('#consulta').href='/consulta/#'+encodeURIComponent(d.reserva.token_consulta);$('#consulta').hidden=false;$('#nuevaReserva').hidden=false;
         estado.textContent='Reserva '+d.reserva.id_reserva+' creada y pendiente de abono. Guarda el enlace privado y continúa con Webpay. Todavía no se ha realizado un cobro.';
     }catch(error){estado.textContent=error.message;$('#camposReserva').disabled=false;}

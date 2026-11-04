@@ -1710,6 +1710,11 @@ app.patch("/api/trabajadoras/:id/desactivar", verificarSesion, async (req, res) 
 app.post("/api/servicios", verificarSesion, async (req, res) => {
     try {
 
+        const permitidos = ['id_emprendimiento','id_categoria','nombre','descripcion','precio','duracion_min','monto_abono'];
+        if (Object.keys(req.body || {}).some(campo => !permitidos.includes(campo))) {
+            return res.status(400).json({mensaje:'La solicitud contiene campos de servicio no permitidos'});
+        }
+
         // Recibimos los datos del servicio.
         const {
             id_emprendimiento,
@@ -1789,7 +1794,7 @@ const nombreLimpio = nombre.trim();
 if (
     typeof precio !== "number" ||
     !Number.isFinite(precio) ||
-    precio <= 0
+    precio <= 0 || precio > 99999999.99 || Number(precio.toFixed(2)) !== precio
 ) {
     return res.status(400).json({
         mensaje: "El precio debe ser un número mayor que cero"
@@ -1799,7 +1804,7 @@ if (
 // Validamos que la duración sea un entero positivo.
 if (
     !Number.isSafeInteger(duracion_min) ||
-    duracion_min <= 0
+    duracion_min <= 0 || duracion_min > 2147483647
 ) {
     return res.status(400).json({
         mensaje: "La duración debe ser un número entero positivo"
@@ -1811,7 +1816,7 @@ if (
     typeof monto_abono !== "number" ||
     !Number.isFinite(monto_abono) ||
     monto_abono < 0 ||
-    monto_abono > precio
+    monto_abono > precio || Number(monto_abono.toFixed(2)) !== monto_abono
 ) {
     return res.status(400).json({
         mensaje: "El abono debe estar entre cero y el precio del servicio"
@@ -1886,6 +1891,11 @@ return res.status(201).json({
 app.patch("/api/servicios/:id", verificarSesion, async (req, res) => {
     try {
 
+        const permitidos = ['id_categoria','nombre','descripcion','precio','duracion_min','monto_abono'];
+        if (Object.keys(req.body || {}).some(campo => !permitidos.includes(campo))) {
+            return res.status(400).json({mensaje:'La solicitud contiene campos de servicio no permitidos'});
+        }
+
         // Obtenemos el identificador del servicio.
         const idServicio = Number(req.params.id);
 
@@ -1917,6 +1927,7 @@ if (propiedad.rows.length === 0) {
 
 // Recibimos los campos que la emprendedora desea modificar.
 const {
+    id_categoria,
     nombre,
     descripcion,
     precio,
@@ -1926,6 +1937,7 @@ const {
 
 // Comprobamos que se haya enviado al menos un campo permitido.
 if (
+    id_categoria === undefined &&
     nombre === undefined &&
     descripcion === undefined &&
     precio === undefined &&
@@ -1935,6 +1947,15 @@ if (
     return res.status(400).json({
         mensaje: "Debes indicar al menos un campo para modificar"
     });
+}
+
+// La categoría también es editable, pero debe existir en el catálogo.
+if (id_categoria !== undefined) {
+    if (!Number.isSafeInteger(id_categoria) || id_categoria <= 0) {
+        return res.status(400).json({mensaje:'Debes indicar una categoría válida'});
+    }
+    const categoria = await pool.query('SELECT id_categoria FROM categoria WHERE id_categoria=$1',[id_categoria]);
+    if (!categoria.rows.length) return res.status(400).json({mensaje:'La categoría indicada no existe'});
 }
 
 // Validamos el nombre solamente si fue enviado.
@@ -1970,7 +1991,7 @@ if (precio !== undefined) {
     if (
         typeof precio !== "number" ||
         !Number.isFinite(precio) ||
-        precio <= 0
+        precio <= 0 || precio > 99999999.99 || Number(precio.toFixed(2)) !== precio
     ) {
         return res.status(400).json({
             mensaje: "El precio debe ser un número mayor que cero"
@@ -1982,7 +2003,7 @@ if (precio !== undefined) {
 if (duracion_min !== undefined) {
     if (
         !Number.isSafeInteger(duracion_min) ||
-        duracion_min <= 0
+        duracion_min <= 0 || duracion_min > 2147483647
     ) {
         return res.status(400).json({
             mensaje: "La duración debe ser un número entero positivo"
@@ -1995,7 +2016,7 @@ if (monto_abono !== undefined) {
     if (
         typeof monto_abono !== "number" ||
         !Number.isFinite(monto_abono) ||
-        monto_abono < 0
+        monto_abono < 0 || monto_abono > 99999999.99 || Number(monto_abono.toFixed(2)) !== monto_abono
     ) {
         return res.status(400).json({
             mensaje: "El abono debe ser un número mayor o igual a cero"
@@ -2039,8 +2060,11 @@ const resultado = await pool.query(`
         END,
         precio = COALESCE($4, precio),
         duracion_min = COALESCE($5, duracion_min),
-        monto_abono = COALESCE($6, monto_abono)
+        monto_abono = COALESCE($6, monto_abono),
+        id_categoria = COALESCE($9, id_categoria)
     WHERE id_servicio = $7
+      -- Se evalúa contra la fila vigente, incluso si hubo otra edición simultánea.
+      AND COALESCE($6, monto_abono) <= COALESCE($4, precio)
       AND id_emprendimiento IN (
           SELECT id_emprendimiento
           FROM emprendimiento
@@ -2064,13 +2088,14 @@ const resultado = await pool.query(`
     duracion_min !== undefined ? duracion_min : null,
     monto_abono !== undefined ? monto_abono : null,
     idServicio,
-    req.session.idEmprendedora
+    req.session.idEmprendedora,
+    id_categoria ?? null
 ]);
 
 // Comprobamos que el servicio haya sido actualizado.
 if (resultado.rows.length === 0) {
-    return res.status(404).json({
-        mensaje: "El servicio no existe"
+    return res.status(409).json({
+        mensaje: "El servicio cambió durante la edición. Actualiza la lista y revisa el precio y el abono"
     });
 }
 
@@ -2386,6 +2411,11 @@ app.post("/api/clientas", async (req, res) => {
 // Ruta para registrar nuevas reservas en Meraki.
 app.post("/api/reservas", async (req, res) => {
 
+    const nombreReserva = req.body?.nombre_clienta;
+    if (nombreReserva !== undefined && (typeof nombreReserva !== 'string' || !nombreReserva.trim() || nombreReserva.trim().length > 200)) {
+        return res.status(400).json({mensaje:'Indica un nombre de hasta 200 caracteres para la reserva'});
+    }
+
     // Recibimos los datos enviados por la clienta.
     const {
         id_clienta,
@@ -2608,11 +2638,12 @@ app.post("/api/reservas", async (req, res) => {
                 estado,
                 precio_servicio,
                 monto_abono,
-                token_consulta
+                token_consulta,
+                nombre_clienta
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6,
-                'pendiente_abono', $7, $8, $9
+                'pendiente_abono', $7, $8, $9, $10
             )
             RETURNING
                 id_reserva,
@@ -2634,7 +2665,8 @@ app.post("/api/reservas", async (req, res) => {
             datos.fecha_hora_fin,
             datos.precio,
             datos.monto_abono,
-            tokenConsulta
+            tokenConsulta,
+            nombreReserva?.trim() || null
         ]);
 
 
@@ -4064,7 +4096,7 @@ if (propiedad.rows.length === 0) {
         const resultado = await pool.query(`
             SELECT
                 r.id_reserva,
-                c.nombre AS clienta,
+                COALESCE(r.nombre_clienta,c.nombre) AS clienta,
                 t.nombre AS trabajadora,
                 s.nombre AS servicio,
                TO_CHAR(r.fecha_hora_inicio, 'YYYY-MM-DD"T"HH24:MI:SS') AS fecha_hora_inicio,

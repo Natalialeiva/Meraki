@@ -14,7 +14,7 @@ function crearNotificaciones(pool, enviar = enviarConfirmacionReserva) {
   const intento = reclamo.rows[0];
   let resultado;
   try {
-   const datos = await pool.query(`SELECT c.nombre AS nombre_clienta,COALESCE(r.correo_confirmacion,c.correo) AS correo,e.nombre AS emprendimiento,
+   const datos = await pool.query(`SELECT COALESCE(r.nombre_clienta,c.nombre) AS nombre_clienta,COALESCE(r.correo_confirmacion,c.correo) AS correo,e.nombre AS emprendimiento,
     s.nombre AS servicio,TO_CHAR(r.fecha_hora_inicio,'DD/MM/YYYY') AS fecha,
     TO_CHAR(r.fecha_hora_inicio,'HH24:MI') AS hora,r.token_consulta FROM reserva r
     JOIN clienta c ON c.id_clienta=r.id_clienta JOIN emprendimiento e ON e.id_emprendimiento=r.id_emprendimiento

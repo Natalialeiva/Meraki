@@ -7,8 +7,17 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
  const config={host:process.env.DB_HOST,port:Number(process.env.DB_PORT),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD};
  const admin=new Pool(config);let pool;let app;let enviados=0;let modo='ok';let notificacionId=1;let transaccionesCreadas=0;let status={status:'AUTHORIZED',response_code:0,amount:5000,buy_order:'orden-test',authorization_code:'TEST'};
  try{
+  // La extensión debe estar instalada previamente: las pruebas no la instalan en la base principal.
+  assert.equal((await admin.query("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='btree_gist') AS instalada")).rows[0].instalada,true);
   await admin.query('CREATE SCHEMA '+schema);pool=new Pool({...config,options:'-c search_path='+schema+',public'});
-  for(const file of ['schema.sql','002_agregar_token_consulta.sql','003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql','006_correccion_correo_reserva.sql','seed.sql'])await pool.query(fs.readFileSync(path.join(__dirname,'../../database',file),'utf8'));
+  for(const file of ['schema.sql','002_agregar_token_consulta.sql','003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql','006_correccion_correo_reserva.sql','007_nombre_reserva.sql','seed.sql'])await pool.query(fs.readFileSync(path.join(__dirname,'../../database',file),'utf8'));
+  // public se usa solo al construir las tablas para resolver la extensión btree_gist.
+  // Las consultas del servidor y sus sesiones nunca pueden recurrir a tablas de public.
+  await pool.end();pool=new Pool({...config,options:'-c search_path='+schema});
+  await t.test('Aislamiento: las consultas y sesiones solo resuelven el esquema temporal',async()=>{
+   const contexto=(await pool.query('SELECT current_schema() AS esquema,current_schemas(false)::text[] AS rutas')).rows[0];
+   assert.equal(contexto.esquema,schema);assert.deepEqual(contexto.rutas,[schema]);
+  });
   await pool.query('UPDATE emprendedora SET password_hash=$1',[await bcrypt.hash('clave-prueba',4)]);
   await pool.query("UPDATE reserva SET token_consulta='11111111-1111-4111-8111-111111111111',estado='pendiente_abono'");
   await pool.query("INSERT INTO abono(id_reserva,monto,token_transaccion,buy_order) VALUES(1,5000,'token-prueba','orden-test')");
@@ -19,6 +28,89 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   const agent=request.agent(app);
   await t.test('Anónimo no lista ni reintenta',async()=>{await request(app).get('/api/notificaciones').expect(401);await request(app).post('/api/notificaciones/'+notificacionId+'/reintentar').expect(401);});
   await t.test('Login real crea sesión PostgreSQL',async()=>{await agent.post('/api/auth/login').send({correo:'camila@meraki.test',password:'clave-prueba'}).expect(200);});
+  await t.test('Perfil: autenticación, campos protegidos y validaciones',async()=>{
+   await request(app).patch('/api/emprendimientos/1').send({nombre:'Sin permiso'}).expect(401);
+   for(const datos of [{},{nombre:'   '},{nombre:null},{nombre:'x'.repeat(151)},{telefono:123},{id_emprendedora:2},{estado:false},{latitud:1}]){
+    await agent.patch('/api/emprendimientos/1').send(datos).expect(400);
+   }
+   await agent.patch('/api/emprendimientos/incorrecto').send({nombre:'Prueba'}).expect(400);
+  });
+  await t.test('Perfil: guarda datos públicos, limpia opcionales y mantiene reservas y coordenadas',async()=>{
+   const original=(await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0];
+   const reservas=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   const datos={nombre:' Belleza de prueba ',descripcion:' Descripción de prueba ',direccion:' Dirección de prueba ',comuna:' Santiago ',telefono:null};
+   const respuesta=(await agent.patch('/api/emprendimientos/1').send(datos).expect(200)).body.emprendimiento;
+   assert.equal(respuesta.nombre,'Belleza de prueba');assert.equal(respuesta.telefono,null);
+   const guardado=(await agent.get('/api/mis-emprendimientos').expect(200)).body.find(n=>n.id_emprendimiento===1);
+   assert.equal(guardado.descripcion,'Descripción de prueba');assert.equal(guardado.direccion,'Dirección de prueba');assert.equal(guardado.comuna,'Santiago');
+   const publico=(await request(app).get('/api/emprendimientos').expect(200)).body.find(n=>n.id_emprendimiento===1);
+   assert.equal(publico.nombre,'Belleza de prueba');
+   assert.equal(guardado.latitud,original.latitud);assert.equal(guardado.longitud,original.longitud);
+   assert.equal(guardado.estado,original.estado);assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,reservas);
+   await agent.patch('/api/emprendimientos/1').send(Object.fromEntries(['nombre','descripcion','direccion','comuna','telefono'].map(k=>[k,original[k]]))).expect(200);
+  });
+  await t.test('Perfil: no permite editar el emprendimiento de otra propietaria',async()=>{
+   const otra=request.agent(app);
+   const cuenta=(await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Perfil','Ajeno','perfil-ajeno','perfil@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)])).rows[0];
+   await otra.post('/api/auth/login').send({correo:'perfil@meraki.test',password:'clave-prueba'}).expect(200);
+   const antes=(await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0];
+   await otra.patch('/api/emprendimientos/1').send({nombre:'Cambio ajeno'}).expect(404);
+   assert.deepEqual((await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0],antes);
+   await otra.post('/api/auth/logout').expect(200);
+  });
+  let servicioGestion;
+  const datosServicio={id_emprendimiento:1,id_categoria:1,nombre:'Z servicio gestionado',descripcion:' Prueba aislada ',precio:20000,duracion_min:60,monto_abono:5000};
+  await t.test('Servicios: autenticación, campos protegidos y valores inválidos',async()=>{
+   await request(app).get('/api/mis-servicios').expect(401);
+   await request(app).post('/api/servicios').send(datosServicio).expect(401);
+   await request(app).patch('/api/servicios/1').send({precio:10000}).expect(401);
+   for(const cambio of [{nombre:' '},{nombre:'x'.repeat(151)},{descripcion:3},{precio:0},{precio:1e10},{precio:20.001},{precio:0.00000001},{duracion_min:1.5},{duracion_min:2147483648},{monto_abono:-1},{monto_abono:25000},{monto_abono:1.001},{id_categoria:999999},{activo:false}]){
+    await agent.post('/api/servicios').send({...datosServicio,...cambio}).expect(400);
+   }
+   for(const cambio of [{},{precio:null},{precio:1e10},{precio:20.001},{precio:0.00000001},{duracion_min:0},{duracion_min:2147483648},{monto_abono:1.001},{id_categoria:999999},{id_categoria:'1'},{activo:false},{nombre:' '},{nombre:'Válido',id_emprendimiento:2}]){
+    await agent.patch('/api/servicios/1').send(cambio).expect(400);
+   }
+  });
+  await t.test('Servicios: crear, editar categoría y precio conserva reservas existentes',async()=>{
+   const antes=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   servicioGestion=(await agent.post('/api/servicios').send(datosServicio).expect(201)).body.servicio;
+   assert.equal(servicioGestion.descripcion,'Prueba aislada');assert.equal(servicioGestion.activo,true);
+   const categoria=(await pool.query("INSERT INTO categoria(nombre) VALUES('Categoría de prueba de gestión') RETURNING id_categoria")).rows[0].id_categoria;
+   const editado=(await agent.patch('/api/servicios/'+servicioGestion.id_servicio).send({nombre:' Z editado ',descripcion:null,id_categoria:categoria,precio:24000,duracion_min:90,monto_abono:6000}).expect(200)).body.servicio;
+   assert.equal(editado.nombre,'Z editado');assert.equal(editado.id_categoria,categoria);assert.equal(editado.descripcion,null);assert.equal(Number(editado.precio),24000);assert.equal(editado.duracion_min,90);
+   const listado=(await agent.get('/api/mis-servicios').expect(200)).body.find(s=>s.id_servicio===servicioGestion.id_servicio);
+   assert.equal(listado.servicio,'Z editado');assert.equal(listado.categoria,'Categoría de prueba de gestión');
+   // Cambiar un servicio con una reserva existente tampoco altera su precio o duración históricos.
+   const original=(await pool.query('SELECT * FROM servicio WHERE id_servicio=1')).rows[0];
+   await agent.patch('/api/servicios/1').send({precio:25000,duracion_min:90,monto_abono:6000}).expect(200);
+   assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,antes);
+   await agent.patch('/api/servicios/1').send({precio:Number(original.precio),duracion_min:original.duracion_min,monto_abono:Number(original.monto_abono)}).expect(200);
+  });
+  await t.test('Servicios: ediciones simultáneas no dejan abono superior al precio',async()=>{
+   const ruta='/api/servicios/'+servicioGestion.id_servicio;
+   await agent.patch(ruta).send({precio:20000,monto_abono:5000}).expect(200);
+   const respuestas=await Promise.all([agent.patch(ruta).send({precio:10000}),agent.patch(ruta).send({monto_abono:15000})]);
+   for(const r of respuestas)assert([200,400,409].includes(r.status));
+   assert(respuestas.some(r=>r.status!==200));
+   const actual=(await pool.query('SELECT precio,monto_abono FROM servicio WHERE id_servicio=$1',[servicioGestion.id_servicio])).rows[0];
+   assert(Number(actual.monto_abono)<=Number(actual.precio));
+  });
+  await t.test('Servicios: otra propietaria no puede crear, editar ni desactivar',async()=>{
+   const otra=request.agent(app);await otra.post('/api/auth/login').send({correo:'perfil@meraki.test',password:'clave-prueba'}).expect(200);
+   await otra.get('/api/mis-servicios').expect(200,[]);
+   await otra.post('/api/servicios').send(datosServicio).expect(403);
+   await otra.patch('/api/servicios/'+servicioGestion.id_servicio).send({precio:100}).expect(404);
+   await otra.patch('/api/servicios/'+servicioGestion.id_servicio+'/desactivar').expect(404);
+   await otra.post('/api/auth/logout').expect(200);
+  });
+  await t.test('Servicios: desactivación conserva historial y retira del catálogo público',async()=>{
+   const antes=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   const ruta='/api/servicios/'+servicioGestion.id_servicio+'/desactivar';
+   await request(app).patch(ruta).expect(401);await agent.patch(ruta).expect(200);await agent.patch(ruta).expect(409);
+   assert.equal((await agent.get('/api/mis-servicios').expect(200)).body.find(s=>s.id_servicio===servicioGestion.id_servicio).activo,false);
+   assert(!(await request(app).get('/api/servicios').expect(200)).body.some(s=>s.id_servicio===servicioGestion.id_servicio));
+   assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,antes);
+  });
   await t.test('Webpay inconsistente no confirma ni envía',async()=>{status.amount=99;await agent.post('/api/abonos/1/recuperar').expect(409);assert.equal(enviados,0);status.amount=5000;});
   await t.test('INITIALIZED e incompleto no recuperan pago',async()=>{
    status.status='INITIALIZED';await agent.post('/api/abonos/1/recuperar').expect(200);assert.equal(enviados,0);
@@ -63,7 +155,9 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    const personal=(await request(app).get('/api/servicios/1/trabajadoras').expect(200)).body;assert(personal.length);
    const fecha='2030-11-04';const horas=(await request(app).get('/api/disponibilidad').query({id_servicio:1,id_trabajadora:1,fecha}).expect(200)).body;assert(horas.length);
    const c=(await request(app).post('/api/clientas').send({nombre:'Prueba integral',correo:'integral@example.com'}).expect(201)).body;
-   const r=(await request(app).post('/api/reservas').send({id_clienta:c.id_clienta,id_servicio:1,id_trabajadora:1,fecha,hora:horas[0].hora_inicio.slice(0,5)}).expect(201)).body.reserva;
+   const r=(await request(app).post('/api/reservas').send({id_clienta:c.id_clienta,nombre_clienta:'Renata prueba',id_servicio:1,id_trabajadora:1,fecha,hora:horas[0].hora_inicio.slice(0,5)}).expect(201)).body.reserva;
+   assert.equal((await agent.get('/api/reservas').query({id_emprendimiento:1}).expect(200)).body.find(x=>x.id_reserva===r.id_reserva).clienta,'Renata prueba');
+   assert.equal((await pool.query('SELECT nombre FROM clienta WHERE id_clienta=$1',[c.id_clienta])).rows[0].nombre,'Prueba integral');
    const pago=(await request(app).post('/api/abonos/cliente/iniciar').send({token_consulta:r.token_consulta}).expect(201)).body;assert(pago.token);
    await pool.query('ALTER TABLE notificacion_correo ADD CONSTRAINT prueba_retorno CHECK(false) NOT VALID');
    await request(app).post('/api/abonos/retorno').send({token_ws:pago.token}).expect(502);
