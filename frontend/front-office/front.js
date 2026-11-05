@@ -150,22 +150,45 @@ async function seleccionar(dato) {
         await profesionales();
     } catch (error) { if (version === versionSeleccion) informar(error.message, 'error'); }
 }
+
+// Solo memoria de esta visita; las distancias se derivan al dibujar y no se guardan.
+let resultadosCatalogo = [], ubicacionCatalogo = null, calcularDistancia = null;
+function actualizarCercania(posicion, calcular) {
+    ubicacionCatalogo = posicion ? {...posicion} : null; calcularDistancia = calcular;
+    $('#controlCercania').hidden = !posicion; $('#notaDistancias').hidden = !posicion;
+    if (!posicion) $('#ordenCercania').value = 'original';
+    dibujarCatalogo();
+}
+function dibujarCatalogo() {
+    $('#resultados').replaceChildren();
+    const filas = resultadosCatalogo.map((dato, indice) => ({dato, indice, distancia:ubicacionCatalogo && calcularDistancia ? calcularDistancia(ubicacionCatalogo.latitud, ubicacionCatalogo.longitud, dato.latitud, dato.longitud) : null}));
+    if (ubicacionCatalogo && $('#ordenCercania').value === 'cercania') filas.sort((a,b) => (a.distancia ?? Infinity) - (b.distancia ?? Infinity) || a.indice - b.indice);
+        for (const {dato:d, distancia} of filas) {
+            const a = document.createElement('article'), h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
+            a.className = 'negocio-card';
+            h.textContent = d.nombre; p.textContent = [d.descripcion, d.comuna, d.direccion].filter(Boolean).join(' · ');
+            b.type = 'button'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
+            a.append(h, p, b);
+            if (ubicacionCatalogo) {
+                const distanciaTexto = document.createElement('p'); distanciaTexto.className = 'distanciaNegocio';
+                distanciaTexto.textContent = distancia === null ? 'Distancia no disponible' : 'Aprox. ' + (distancia < 0.1 ? 'menos de 0,1' : new Intl.NumberFormat('es-CL', {maximumFractionDigits:1}).format(distancia)) + ' km';
+                a.append(distanciaTexto);
+            } $('#resultados').append(a);
+        }
+
+}
+$('#ordenCercania').onchange = dibujarCatalogo;
+
 $('#buscar').onsubmit = async evento => {
     evento.preventDefault(); if (enviando) return;
     const version = ++versionBusqueda; versionSeleccion++; versionProfesional++; limpiarHoras();
-    $('#reserva').hidden = true; $('#resultados').replaceChildren(); informar('Buscando emprendimientos…', 'carga');
+    $('#reserva').hidden = true; resultadosCatalogo = []; $('#resultados').replaceChildren(); informar('Buscando emprendimientos…', 'carga');
     $('#estadoCatalogo').append(estado);
     try {
         const filtros = new URLSearchParams(new FormData(evento.target));
         const datos = await api('/api/emprendimientos?' + filtros);
         if (version !== versionBusqueda) return;
-        for (const d of datos) {
-            const a = document.createElement('article'), h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
-            a.className = 'negocio-card';
-            h.textContent = d.nombre; p.textContent = [d.descripcion, d.comuna, d.direccion].filter(Boolean).join(' · ');
-            b.type = 'button'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
-            a.append(h, p, b); $('#resultados').append(a);
-        }
+        resultadosCatalogo = datos; dibujarCatalogo();
         informar(datos.length ? datos.length + ' emprendimiento(s). Selecciona uno para ver sus servicios.' : 'No encontramos emprendimientos con esos filtros. Prueba solo con el nombre o pulsa Ver todos.');
     } catch (error) { if (version === versionBusqueda) informar(error.message, 'error'); }
 };

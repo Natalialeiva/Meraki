@@ -53,7 +53,7 @@ function iniciar(config = {}) {
         }
     });
     vm.runInContext(script, contexto);
-    const p = {elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
+    const p = {actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
         async seleccionar() { await pausa(); return elementos['#resultados'].children[0].children[2].onclick(); },
         async preparar() {
             await p.seleccionar(); elementos['#profesional'].value = '3'; elementos['#profesional'].onchange();
@@ -234,4 +234,51 @@ test('Errores aparecen solo en campos interactuados o al intentar continuar', as
     p.correo.value = 'clienta@example.com'; p.correo.oninput(); assert.equal(p.elementos['#errorCorreo'].textContent, '');
     await p.elementos['#formReserva'].requestSubmit(); assert.match(p.elementos['#errorFecha'].textContent, /Selecciona una fecha/);
     assert.equal(p.creadas(), 0);
+});
+
+
+test('Cercanía calcula, ordena con empates estables y conserva ausencias e inválidos', async()=>{
+ const {distanciaKm}=await import('../../frontend/front-office/geografia.mjs');
+ const datos=[{id_emprendimiento:1,nombre:'Lejos',latitud:'0',longitud:'2'},{id_emprendimiento:2,nombre:'Ausente',latitud:null,longitud:null},{id_emprendimiento:3,nombre:'Cerca A',latitud:0,longitud:1},{id_emprendimiento:4,nombre:'Inválido',latitud:91,longitud:0},{id_emprendimiento:5,nombre:'Cerca B',latitud:0,longitud:1}];
+ const p=iniciar({buscar:async()=>datos});await pausa();
+ const nombres=()=>p.elementos['#resultados'].children.map(c=>c.children[0].textContent);
+ assert.deepEqual(nombres(),datos.map(d=>d.nombre));
+ p.actualizar({latitud:0,longitud:0},distanciaKm);
+ assert.match(textos(p.elementos['#resultados'].children[0]),/222,4 km/);
+ assert.match(textos(p.elementos['#resultados'].children[1]),/Distancia no disponible/);
+ p.elementos['#ordenCercania'].value='cercania';p.elementos['#ordenCercania'].onchange();
+ assert.deepEqual(nombres(),['Cerca A','Cerca B','Lejos','Ausente','Inválido']);
+ p.actualizar({latitud:0,longitud:2},distanciaKm);assert.equal(nombres()[0],'Lejos');
+ p.actualizar(null,distanciaKm);assert.deepEqual(nombres(),datos.map(d=>d.nombre));assert.doesNotMatch(textos(p.elementos['#resultados']),/km|Distancia no disponible/);
+ assert.equal(p.elementos['#controlCercania'].hidden,true);
+});
+
+test('Cercanía conserva filtros, descarta respuestas antiguas y usa ubicación actual',async()=>{
+ const {distanciaKm}=await import('../../frontend/front-office/geografia.mjs');const antigua=diferida();let veces=0;
+ const p=iniciar({buscar:async()=>++veces===1?antigua.promise:[{id_emprendimiento:2,nombre:'Filtrado',latitud:0,longitud:1}]});
+ p.filtroNombre.value='Filtrado';p.comuna.value='Santiago';p.actualizar({latitud:0,longitud:0},distanciaKm);
+ p.elementos['#ordenCercania'].value='cercania';await p.elementos['#buscar'].requestSubmit();
+ assert.match(p.peticiones.at(-1).url,/nombre=Filtrado&comuna=Santiago/);
+ p.actualizar({latitud:0,longitud:1},distanciaKm);
+ antigua.resolve([{id_emprendimiento:9,nombre:'Antiguo',latitud:0,longitud:5}]);await pausa();
+ assert.match(textos(p.elementos['#resultados']),/Filtrado/);assert.doesNotMatch(textos(p.elementos['#resultados']),/Antiguo/);
+ assert.match(textos(p.elementos['#resultados']),/menos de 0,1 km/);
+ p.actualizar(null,distanciaKm);assert.doesNotMatch(textos(p.elementos['#resultados']),/km/);
+ assert(p.peticiones.every(r=>r.method==='GET'&&!r.url.includes('latitud')&&!r.url.includes('longitud')));
+});
+
+test('Reordenar catálogo no cambia servicio, profesional, horas ni reserva preparada',async()=>{
+ const {distanciaKm}=await import('../../frontend/front-office/geografia.mjs');const p=iniciar();await p.preparar();
+ const antes=['#servicio','#profesional','#fecha','#hora'].map(id=>p.elementos[id].value);
+ p.actualizar({latitud:0,longitud:0},distanciaKm);p.elementos['#ordenCercania'].value='cercania';p.elementos['#ordenCercania'].onchange();p.actualizar(null,distanciaKm);
+ assert.deepEqual(['#servicio','#profesional','#fecha','#hora'].map(id=>p.elementos[id].value),antes);assert.equal(p.elementos['#crearReserva'].disabled,false);assert.equal(p.creadas(),0);
+});
+
+test('Una API tardía tras retirar ubicación no restaura distancias ni envía coordenadas',async()=>{
+ const {distanciaKm}=await import('../../frontend/front-office/geografia.mjs');const respuesta=diferida();
+ const p=iniciar({buscar:async()=>respuesta.promise});p.actualizar({latitud:0,longitud:0},distanciaKm);p.actualizar(null,distanciaKm);
+ respuesta.resolve([{id_emprendimiento:1,nombre:'Resultado tardío',latitud:0,longitud:1}]);await pausa();
+ assert.match(textos(p.elementos['#resultados']),/Resultado tardío/);assert.doesNotMatch(textos(p.elementos['#resultados']),/km|Distancia no disponible/);
+ assert.equal(p.elementos['#ordenCercania'].value,'original');
+ assert(p.peticiones.every(r=>r.method==='GET'&&!r.body&&!/[?&](latitud|longitud|latitude|longitude)=/.test(r.url)));
 });

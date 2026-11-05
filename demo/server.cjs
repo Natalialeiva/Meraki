@@ -17,6 +17,8 @@ const rutasConsulta = [
     /^\/front-office\/?$/,
     /^\/front-office\/front\.js$/,
     /^\/front-office\/styles\.css$/,
+    /^\/front-office\/geografia\.mjs$/ ,
+    /^\/front-office\/ubicacion\.mjs$/ ,
     /^\/front-office\/assets\/(banner-meraki|logo-meraki|banner-meraki-nuevo|logo-meraki-transparente)\.png$/
 ];
 function permitida(method, ruta) { return method === 'GET' && rutasConsulta.some(r => r.test(ruta)); }
@@ -86,6 +88,8 @@ async function crearDemo() {
             const html=fs.readFileSync(path.join(raiz,'frontend','front-office','index.html'),'utf8');
             res.set('Cache-Control','no-store').type('html').send(html.replace('<body>','<body><aside role="note" style="padding:1rem;text-align:center;background:#e7f3ec;color:#24563a">DEMO · Datos ficticios · Solo consulta hasta el resumen. No se crean reservas ni pagos.</aside>'));
         });
+        app.get('/front-office/geografia.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','geografia.mjs')));
+        app.get('/front-office/ubicacion.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','ubicacion.mjs')));
         app.use(backend);
         return {app,pool,intentos};
     } catch(e) { await pool.end(); throw e; }

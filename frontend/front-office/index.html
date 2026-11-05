@@ -36,6 +36,13 @@
             </div>
             <div class="acciones accionesBusqueda"><button>Buscar <span aria-hidden="true">→</span></button><button id="limpiarBusqueda" class="secundario" type="button">Ver todos</button></div>
             <small class="ayuda">Si completas nombre y comuna, ambos deben coincidir. Elige un emprendimiento para ver sus servicios y precios.</small>
+            <div class="ubicacion">
+                <p id="privacidadUbicacion" class="ayuda">Tu ubicación se utilizará para mostrar emprendimientos cercanos. No se almacenará ni se enviará al servidor.</p>
+                <div class="acciones"><button id="usarUbicacion" type="button" class="secundario" aria-describedby="privacidadUbicacion">Usar mi ubicación</button><button id="dejarUbicacion" type="button" class="secundario" hidden>Dejar de usar mi ubicación</button></div>
+                <label id="controlCercania" hidden>Orden del catálogo <select id="ordenCercania"><option value="original">Orden habitual</option><option value="cercania">Más cercanos primero</option></select></label>
+                <p id="notaDistancias" class="ayuda" hidden>Distancias aproximadas en línea recta, no recorridos por carretera. Su precisión depende de tu dispositivo.</p>
+                <p id="estadoUbicacion" role="status" aria-live="polite" aria-atomic="true">Ubicación no solicitada. Puedes buscar por nombre y comuna.</p>
+            </div>
         </form>
     </section>
 
@@ -86,5 +93,6 @@
 </main>
 <footer class="pie"><p>Catálogo de servicios de cuidado personal</p><a href="#inicio">Volver al inicio <span aria-hidden="true">↑</span></a></footer>
 <script src="front.js?v=fase-a-2-3-final"></script>
+<script type="module" src="ubicacion.mjs?v=a3-2"></script>
 </body>
 </html>

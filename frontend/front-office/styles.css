@@ -953,3 +953,6 @@ main {
         transition:none
     }
 }
+
+.ubicacion { grid-column:1/-1; padding-top:.8rem; border-top:1px solid var(--borde); min-width:0; }
+.ubicacion p { font-size:.8rem; color:var(--suave); }
