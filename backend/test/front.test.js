@@ -53,7 +53,7 @@ function iniciar(config = {}) {
         }
     });
     vm.runInContext(script, contexto);
-    const p = {suscribirMapa:receptor=>contexto.suscribirMapa(receptor),seleccionarMapa:dato=>contexto.seleccionar(dato),actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
+    const p = {configurarIndicaciones:crearVista=>contexto.configurarIndicaciones(crearVista),suscribirMapa:receptor=>contexto.suscribirMapa(receptor),seleccionarMapa:dato=>contexto.seleccionar(dato),actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
         async seleccionar() { await pausa(); return elementos['#resultados'].children[0].children[2].onclick(); },
         async preparar() {
             await p.seleccionar(); elementos['#profesional'].value = '3'; elementos['#profesional'].onchange();
@@ -291,4 +291,16 @@ test('Proveedor del mapa recibe filtros recientes y su selección conserva flujo
  antigua.resolve([{id_emprendimiento:9,nombre:'Viejo'}]);await pausa();assert.equal(recibidos.at(-1)[0].nombre,'Demo filtrada');
  await p.seleccionarMapa(recibidos.at(-1)[0]);assert.equal(p.elementos['#reserva'].hidden,false);assert.equal(p.creadas(),0);
  assert.match(p.peticiones.find(r=>r.url.includes('nombre=Demo')).url,/comuna=Santiago/);assert(p.peticiones.every(r=>r.method==='GET'));
+});
+
+
+test('Indicaciones conserva catálogo y reserva aunque coordenadas de API no estén confirmadas',async()=>{
+ const {crearVistaIndicaciones}=await import('../../frontend/front-office/mapa-datos.mjs');
+ const p=iniciar({buscar:async()=>[{id_emprendimiento:1,nombre:'Demo',comuna:'Santiago',latitud:0,longitud:0,ubicacion_confirmada:true}]});await p.preparar();
+ const doc={createElement:tag=>new Elemento(tag)};
+ p.configurarIndicaciones(negocio=>crearVistaIndicaciones(doc,negocio));
+ assert.match(textos(p.elementos['#resultados']),/Ubicación exacta no disponible/);
+ assert(!p.elementos['#resultados'].children[0].children.some(n=>n.tag==='a'));
+ assert.equal(p.elementos['#crearReserva'].disabled,false);assert.equal(p.creadas(),0);
+ assert(p.peticiones.every(r=>r.method==='GET'));
 });

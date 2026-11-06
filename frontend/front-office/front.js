@@ -159,26 +159,36 @@ function actualizarCercania(posicion, calcular) {
     if (!posicion) $('#ordenCercania').value = 'original';
     dibujarCatalogo();
 }
-let receptorMapa = null;
+let receptorMapa = null, vistaIndicaciones=null;
+function configurarIndicaciones(crearVista) {vistaIndicaciones=crearVista;dibujarCatalogo();}
 function suscribirMapa(receptor) { receptorMapa = receptor; receptor(resultadosCatalogo); }
 function dibujarCatalogo() {
+    const foco=document.activeElement;
+    const idEnFoco=foco?.closest?.('article[data-id-negocio]')?.dataset.idNegocio;
+    const accionEnFoco=foco?.dataset.accion;
     receptorMapa?.(resultadosCatalogo);
     $('#resultados').replaceChildren();
     const filas = resultadosCatalogo.map((dato, indice) => ({dato, indice, distancia:ubicacionCatalogo && calcularDistancia ? calcularDistancia(ubicacionCatalogo.latitud, ubicacionCatalogo.longitud, dato.latitud, dato.longitud) : null}));
     if (ubicacionCatalogo && $('#ordenCercania').value === 'cercania') filas.sort((a,b) => (a.distancia ?? Infinity) - (b.distancia ?? Infinity) || a.indice - b.indice);
         for (const {dato:d, distancia} of filas) {
             const a = document.createElement('article'), h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
-            a.className = 'negocio-card';
+            a.className = 'negocio-card';a.dataset.idNegocio=String(d.id_emprendimiento);
             h.textContent = d.nombre; p.textContent = [d.descripcion, d.comuna, d.direccion].filter(Boolean).join(' · ');
-            b.type = 'button'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
+            b.type = 'button'; b.dataset.accion='servicios'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
             a.append(h, p, b);
+            if (vistaIndicaciones) a.append(vistaIndicaciones(d));
+            else {const aviso=document.createElement('p');aviso.className='ayuda';aviso.textContent='Ubicación exacta no disponible';a.append(aviso);}
             if (ubicacionCatalogo) {
                 const distanciaTexto = document.createElement('p'); distanciaTexto.className = 'distanciaNegocio';
                 distanciaTexto.textContent = distancia === null ? 'Distancia no disponible' : 'Aprox. ' + (distancia < 0.1 ? 'menos de 0,1' : new Intl.NumberFormat('es-CL', {maximumFractionDigits:1}).format(distancia)) + ' km';
                 a.append(distanciaTexto);
             } $('#resultados').append(a);
         }
-
+    if (idEnFoco && ['servicios','indicaciones'].includes(accionEnFoco)) {
+        const tarjeta=Array.from($('#resultados').children).find(n=>n.dataset.idNegocio===idEnFoco);
+        const destino=tarjeta?.querySelector('[data-accion="'+accionEnFoco+'"]');
+        (destino||$('#tituloCatalogo')).focus();
+    }
 }
 $('#ordenCercania').onchange = dibujarCatalogo;
 

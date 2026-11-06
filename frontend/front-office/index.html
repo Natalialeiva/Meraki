@@ -47,7 +47,7 @@
     </section>
 
     <section id="catalogo" class="catalogo" aria-labelledby="tituloCatalogo">
-        <div class="encabezadoSeccion"><div><p class="etiqueta">Catálogo</p><h2 id="tituloCatalogo">Emprendimientos para explorar</h2></div><p>Consulta sus servicios, precios y disponibilidad antes de reservar.</p></div>
+        <div class="encabezadoSeccion"><div><p class="etiqueta">Catálogo</p><h2 id="tituloCatalogo" tabindex="-1">Emprendimientos para explorar</h2></div><p>Consulta sus servicios, precios y disponibilidad antes de reservar.</p></div>
         <div id="estadoCatalogo"><p id="estado" role="status" aria-live="polite" aria-atomic="true"></p></div>
         <div class="acciones"><button id="verMapa" type="button" class="secundario" aria-expanded="false" aria-controls="panelMapa">Ver mapa</button></div>
         <section id="panelMapa" class="mapaPreparacion" hidden aria-labelledby="tituloMapa">
@@ -58,6 +58,7 @@
             <div id="negociosMapa" class="acciones" aria-label="Emprendimientos con coordenadas válidas"></div>
             <section id="seleccionMapa" class="seleccionMapa" hidden aria-label="Emprendimiento seleccionado" aria-live="polite">
                 <h4 id="nombreMapa"></h4><p id="comunaMapa"></p>
+                <div id="indicacionesMapa"></div>
                 <button id="serviciosMapa" type="button" class="secundario" disabled>Ver servicios</button>
             </section>
         </section>

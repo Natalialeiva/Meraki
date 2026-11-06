@@ -135,3 +135,83 @@ La demo usa negocios ficticios; sus suscripciones vencen sin renovación automá
 No iniciar nuevas funcionalidades ni activar Google real. Sin commit ni push
 automáticos; este documento debe incluirse junto a los 14 archivos de A3.4.1–A3.4.3
 en el commit manual que Adriana está preparando.
+
+
+## A3.4.4 — Cómo llegar y accesibilidad (6 de noviembre de 2026)
+
+Implementación Front Office pendiente de revisión y publicación. Se conserva el
+historial anterior: sus referencias a A3.4.4 pendiente describen el estado previo.
+
+La API pública actual solo entrega id_emprendimiento, nombre, descripcion, comuna,
+direccion, latitud y longitud. No existe indicador documentado/confiable de ubicación
+confirmada. En 3000, Belleza Camila tiene «Dirección de prueba», Belleza Sofia no
+posee dirección y ambas carecen de coordenadas completas. No se inventó validación.
+
+- Constructor de enlace preparado en mapa-datos.mjs: HTTPS fijo a Google Maps,
+  Maps URLs con api=1 y destination. Reutiliza validarCoordenadas, admite decimales
+  PostgreSQL y cero explícito. No utiliza direcciones libres ni parámetros origin,
+  tokens o coordenadas personales. Solo construye texto de URL, sin red.
+- Confirmación: un argumento interno independiente debe ser exactamente true para
+  construir el enlace. No se interpreta ningún campo inventado de la API. Todos
+  los consumidores reales dejan esa condición en false por defecto; solo las
+  pruebas unitarias usan confirmación ficticia explícita para probar el constructor.
+  Esta condición es una puerta preparada, NO acredita por sí misma la confiabilidad
+  de una ubicación. Se necesita acordar una fuente autoritativa y su vinculación
+  al negocio y coordenadas antes de conectar esa condición en producción.
+- En tarjetas y detalle de marcador se muestra «Ubicación exacta no disponible».
+  No se crea href ni enlace activo ante datos no confirmados, incluso si las
+  coordenadas son válidas. No se modificaron negocios ni datos de demo para forzarlo.
+- La vista de enlace preparada utiliza a nativo, nombre accesible «Cómo llegar a
+  [nombre]», aviso visible/para lectores, target _blank, noopener noreferrer,
+  no-referrer y foco visible. No existen onclick de navegación ni aperturas automáticas.
+- Tarjetas independientes del mapa: el módulo de ubicación registra la presentación
+  del aviso sin solicitar geolocalización. Si el módulo no carga, el render clásico
+  conserva el aviso seguro. Se mantienen filtros, cercanía y reglas de reserva.
+- Escape cierra el panel no modal y devuelve foco a Ver mapa. Ocultar un detalle
+  enfocado restaura foco; al redibujar tarjetas se conserva el control del mismo
+  negocio cuando existe y, si no existe, se enfoca el título del catálogo.
+
+Archivos de A3.4.4:
+
+- frontend/front-office/front.js
+- frontend/front-office/index.html
+- frontend/front-office/styles.css
+- frontend/front-office/mapa-datos.mjs
+- frontend/front-office/mapa.mjs
+- frontend/front-office/ubicacion.mjs
+- backend/test/front.test.js
+- backend/test/mapa.test.js
+- backend/test/indicaciones.test.js (nuevo)
+- docs/FRONT-OFFICE-FASE-A3-4.md (este registro)
+
+No se creó un módulo JavaScript nuevo: mapa-datos.mjs ya se sirve como módulo ES
+por el backend normal y ya figura en la lista GET exacta del servidor demo. No se
+modificó ningún archivo de demo ni del backend compartido. Se verificó HTTP 200 y
+MIME JavaScript en 3000. En esta revisión 3001 estaba detenido; no se inició por
+estar fuera del alcance. Compatibilidad de rutas confirmada por pruebas de demo,
+sin ampliar permisos ni servir carpetas nuevas.
+
+Verificación: 91 pruebas focalizadas aprobadas, cero fallos, omisiones o
+cancelaciones. Incluyen las 83 anteriores, siete casos nuevos de indicaciones y
+uno de integración con catálogo/reserva. No sumar ambas baterías como casos únicos.
+Pruebas aisladas, sin escrituras PostgreSQL ni proveedores externos. Sintaxis y
+git diff --check correctos; avisos informativos LF/CRLF previos.
+
+Chrome sobre 3000 a 1440, 768 y 390 px: avisos sin enlaces para datos actuales,
+filtros nombre/comuna, servicios y profesionales, Escape y foco al reordenar;
+sin overflow horizontal ni excepciones JavaScript. Navegación externa interceptada
+preventivamente; ninguna salida intentada. Cero recursos externos y ningún SDK
+Google cargado. Capturas fuera de Git con prefijo a3-4-4. No se creó reserva.
+Los enlaces positivos se prueban solo con objetos ficticios unitarios, sin abrir Maps.
+
+Pendiente: confirmar con Natalia la procedencia de ubicaciones reales y definir
+cómo acreditar su confirmación de manera confiable. Una coordenada numéricamente
+válida no demuestra que corresponda al negocio. Hasta entonces, Cómo llegar queda
+oculto en servidor principal y demo, con explicación. No activar Google Maps SDK,
+claves o facturación para esta funcionalidad. Google puede gestionar su propio
+origen/permisos cuando se abra un futuro enlace; Meraki no enviará la ubicación
+personal ni añadirá origin.
+
+Sin cambios de PostgreSQL, migraciones, Back Office, Webpay, Oneclick, suscripciones,
+.env o configuración. Sin correos, reservas, abonos, commit ni push.
+Detenerse para revisión con Adriana y ChatGPT antes de publicar.

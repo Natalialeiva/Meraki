@@ -967,3 +967,8 @@ main {
 .seleccionMapa { margin-top:1rem; padding:1rem; border:1px solid var(--borde); border-radius:14px; background:var(--papel); }
 .seleccionMapa h4 { margin:0; overflow-wrap:anywhere; }
 .seleccionMapa button { margin-top:.8rem; }
+
+.indicaciones { margin-top:.8rem; min-width:0; }
+.enlaceIndicaciones { display:inline-flex; align-items:center; min-height:44px; padding:.6rem 1rem; border:1px solid var(--borde); border-radius:999px; overflow-wrap:anywhere; }
+.enlaceIndicaciones:focus-visible { outline:3px solid var(--ciruela); outline-offset:3px; }
+.indicaciones .ayuda { margin-top:.4rem; }

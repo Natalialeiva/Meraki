@@ -1,3 +1,4 @@
+import {crearVistaIndicaciones} from './mapa-datos.mjs';
 import {validarCoordenadas, distanciaKm} from './geografia.mjs';
 
 // Estado privado de esta visita. No usa red, almacenamiento ni seguimiento.
@@ -57,5 +58,7 @@ export function montarUbicacion(documento, navegador, seguro) {
 }
 
 if (typeof document !== 'undefined' && typeof navigator !== 'undefined') {
+    // Sin indicador confiable de confirmación, la vista siempre permanece inhabilitada.
+    globalThis.configurarIndicaciones?.(negocio=>crearVistaIndicaciones(document,negocio));
     montarUbicacion(document, navigator, globalThis.isSecureContext === true);
 }

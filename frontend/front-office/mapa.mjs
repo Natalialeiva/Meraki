@@ -1,5 +1,5 @@
 import {validarCoordenadas} from './geografia.mjs';
-import {normalizarMarcadores} from './mapa-datos.mjs';
+import {normalizarMarcadores,crearVistaIndicaciones} from './mapa-datos.mjs';
 import {crearProveedorMapa} from './mapa-proveedores.mjs';
 
 // Contrato: preparar(datos, seleccionar), renderizar(contenido), limpiar().
@@ -27,7 +27,7 @@ export function crearMapa({proveedor, mostrar, seleccionar, presentarSeleccion=(
             const contenido=await proveedor.preparar(datos, id=>{
                 if (abierto && actual===version) {
                     const negocio=datos.find(n=>n.id===id);
-                    if (negocio) {seleccion={id,version:actual};presentarSeleccion({id:negocio.id,nombre:negocio.nombre,comuna:negocio.comuna});}
+                    if (negocio) {seleccion={id,version:actual};presentarSeleccion({...negocio});}
                 }
             });
             if (!abierto || actual!==version) return;
@@ -61,18 +61,26 @@ export function montarMapa(documento, suscribir) {
     const lista=documento.querySelector('#negociosMapa'), estado=documento.querySelector('#estadoMapa');
     const proveedor=crearProveedorMapa({documento,contenedor:lista});
     const detalle=documento.querySelector('#seleccionMapa'), nombre=documento.querySelector('#nombreMapa'), comuna=documento.querySelector('#comunaMapa');
-    const accion=documento.querySelector('#serviciosMapa');
+    const accion=documento.querySelector('#serviciosMapa'), indicaciones=documento.querySelector('#indicacionesMapa');
     const control=crearMapa({proveedor,presentarSeleccion:negocio=>{
+        const pierdeFoco=!negocio && detalle.contains?.(documento.activeElement);
         detalle.hidden=!negocio;nombre.textContent=negocio?.nombre||'';comuna.textContent=negocio?.comuna||'';
         accion.disabled=!negocio;
+        indicaciones.replaceChildren();
+        if(negocio) indicaciones.append(crearVistaIndicaciones(documento,negocio));
+        if(pierdeFoco)boton.focus();
     },mostrar:({abierto,mensaje})=>{
-        panel.hidden=!abierto;boton.setAttribute('aria-expanded',String(abierto));
+        const pierdeFoco=!abierto && panel.contains?.(documento.activeElement);
+        panel.hidden=!abierto;if(pierdeFoco)boton.focus();boton.setAttribute('aria-expanded',String(abierto));
         boton.textContent=abierto?'Cerrar mapa':'Ver mapa';estado.textContent=mensaje;
         documento.querySelector('#tituloMapa').textContent=proveedor.modo==='google'?'Mapa de emprendimientos':'Vista de preparación del mapa';
         documento.querySelector('#descripcionMapa').textContent=proveedor.modo==='google'?'Mapa real de Google. Puedes seleccionar un emprendimiento para consultar sus servicios.':'Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.';
     },seleccionar:negocio=>globalThis.seleccionar?.(negocio)});
     boton.onclick=control.alternar;
     accion.onclick=()=>control.verServicios();
+    panel.addEventListener?.('keydown',evento=>{
+        if(evento.key==='Escape' && !panel.hidden) {evento.preventDefault();control.alternar();boton.focus();}
+    });
     suscribir(datos=>control.actualizar(datos));
     return control;
 }

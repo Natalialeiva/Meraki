@@ -45,7 +45,7 @@ test('Marcadores deduplica IDs numéricos y textuales y rechaza IDs y coordenada
 
 test('Seleccionar marcador muestra nombre y comuna; Ver servicios exige selección vigente',async()=>{
  const p=await iniciar();await p.control.actualizar([negocio]);await p.control.alternar();p.control.verServicios();assert.equal(p.selecciones.length,0);
- p.llamadas[0].elegir(1);assert.deepEqual(p.detalles.at(-1),{id:1,nombre:'Demo',comuna:'Santiago'});assert.equal(p.selecciones.length,0);
+ p.llamadas[0].elegir(1);assert.deepEqual(p.detalles.at(-1),{id:1,nombre:'Demo',comuna:'Santiago',latitud:-33.4,longitud:-70.6});assert.equal(p.selecciones.length,0);
  p.control.verServicios();assert.equal(p.selecciones.length,1);
  await p.control.actualizar([{...negocio,id_emprendimiento:2}]);assert.equal(p.detalles.at(-1),null);p.control.verServicios();assert.equal(p.selecciones.length,1);
  p.llamadas[0].elegir(1);assert.equal(p.detalles.at(-1),null);
@@ -66,10 +66,11 @@ test('Cerrar limpia selección y callbacks de Ver servicios, incluso tras reabri
 
 test('Panel simulado selecciona detalle público y solo Ver servicios inicia el flujo existente',async()=>{
  const {montarMapa}=await modulo;
- class Nodo {constructor(){this.children=[];this.attributes={};this.hidden=false;this.disabled=false;this.textContent='';}setAttribute(k,v){this.attributes[k]=v;}replaceChildren(...hijos){this.children=hijos;}}
- const ids=['verMapa','panelMapa','negociosMapa','estadoMapa','seleccionMapa','nombreMapa','comunaMapa','serviciosMapa','tituloMapa','descripcionMapa'];
+ class Nodo {constructor(){this.children=[];this.attributes={};this.hidden=false;this.disabled=false;this.textContent='';this.listeners={};}focus(){doc.activeElement=this;}contains(el){return el===this||this.children.some(n=>n.contains?.(el));}addEventListener(k,fn){this.listeners[k]=fn;}setAttribute(k,v){this.attributes[k]=v;}replaceChildren(...hijos){this.children=hijos;}append(...hijos){this.children.push(...hijos);}}
+ const ids=['verMapa','panelMapa','negociosMapa','estadoMapa','seleccionMapa','nombreMapa','comunaMapa','serviciosMapa','tituloMapa','descripcionMapa','indicacionesMapa'];
  const nodos=Object.fromEntries(ids.map(id=>['#'+id,new Nodo()]));
- const doc={querySelector:id=>{assert(nodos[id],id);return nodos[id];},createElement:tag=>{assert.equal(tag,'button');return new Nodo();}};
+ const doc={querySelector:id=>{assert(nodos[id],id);return nodos[id];},createElement:tag=>{assert(['button','div','p'].includes(tag));return new Nodo();}};
+ nodos['#panelMapa'].append(nodos['#negociosMapa'],nodos['#seleccionMapa']);nodos['#seleccionMapa'].append(nodos['#serviciosMapa']);
  let publicar,selecciones=0;const anterior=globalThis.seleccionar;globalThis.seleccionar=()=>{selecciones++;};
  try {
   montarMapa(doc,receptor=>{publicar=receptor;});await publicar([negocio]);assert.equal(nodos['#panelMapa'].hidden,true);
@@ -77,8 +78,12 @@ test('Panel simulado selecciona detalle público y solo Ver servicios inicia el 
   nodos['#negociosMapa'].children[0].onclick();assert.equal(nodos['#nombreMapa'].textContent,'Demo');assert.equal(nodos['#comunaMapa'].textContent,'Santiago');
   assert.equal(nodos['#seleccionMapa'].hidden,false);assert.equal(selecciones,0);
   nodos['#serviciosMapa'].onclick();assert.equal(selecciones,1);
-  await publicar([{...negocio,id_emprendimiento:2}]);assert.equal(nodos['#seleccionMapa'].hidden,true);assert.equal(nodos['#serviciosMapa'].disabled,true);
+  doc.activeElement=nodos['#serviciosMapa'];
+  await publicar([{...negocio,id_emprendimiento:2}]);assert.equal(doc.activeElement,nodos['#verMapa']);assert.equal(nodos['#seleccionMapa'].hidden,true);assert.equal(nodos['#serviciosMapa'].disabled,true);
   nodos['#serviciosMapa'].onclick();assert.equal(selecciones,1);
   await nodos['#verMapa'].onclick();assert.equal(nodos['#panelMapa'].hidden,true);assert.equal(nodos['#negociosMapa'].children.length,0);
+  await nodos['#verMapa'].onclick();doc.activeElement=nodos['#negociosMapa'].children[0];let evitado=false;
+  nodos['#panelMapa'].listeners.keydown({key:'Escape',preventDefault(){evitado=true;}});
+  assert(evitado);assert.equal(nodos['#panelMapa'].hidden,true);assert.equal(doc.activeElement,nodos['#verMapa']);
  } finally {if(anterior===undefined)delete globalThis.seleccionar;else globalThis.seleccionar=anterior;}
 });
