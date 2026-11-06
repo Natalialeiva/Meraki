@@ -19,6 +19,11 @@ const rutasConsulta = [
     /^\/front-office\/styles\.css$/,
     /^\/front-office\/geografia\.mjs$/ ,
     /^\/front-office\/ubicacion\.mjs$/ ,
+    /^\/front-office\/mapa\.mjs$/ ,
+    /^\/front-office\/mapa-datos\.mjs$/ ,
+    /^\/front-office\/mapa-simulado\.mjs$/ ,
+    /^\/front-office\/mapa-google\.mjs$/ ,
+    /^\/front-office\/mapa-proveedores\.mjs$/ ,
     /^\/front-office\/assets\/(banner-meraki|logo-meraki|banner-meraki-nuevo|logo-meraki-transparente)\.png$/
 ];
 function permitida(method, ruta) { return method === 'GET' && rutasConsulta.some(r => r.test(ruta)); }
@@ -90,6 +95,11 @@ async function crearDemo() {
         });
         app.get('/front-office/geografia.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','geografia.mjs')));
         app.get('/front-office/ubicacion.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','ubicacion.mjs')));
+        app.get('/front-office/mapa.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','mapa.mjs')));
+        app.get('/front-office/mapa-simulado.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','mapa-simulado.mjs')));
+        app.get('/front-office/mapa-google.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','mapa-google.mjs')));
+        app.get('/front-office/mapa-proveedores.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','mapa-proveedores.mjs')));
+        app.get('/front-office/mapa-datos.mjs',(_req,res)=>res.type('text/javascript').sendFile(path.join(raiz,'frontend','front-office','mapa-datos.mjs')));
         app.use(backend);
         return {app,pool,intentos};
     } catch(e) { await pool.end(); throw e; }

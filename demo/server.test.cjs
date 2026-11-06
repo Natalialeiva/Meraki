@@ -14,7 +14,7 @@ test('Demo bloquea también retornos GET y rutas no incluidas explícitamente',(
 });
 
 test('Demo permite módulos exactos GET y rechaza otros métodos y rutas privadas',()=>{
-    for(const ruta of ['/front-office/geografia.mjs','/front-office/ubicacion.mjs']) {
+    for(const ruta of ['/front-office/geografia.mjs','/front-office/ubicacion.mjs','/front-office/mapa.mjs','/front-office/mapa-datos.mjs','/front-office/mapa-simulado.mjs','/front-office/mapa-google.mjs','/front-office/mapa-proveedores.mjs']) {
         assert.equal(permitida('GET',ruta),true);
         for(const metodo of ['POST','PUT','PATCH','DELETE','HEAD','OPTIONS'])assert.equal(permitida(metodo,ruta),false);
     }

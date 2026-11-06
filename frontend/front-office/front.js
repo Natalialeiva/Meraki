@@ -159,7 +159,10 @@ function actualizarCercania(posicion, calcular) {
     if (!posicion) $('#ordenCercania').value = 'original';
     dibujarCatalogo();
 }
+let receptorMapa = null;
+function suscribirMapa(receptor) { receptorMapa = receptor; receptor(resultadosCatalogo); }
 function dibujarCatalogo() {
+    receptorMapa?.(resultadosCatalogo);
     $('#resultados').replaceChildren();
     const filas = resultadosCatalogo.map((dato, indice) => ({dato, indice, distancia:ubicacionCatalogo && calcularDistancia ? calcularDistancia(ubicacionCatalogo.latitud, ubicacionCatalogo.longitud, dato.latitud, dato.longitud) : null}));
     if (ubicacionCatalogo && $('#ordenCercania').value === 'cercania') filas.sort((a,b) => (a.distancia ?? Infinity) - (b.distancia ?? Infinity) || a.indice - b.indice);
@@ -182,7 +185,7 @@ $('#ordenCercania').onchange = dibujarCatalogo;
 $('#buscar').onsubmit = async evento => {
     evento.preventDefault(); if (enviando) return;
     const version = ++versionBusqueda; versionSeleccion++; versionProfesional++; limpiarHoras();
-    $('#reserva').hidden = true; resultadosCatalogo = []; $('#resultados').replaceChildren(); informar('Buscando emprendimientos…', 'carga');
+    $('#reserva').hidden = true; resultadosCatalogo = []; receptorMapa?.([]); $('#resultados').replaceChildren(); informar('Buscando emprendimientos…', 'carga');
     $('#estadoCatalogo').append(estado);
     try {
         const filtros = new URLSearchParams(new FormData(evento.target));

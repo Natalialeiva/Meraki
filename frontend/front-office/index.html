@@ -49,6 +49,18 @@
     <section id="catalogo" class="catalogo" aria-labelledby="tituloCatalogo">
         <div class="encabezadoSeccion"><div><p class="etiqueta">Catálogo</p><h2 id="tituloCatalogo">Emprendimientos para explorar</h2></div><p>Consulta sus servicios, precios y disponibilidad antes de reservar.</p></div>
         <div id="estadoCatalogo"><p id="estado" role="status" aria-live="polite" aria-atomic="true"></p></div>
+        <div class="acciones"><button id="verMapa" type="button" class="secundario" aria-expanded="false" aria-controls="panelMapa">Ver mapa</button></div>
+        <section id="panelMapa" class="mapaPreparacion" hidden aria-labelledby="tituloMapa">
+            <h3 id="tituloMapa">Vista de preparación del mapa</h3>
+            <p id="descripcionMapa">Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.</p>
+            <p class="ayuda">El mapa real solo se habilitará con configuración y autorización previas. Abrirlo establecerá conexiones con Google. La vista de preparación no se conecta y tu ubicación no se comparte.</p>
+            <p id="estadoMapa" role="status" aria-live="polite"></p>
+            <div id="negociosMapa" class="acciones" aria-label="Emprendimientos con coordenadas válidas"></div>
+            <section id="seleccionMapa" class="seleccionMapa" hidden aria-label="Emprendimiento seleccionado" aria-live="polite">
+                <h4 id="nombreMapa"></h4><p id="comunaMapa"></p>
+                <button id="serviciosMapa" type="button" class="secundario" disabled>Ver servicios</button>
+            </section>
+        </section>
         <div id="resultados" aria-label="Emprendimientos encontrados"></div>
     </section>
 
@@ -94,5 +106,6 @@
 <footer class="pie"><p>Catálogo de servicios de cuidado personal</p><a href="#inicio">Volver al inicio <span aria-hidden="true">↑</span></a></footer>
 <script src="front.js?v=fase-a-2-3-final"></script>
 <script type="module" src="ubicacion.mjs?v=a3-2"></script>
+<script type="module" src="mapa.mjs?v=a3-4-1"></script>
 </body>
 </html>

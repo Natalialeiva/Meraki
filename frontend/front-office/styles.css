@@ -956,3 +956,14 @@ main {
 
 .ubicacion { grid-column:1/-1; padding-top:.8rem; border-top:1px solid var(--borde); min-width:0; }
 .ubicacion p { font-size:.8rem; color:var(--suave); }
+
+.mapaPreparacion { padding:1.2rem; margin-bottom:1.3rem; border:1px solid var(--borde); border-radius:18px; background:linear-gradient(120deg,var(--papel),var(--lavanda)); }
+.mapaPreparacion p { margin-top:.7rem; }
+.mapaPreparacion button { max-width:100%; overflow-wrap:anywhere; }
+
+.mapaGoogle { width:100%; height:380px; border-radius:14px; }
+@media(max-width:620px) { .mapaGoogle { height:320px; } }
+
+.seleccionMapa { margin-top:1rem; padding:1rem; border:1px solid var(--borde); border-radius:14px; background:var(--papel); }
+.seleccionMapa h4 { margin:0; overflow-wrap:anywhere; }
+.seleccionMapa button { margin-top:.8rem; }

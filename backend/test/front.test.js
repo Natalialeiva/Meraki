@@ -53,7 +53,7 @@ function iniciar(config = {}) {
         }
     });
     vm.runInContext(script, contexto);
-    const p = {actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
+    const p = {suscribirMapa:receptor=>contexto.suscribirMapa(receptor),seleccionarMapa:dato=>contexto.seleccionar(dato),actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
         async seleccionar() { await pausa(); return elementos['#resultados'].children[0].children[2].onclick(); },
         async preparar() {
             await p.seleccionar(); elementos['#profesional'].value = '3'; elementos['#profesional'].onchange();
@@ -281,4 +281,14 @@ test('Una API tardía tras retirar ubicación no restaura distancias ni envía c
  assert.match(textos(p.elementos['#resultados']),/Resultado tardío/);assert.doesNotMatch(textos(p.elementos['#resultados']),/km|Distancia no disponible/);
  assert.equal(p.elementos['#ordenCercania'].value,'original');
  assert(p.peticiones.every(r=>r.method==='GET'&&!r.body&&!/[?&](latitud|longitud|latitude|longitude)=/.test(r.url)));
+});
+
+
+test('Proveedor del mapa recibe filtros recientes y su selección conserva flujo sin reservas',async()=>{
+ const antigua=diferida();let veces=0;const actual={id_emprendimiento:1,nombre:'Demo filtrada',latitud:0,longitud:0};
+ const p=iniciar({buscar:async()=>++veces===1?antigua.promise:[actual]});const recibidos=[];
+ p.suscribirMapa(datos=>recibidos.push(datos));p.filtroNombre.value='Demo';p.comuna.value='Santiago';await p.elementos['#buscar'].requestSubmit();
+ antigua.resolve([{id_emprendimiento:9,nombre:'Viejo'}]);await pausa();assert.equal(recibidos.at(-1)[0].nombre,'Demo filtrada');
+ await p.seleccionarMapa(recibidos.at(-1)[0]);assert.equal(p.elementos['#reserva'].hidden,false);assert.equal(p.creadas(),0);
+ assert.match(p.peticiones.find(r=>r.url.includes('nombre=Demo')).url,/comuna=Santiago/);assert(p.peticiones.every(r=>r.method==='GET'));
 });
