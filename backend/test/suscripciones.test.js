@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path');
 const express=require('express'),request=require('supertest'),{Pool}=require('pg');
 const {crearSuscripciones,montarRutasSuscripcion}=require('../suscripciones');
-const {PLAN,siguienteMes,cifrar,descifrar,validarPago,urlRetorno}=require('../suscripcion-plan');
+const {PLAN,siguienteMes,cifrar,descifrar,validarPago,urlRetorno,normalizarTarjetaInscrita}=require('../suscripcion-plan');
 require('dotenv').config({path:path.join(__dirname,'../.env'),quiet:true});
 
 test('Suscripción calcula un mes calendario y conserva el día al pasar febrero',()=>{
@@ -23,6 +23,17 @@ test('Suscripción conserva el alias local y rechaza controlar el retorno desde 
  assert.throws(()=>urlRetorno('http://otro.example'));assert.throws(()=>urlRetorno('https://usuario:clave@meraki.example'));
 });
 
+test('Inscripción Oneclick acepta el formato real enmascarado y conserva solo los últimos cuatro',()=>{
+ assert.deepEqual(normalizarTarjetaInscrita({card_number:'XXXXXXXXXXXX6623',card_type:'Visa'}),{ultimos4:'6623',tipo:'Visa'});
+ assert.deepEqual(normalizarTarjetaInscrita({card_number:'************6623',card_type:'Visa'}),{ultimos4:'6623',tipo:'Visa'});
+ assert.deepEqual(normalizarTarjetaInscrita({card_number:'6623',credit_card_type:'Visa'}),{ultimos4:'6623',tipo:'Visa'});
+});
+test('Inscripción Oneclick rechaza número completo, datos incompletos y tipo de tarjeta inválido',()=>{
+ for(const card_number of ['4051885600446623','662','abc6623','',null,6623])assert.equal(normalizarTarjetaInscrita({card_number,card_type:'Visa'}),null);
+ for(const card_type of ['',null,123,'x'.repeat(101)])assert.equal(normalizarTarjetaInscrita({card_number:'XXXXXXXXXXXX6623',card_type}),null);
+ assert.equal(normalizarTarjetaInscrita({card_number:'6623'}),null);
+});
+
 test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:process.env.MERAKI_DB_TEST!=='1'},async t=>{
  const esquema='meraki_sub_test_'+Date.now();assert.match(esquema,/^meraki_sub_test_\d+$/);
  const configuracion={host:process.env.DB_HOST,port:Number(process.env.DB_PORT),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD};
@@ -32,7 +43,7 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
  const responder=(p,aprobado=true)=>({buy_order:p.orden_compra,details:[{buy_order:p.orden_tienda,commerce_code:p.codigo_comercio,amount:Number(p.monto),status:aprobado?'AUTHORIZED':'FAILED',response_code:aprobado?0:-1,authorization_code:'PRUEBA'}]});
  const proveedor={ambiente:'integracion',codigoComercio:'tienda-simulada',
   async iniciar(usuario,correo,retorno){inicios++;assert.match(retorno,/\/api\/suscripcion\/retorno$/);return{token:'token-inscripcion-'+inicios,url_webpay:'https://webpay3gint.transbank.cl/webpayserver/bp_multicode_inscription.cgi'};},
-  async finalizar(){finalizaciones++;if(modoFin==='timeout')throw Error('Simulado');return modoFin==='rechazar'?{response_code:-1}:{response_code:0,tbk_user:'identificador-privado-tbk',card_number:'6623',credit_card_type:'Visa'};},
+  async finalizar(){finalizaciones++;if(modoFin==='timeout')throw Error('Simulado');return modoFin==='rechazar'?{response_code:-1}:{response_code:0,tbk_user:'identificador-privado-tbk',card_number:'XXXXXXXXXXXX6623',card_type:'Visa'};},
   async eliminar(token){assert.equal(token,'identificador-privado-tbk');revocaciones++;},
   async autorizar(usuario,token,p){assert.equal(token,'identificador-privado-tbk');cargos++;let r=responder(p,modo!=='rechazar');
    if(modo==='monto')r.details[0].amount=1;respuestas.set(p.orden_compra,r);
@@ -71,6 +82,7 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
    assert.equal(finalizaciones,1);assert.equal(cargos,0);
    const d=await servicio.obtener(1);assert.equal(d.suscripcion.estado,'prueba');assert.equal(d.suscripcion.fecha_fin_prueba,'2026-12-04');assert.equal(d.suscripcion.fecha_proximo_cobro,'2026-12-04');
    assert(!JSON.stringify(d).includes('identificador-privado'));assert(!JSON.stringify(d).includes('tarjeta_cifrada'));assert(!JSON.stringify(d).includes('usuario_oneclick'));
+   assert.equal(d.suscripcion.tarjeta_ultimos4,'6623');assert.equal(d.suscripcion.tarjeta_tipo,'Visa');
    assert.equal(descifrar((await pool.query('SELECT tarjeta_cifrada FROM suscripcion')).rows[0].tarjeta_cifrada,'clave-prueba-suscripcion'),'identificador-privado-tbk');
    await post('inscribir').expect(409);
   });

@@ -18,6 +18,14 @@ function urlRetorno(base,origenSolicitado){
     if(retorno.username||retorno.password||!(retorno.protocol==='https:'||(retorno.protocol==='http:'&&locales.includes(retorno.hostname))))throw Error('URL de retorno no válida');
     return retorno.href;
 }
+function normalizarTarjetaInscrita(respuesta){
+    if(typeof respuesta?.card_number!=='string')return null;
+    // Acepta los últimos cuatro o el PAN enmascarado; nunca un número completo.
+    const numero=/^(?:[Xx*]{8,15})?(\d{4})$/.exec(respuesta.card_number);
+    const tipo=respuesta.card_type??respuesta.credit_card_type;
+    if(!numero||typeof tipo!=='string'||!tipo.trim()||tipo.length>100)return null;
+    return {ultimos4:numero[1],tipo:tipo.trim()};
+}
 function validarPago(respuesta,pago){
     const d=respuesta?.details;
     if(respuesta?.buy_order!==pago.orden_compra||!Array.isArray(d)||d.length!==1)return 'incierto';
@@ -27,4 +35,4 @@ function validarPago(respuesta,pago){
     if(item.status==='FAILED'&&Number.isInteger(item.response_code)&&item.response_code!==0)return 'rechazado';
     return 'incierto';
 }
-module.exports={PLAN,siguienteMes,cifrar,descifrar,hash,validarPago,urlRetorno};
+module.exports={PLAN,siguienteMes,cifrar,descifrar,hash,validarPago,urlRetorno,normalizarTarjetaInscrita};

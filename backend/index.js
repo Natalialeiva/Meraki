@@ -20,6 +20,13 @@ const webpay = new WebpayPlus.Transaction(
     )
 );
 
+// Una respuesta aprobada debe incluir la autorización emitida por Transbank.
+function tieneCodigoAutorizacionWebpay(resultado) {
+    return typeof resultado?.authorization_code === 'string' &&
+        resultado.authorization_code.trim().length > 0 &&
+        resultado.authorization_code.length <= 100;
+}
+
 // Importamos bcrypt para proteger las contraseñas.
 const bcrypt = require("bcrypt");
 
@@ -3583,7 +3590,7 @@ if (retornoInterrumpido) {
         // Comprobar si Transbank autorizó la transacción.
 const pagoAutorizado =
     resultado.status === "AUTHORIZED" &&
-    Number(resultado.response_code) === 0;
+    resultado.response_code === 0;
 
 // Comprobar que los datos coincidan con Meraki.
 const datosCoinciden =
@@ -3592,12 +3599,12 @@ const datosCoinciden =
     typeof abono.buy_order === "string" &&
 resultado.buy_order === abono.buy_order;
 
-// La aprobación requiere ambas condiciones.
-const aprobado = pagoAutorizado && datosCoinciden;
+// La aprobación requiere identidad, importe y código de autorización válidos.
+const aprobado = pagoAutorizado && datosCoinciden && tieneCodigoAutorizacionWebpay(resultado);
 
-// Si Transbank autorizó el pago, pero los datos no coinciden,
+// Si Transbank indica aprobación, pero faltan datos o autorización válida,
 // NO debemos marcarlo como rechazado ni confirmar la reserva.
-if (pagoAutorizado && !datosCoinciden) {
+if (pagoAutorizado && (!datosCoinciden || !tieneCodigoAutorizacionWebpay(resultado))) {
     await clienteDB.query("ROLLBACK");
 
     console.error(
@@ -3844,7 +3851,8 @@ app.get("/api/abonos/:id/estado", verificarSesion, async (req, res) => {
             monto: abono.monto,
             datos_coinciden: datosCoinciden,
             puede_recuperar: datosCoinciden && resultado.status === "AUTHORIZED" &&
-                resultado.response_code === 0 && abono.estado_local === "pendiente" &&
+                resultado.response_code === 0 && tieneCodigoAutorizacionWebpay(resultado) &&
+                abono.estado_local === "pendiente" &&
                 abono.estado_reserva === "pendiente_abono"
         });
 
@@ -3989,9 +3997,8 @@ if (
         // Exigir autorización y código de respuesta válido.
         if (
             resultado.status !== "AUTHORIZED" ||
-            resultado.response_code === null ||
-            resultado.response_code === undefined ||
-            Number(resultado.response_code) !== 0
+            resultado.response_code !== 0 ||
+            !tieneCodigoAutorizacionWebpay(resultado)
         ) {
             await clienteDB.query("ROLLBACK");
 

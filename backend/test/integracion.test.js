@@ -276,6 +276,45 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    status.status='INITIALIZED';await agent.post('/api/abonos/1/recuperar').expect(200);assert.equal(enviados,0);
    status.status='AUTHORIZED';status.response_code=null;await agent.post('/api/abonos/1/recuperar').expect(409);status.response_code=0;
   });
+  await t.test('Webpay sin código de autorización válido no habilita recuperación ni modifica datos',async()=>{
+   const codigo=status.authorization_code;
+   const antesAbono=(await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows;
+   const antesReserva=(await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows;
+   const antesNotificaciones=(await pool.query('SELECT * FROM notificacion_correo')).rows;
+   const antesEnvios=enviados;
+   try{
+    for(const invalido of [undefined,null,'','   ',123,'x'.repeat(101)]){
+     status.authorization_code=invalido;
+     assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);
+     await agent.post('/api/abonos/1/recuperar').expect(409);
+     assert.deepEqual((await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows,antesAbono);
+     assert.deepEqual((await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows,antesReserva);
+     assert.deepEqual((await pool.query('SELECT * FROM notificacion_correo')).rows,antesNotificaciones);
+     assert.equal(enviados,antesEnvios);
+    }
+   }finally{status.authorization_code=codigo;}
+  });
+  await t.test('Retorno Webpay GET y POST sin autorización válida conserva el pago pendiente y no envía',async()=>{
+   const codigo=status.authorization_code;
+   const tokenOriginal=(await pool.query('SELECT token_transaccion FROM abono WHERE id_abono=1')).rows[0].token_transaccion;
+   const token='b'.repeat(64);
+   await pool.query('UPDATE abono SET token_transaccion=$1 WHERE id_abono=1',[token]);
+   const antesAbono=(await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows;
+   const antesReserva=(await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows;
+   const antesNotificaciones=(await pool.query('SELECT * FROM notificacion_correo')).rows;
+   const antesEnvios=enviados;
+   try{
+    for(const invalido of [undefined,null,'','   ',123,'x'.repeat(101)]){
+     status.authorization_code=invalido;
+     await request(app).get('/api/abonos/retorno').query({token_ws:token}).expect(409);
+     await request(app).post('/api/abonos/retorno').send({token_ws:token}).expect(409);
+     assert.deepEqual((await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows,antesAbono);
+     assert.deepEqual((await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows,antesReserva);
+     assert.deepEqual((await pool.query('SELECT * FROM notificacion_correo')).rows,antesNotificaciones);
+     assert.equal(enviados,antesEnvios);
+    }
+   }finally{status.authorization_code=codigo;await pool.query('UPDATE abono SET token_transaccion=$1 WHERE id_abono=1',[tokenOriginal]);}
+  });
   await t.test('Fallo al guardar outbox revierte pago y reserva',async()=>{
    await pool.query('ALTER TABLE notificacion_correo ADD CONSTRAINT prueba_bloqueo CHECK(false) NOT VALID');
    await agent.post('/api/abonos/1/recuperar').expect(502);

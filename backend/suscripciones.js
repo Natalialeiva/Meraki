@@ -1,5 +1,5 @@
 const {randomUUID}=require('node:crypto');
-const {PLAN,siguienteMes,cifrar,descifrar,hash,validarPago,urlRetorno}=require('./suscripcion-plan');
+const {PLAN,siguienteMes,cifrar,descifrar,hash,validarPago,urlRetorno,normalizarTarjetaInscrita}=require('./suscripcion-plan');
 const {crearOneclick}=require('./oneclick');
 const fechas=`SELECT s.*,TO_CHAR(fecha_inicio,'YYYY-MM-DD') AS fecha_inicio,
  TO_CHAR(fecha_fin_prueba,'YYYY-MM-DD') AS fecha_fin_prueba,TO_CHAR(fecha_proximo_cobro,'YYYY-MM-DD') AS fecha_proximo_cobro,
@@ -84,7 +84,8 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
             let r;
             try{r=await proveedor.finalizar(token);}catch(e){await db.query("UPDATE inscripcion_suscripcion SET estado='revision' WHERE id_inscripcion=$1",[i.id_inscripcion]);throw error(502,'El resultado de la inscripción requiere revisión. No se activaron cobros');}
             if(r.response_code!==0){await db.query("UPDATE inscripcion_suscripcion SET estado='rechazada',fecha_resolucion=CURRENT_TIMESTAMP WHERE id_inscripcion=$1",[i.id_inscripcion]);throw error(409,'La inscripción fue rechazada; no se realizó un cobro');}
-            if(typeof r.tbk_user!=='string'||!r.tbk_user||r.tbk_user.length>255||!/^\d{4}$/.test(String(r.card_number))||typeof r.credit_card_type!=='string'||r.credit_card_type.length>100){
+            const tarjeta=normalizarTarjetaInscrita(r);
+            if(typeof r.tbk_user!=='string'||!r.tbk_user||r.tbk_user.length>255||!tarjeta){
                 await db.query("UPDATE inscripcion_suscripcion SET estado='revision' WHERE id_inscripcion=$1",[i.id_inscripcion]);throw error(502,'La inscripción requiere revisión; no se activaron cobros');
             }
             await db.query('BEGIN');
@@ -96,7 +97,7 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
              dia_cobro=COALESCE(dia_cobro,$4),usuario_oneclick=$5,tarjeta_cifrada=$6,tarjeta_ultimos4=$7,tarjeta_tipo=$8,
              renovacion_automatica=TRUE,consentimiento_fecha=CURRENT_TIMESTAMP,consentimiento_version=$9,
              estado=$10,reintento_autorizado=TRUE,cancelada_fecha=NULL WHERE id_suscripcion=$11`,
-             [primera,hoy(),fin,Number((primera?hoy():s.fecha_inicio).slice(8,10)),i.usuario_oneclick,cifrar(r.tbk_user,secreto),String(r.card_number),r.credit_card_type,PLAN.version,vigente?(primera||hoy()<fin?'prueba':'activa'):'vencida',s.id_suscripcion]);
+             [primera,hoy(),fin,Number((primera?hoy():s.fecha_inicio).slice(8,10)),i.usuario_oneclick,cifrar(r.tbk_user,secreto),tarjeta.ultimos4,tarjeta.tipo,PLAN.version,vigente?(primera||hoy()<fin?'prueba':'activa'):'vencida',s.id_suscripcion]);
             await db.query("UPDATE inscripcion_suscripcion SET estado='completada',fecha_resolucion=CURRENT_TIMESTAMP WHERE id_inscripcion=$1",[i.id_inscripcion]);
             await evento(db,s.id_suscripcion,'tarjeta_inscrita',{version:PLAN.version,primera_prueba:primera});await db.query('COMMIT');
         });
