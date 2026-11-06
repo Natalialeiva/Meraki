@@ -1,1 +1,367 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Back Office | Meraki</title><style>body{font:16px system-ui;max-width:1100px;margin:auto;padding:2rem;background:#faf6f3;color:#382a34}input,select,button,textarea{font:inherit;padding:.6rem;margin:.3rem}article,section{padding:1rem;background:white;border-radius:12px;margin:1rem 0}button{cursor:pointer}pre{white-space:pre-wrap}#perfil fieldset{border:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}#perfil label{display:flex;flex-direction:column}#perfil input,#perfil textarea{box-sizing:border-box;width:100%;margin:.3rem 0}#perfil p{grid-column:1/-1;margin:0}@media(max-width:600px){#perfil fieldset{grid-template-columns:1fr}}#servicioGestion fieldset{border:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}#servicioGestion label{display:flex;flex-direction:column}#servicioGestion input,#servicioGestion textarea,#servicioGestion select{box-sizing:border-box;width:100%;margin:.3rem 0}#servicioGestion p{grid-column:1/-1}@media(max-width:600px){#servicioGestion fieldset{grid-template-columns:1fr}}#perfil fieldset,#servicioGestion fieldset,#perfil label,#servicioGestion label,#perfil input,#servicioGestion input,#servicioGestion select,#perfil textarea,#servicioGestion textarea{min-width:0}#trabajadoraGestion fieldset{border:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;min-width:0}#trabajadoraGestion label{display:flex;flex-direction:column;min-width:0}#trabajadoraGestion input,#trabajadoraGestion textarea{box-sizing:border-box;min-width:0;width:100%;margin:.3rem 0}#trabajadoraGestion p{grid-column:1/-1}#asignacionGestion fieldset{border:0;padding:0;min-width:0}#asignacionGestion select{max-width:100%;box-sizing:border-box}@media(max-width:600px){#trabajadoraGestion fieldset{grid-template-columns:1fr}}#gestionHorarios fieldset{border:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;min-width:0}#gestionHorarios fieldset label{display:flex;flex-direction:column;min-width:0}#gestionHorarios fieldset input,#gestionHorarios fieldset select{box-sizing:border-box;min-width:0;width:100%;margin:.3rem 0}#gestionHorarios fieldset p{grid-column:1/-1}#trabajadoraHorario{max-width:100%}@media(max-width:600px){#gestionHorarios fieldset{grid-template-columns:1fr}}</style><h1>Meraki · Gestión de reservas</h1><a href="/front-office/">Ver catálogo</a><p id="estado" role="status"></p><form id="login"><label>Correo <input name="correo" type="email" required autocomplete="username"></label><label>Contraseña <input name="password" type="password" required autocomplete="current-password"></label><button>Ingresar</button></form><main id="panel" hidden><p id="avisoAcceso" role="status" hidden></p><button id="salir">Cerrar sesión</button><a href="#tituloPerfil">Editar perfil del emprendimiento</a> · <a href="#tituloServicios">Administrar servicios</a> · <a href="#tituloTrabajadoras">Administrar trabajadoras</a> · <a href="#tituloHorarios">Configurar horarios</a> · <a href="#tituloSuscripcion">Suscripción</a><section><h2>Reservas</h2><label>Emprendimiento <select id="negocio"></select></label><button id="cargar">Actualizar</button><div class="filtros"><label>Fecha <input id="filtroFecha" type="date"></label><label>Estado <select id="filtroEstado"><option value="">Todos</option><option value="pendiente_abono">Pendiente de abono</option><option value="confirmada">Confirmada</option><option value="atendida">Atendida</option><option value="no_atendida">No atendida</option><option value="cancelada">Cancelada</option></select></label><button id="limpiarFiltros" type="button">Limpiar filtros</button></div><p id="resumenReservas" role="status"></p><div id="reservas"></div></section><section aria-labelledby="tituloPerfil"><h2 id="tituloPerfil">Perfil del emprendimiento</h2><p>Estos datos se muestran a las clientas en el catálogo.</p><form id="perfil"><fieldset disabled><label>Nombre <input name="nombre" required maxlength="150"></label><label>Descripción <textarea name="descripcion" maxlength="1000" rows="3"></textarea></label><label>Dirección <input name="direccion" maxlength="200"></label><label>Comuna <input name="comuna" maxlength="100"></label><label>Teléfono <input name="telefono" type="tel" maxlength="20"></label><p><button type="submit">Guardar perfil</button><button type="button" data-restaurar-perfil>Restaurar datos guardados</button></p></fieldset></form><p id="estadoPerfil" role="status" aria-live="polite"></p></section><section aria-labelledby="tituloServicios"><h2 id="tituloServicios">Servicios</h2><p>Los cambios de precio y duración se aplican a las nuevas reservas. Las citas existentes conservan sus datos.</p><button type="button" id="actualizarServicios">Actualizar servicios</button><div id="listaServicios"></div><form id="servicioGestion"><h3 data-titulo-servicio>Nuevo servicio</h3><fieldset disabled><label>Nombre <input name="nombre" maxlength="150" required></label><label>Categoría <select name="id_categoria" required></select></label><label>Descripción <textarea name="descripcion" maxlength="1000" rows="3"></textarea></label><label>Precio ($ CLP) <input name="precio" type="number" min="0.01" max="99999999.99" step="0.01" required></label><label>Duración (minutos) <input name="duracion_min" type="number" min="1" max="2147483647" step="1" required></label><label>Abono ($ CLP) <input name="monto_abono" type="number" min="0" max="99999999.99" step="0.01" required></label><p><button type="submit">Guardar servicio</button><button type="button" data-nuevo-servicio>Nuevo servicio</button></p></fieldset></form><p id="estadoServicios" role="status" aria-live="polite"></p></section><section aria-labelledby="tituloTrabajadoras"><h2 id="tituloTrabajadoras">Trabajadoras y servicios asignados</h2><button id="actualizarTrabajadoras" type="button">Actualizar trabajadoras</button><div id="listaTrabajadoras"></div><form id="trabajadoraGestion"><h3 data-titulo-trabajadora>Nueva trabajadora</h3><fieldset disabled><label>Nombre <input name="nombre" maxlength="100" required></label><label>Apellido (opcional) <input name="apellido" maxlength="100"></label><label>Descripción (opcional) <textarea name="descripcion" maxlength="1000" rows="3"></textarea></label><p><button type="submit">Guardar trabajadora</button><button type="button" data-nueva-trabajadora>Nueva trabajadora</button></p></fieldset></form><h3 id="tituloAsignaciones">Selecciona una trabajadora para administrar sus servicios.</h3><div id="asignacionesTrabajadora"></div><form id="asignacionGestion"><fieldset disabled><label>Servicio para asignar <select name="id_servicio" required></select></label><button type="submit">Asignar servicio</button></fieldset></form><p>Asignar un servicio no crea horas disponibles. La trabajadora también necesita un horario de atención configurado.</p><p id="estadoTrabajadoras" role="status" aria-live="polite"></p></section><section id="gestionHorarios" aria-labelledby="tituloHorarios"><h2 id="tituloHorarios">Horarios y bloqueos</h2><p>Las horas y fechas corresponden a Chile. Cambiar un horario no cancela las citas existentes; revísalas en la agenda.</p><label>Trabajadora <select id="trabajadoraHorario"></select></label><button id="actualizarHorarios" type="button">Actualizar horarios</button><h3>Horarios semanales</h3><div id="listaHorarios"></div><form id="horarioGestion"><h3 id="tituloEdicionHorario">Nuevo horario semanal</h3><fieldset disabled><label>Día <select name="dia_semana" required><option value="lunes">Lunes</option><option value="martes">Martes</option><option value="miercoles">Miércoles</option><option value="jueves">Jueves</option><option value="viernes">Viernes</option><option value="sabado">Sábado</option><option value="domingo">Domingo</option></select></label><label>Inicio <input name="hora_inicio" type="time" step="1" required></label><label>Término <input name="hora_fin" type="time" step="1" required></label><p><button type="submit">Guardar horario</button><button id="nuevoHorario" type="button">Nuevo horario</button></p></fieldset></form><h3>Bloqueos por fecha</h3><div id="listaBloqueos"></div><form id="bloqueoGestion"><fieldset disabled><label>Inicio del bloqueo <input name="fecha_inicio" type="datetime-local" step="60" required></label><label>Término del bloqueo <input name="fecha_fin" type="datetime-local" step="60" required></label><label>Motivo (opcional) <input name="motivo" maxlength="255"></label><p><button type="submit">Registrar bloqueo</button></p></fieldset></form><p>No se permiten bloqueos superpuestos ni sobre reservas pendientes de abono o confirmadas.</p><p id="estadoHorarios" role="status" aria-live="polite"></p></section><section><h2>Revisión de pagos</h2><p>Selecciona un abono desde la agenda o escribe su número. Primero consulta su estado en Webpay.</p><form id="pago"><label>Número de abono <input name="id" type="number" min="1" required></label><button name="accion" value="estado">Consultar en Webpay</button><button id="recuperarPago" name="accion" value="recuperar" disabled>Registrar pago ya aprobado</button></form><p>Consultar solo revisa el estado: no cobra ni modifica la reserva. Registrar un pago aprobado verifica nuevamente Webpay y, si corresponde, confirma la reserva y gestiona su correo. No inicia otro cobro.</p><div id="resultadoPago" role="status" aria-live="polite"></div></section><section id="gestionSuscripcion" aria-labelledby="tituloSuscripcion"><h2 id="tituloSuscripcion">Suscripción mensual a Meraki</h2><div id="detalleSuscripcion"></div><p>Un mes calendario gratuito al inscribir tu tarjeta por primera vez. Después, $9.990 CLP mensuales con renovación automática hasta que la canceles. La inscripción no realiza el cobro mensual. No se acumulan cobros de meses atrasados.</p><label><input id="consentimientoSuscripcion" type="checkbox"> Autorizo la inscripción y los cobros automáticos de $9.990 CLP mensuales una vez terminado mi mes gratuito. Puedo cancelar la renovación desde este panel. Si ya usé la prueba gratuita, la reactivación no concede otro mes gratis y puede generar el cobro del período vencido.</label><p><button id="inscribirSuscripcion" type="button" disabled>Inscribir tarjeta y comenzar mes gratuito</button><button id="cancelarSuscripcion" type="button" hidden>Cancelar renovación automática</button><button id="reintentarSuscripcion" type="button" hidden>Autorizar otro intento de $9.990</button><button id="actualizarSuscripcion" type="button">Actualizar suscripción</button></p><p>Las operaciones se realizan en el ambiente de integración de Transbank. No ingreses una tarjeta real en esta demostración.</p><p id="estadoSuscripcion" role="status" aria-live="polite"></p><h3>Últimos cobros</h3><div id="pagosSuscripcion"></div></section><section><h2>Notificaciones</h2><p>Antes de resolver un envío interrumpido, verifica su entrega en el proveedor y registra la evidencia. Un resultado incierto debe permanecer en revisión.</p><button id="actualizar">Actualizar notificaciones</button><div id="notificaciones"></div></section></main><script src="agenda.js"></script><script src="pagos.js"></script><script src="perfil.js?v=1"></script><script src="servicios.js?v=acceso-1"></script><script src="trabajadoras.js?v=acceso-1"></script><script src="horarios.js?v=acceso-1"></script><script src="suscripcion.js?v=acceso-1"></script><script src="back.js?v=acceso-1"></script></html>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f5f8">
+<title>Mi negocio | Meraki</title>
+<link rel="stylesheet" href="gestion.css?v=gestion-1">
+</head>
+<body>
+<a class="saltar" href="#tituloVista">Saltar al contenido</a>
+<p id="estado" class="estado-global" role="status" aria-live="polite"></p>
+<div id="acceso" class="acceso">
+<div class="tarjeta-acceso">
+<img class="logo-acceso" src="/front-office/assets/logo-meraki-transparente.png" alt="Meraki" width="180" height="60">
+<h1>Tu negocio, en orden.</h1>
+<p>Ingresa para gestionar tus reservas y acompañar a tus clientas.</p>
+<form id="login">
+<label>Correo <input name="correo" type="email" required autocomplete="username">
+</label>
+<label for="claveIngreso">Contraseña</label>
+<span class="campo-clave">
+<input id="claveIngreso" name="password" type="password" required autocomplete="current-password">
+<button id="mostrarClave" type="button" aria-label="Mostrar contraseña" title="Mostrar contraseña" aria-controls="claveIngreso" aria-pressed="false">
+<svg class="ojo-abierto" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/>
+<circle cx="12" cy="12" r="3"/>
+</svg>
+<svg class="ojo-cerrado" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m3 3 18 18M10.6 5.1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.7M6.3 6.3A21 21 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.7-1.7M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
+</svg>
+</button>
+</span>
+<button>Ingresar</button>
+</form>
+<a class="enlace-catalogo" href="/front-office/">Volver al catálogo</a>
+</div>
+</div>
+<main id="panel" class="panel-gestion" hidden>
+<aside class="barra-lateral">
+<a class="marca" href="#tituloReservas" aria-label="Meraki, ir a reservas">
+<img src="/front-office/assets/logo-meraki-transparente.png" alt="Meraki" width="150" height="50">
+<small>Espacio emprendedora</small>
+</a>
+<p class="grupo-menu">Tu día a día</p>
+<nav id="menuGestion" class="menu-gestion" aria-label="Gestión del negocio">
+<a href="#tituloReservas" data-destino="reservas" aria-current="page">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm3 10h2m4 0h2m-8 4h2"/>
+</svg>
+<span>Reservas</span>
+</a>
+<a href="#tituloServicios" data-destino="servicios">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z"/>
+</svg>
+<span>Servicios</span>
+</a>
+<a href="#tituloTrabajadoras" data-destino="equipo">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/>
+</svg>
+<span>Equipo</span>
+</a>
+<a href="#tituloHorarios" data-destino="horarios">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 8v4l3 2m7-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/>
+</svg>
+<span>Horarios</span>
+</a>
+<hr class="separador-menu">
+<p class="grupo-menu">Tu negocio</p>
+<a href="#tituloPagos" data-destino="pagos">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M2 8h20M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm2 11h4"/>
+</svg>
+<span>Pagos</span>
+</a>
+<a href="#tituloNotificaciones" data-destino="notificaciones">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>
+</svg>
+<span>Notificaciones</span>
+</a>
+<a href="#tituloPerfil" data-destino="perfil">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m3 10 9-7 9 7M5 9v12h14V9m-10 12v-8h6v8"/>
+</svg>
+<span>Perfil del negocio</span>
+</a>
+<a href="#tituloSuscripcion" data-destino="suscripcion">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Zm-4 9 3 3 5-6"/>
+</svg>
+<span>Suscripción</span>
+</a>
+</nav>
+<div class="futuro">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z"/>
+</svg>
+<span>Dashboard</span>
+<span>Próximamente</span>
+</div>
+<div class="pie-menu">
+<a href="/front-office/" target="_blank" rel="noopener" aria-label="Ver catálogo público en otra pestaña">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M15 3h6v6m0-6L10 14m0-11H3v18h18v-7"/>
+</svg>
+<span>Ver catálogo público</span>
+</a>
+<button id="salir" type="button" aria-label="Cerrar sesión">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M9 21H4V3h5m5 14 5-5-5-5m-7 5h12"/>
+</svg>
+<span>Cerrar sesión</span>
+</button>
+</div>
+</aside>
+<div class="contenido-gestion">
+<header class="barra-superior">
+<span class="contexto">
+<span class="sello">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m3 10 9-7 9 7M5 9v12h14V9m-10 12v-8h6v8"/>
+</svg>
+</span>Tu espacio de trabajo</span>
+<label class="selector-negocio">
+<span>Emprendimiento</span>
+<select id="negocio" aria-label="Emprendimiento"></select>
+</label>
+</header>
+<div class="introduccion">
+<p class="eyebrow">GESTIÓN MERAKI</p>
+<h1 id="tituloVista" tabindex="-1">Reservas</h1>
+<p id="descripcionVista">Tu agenda y tus próximas atenciones, en un solo lugar.</p>
+</div>
+<p id="avisoAcceso" class="aviso-acceso" role="status" hidden></p>
+<section class="vista" data-vista="reservas">
+<div class="encabezado-seccion">
+<div>
+<h2 id="tituloReservas" tabindex="-1">Agenda de reservas</h2>
+<p>Consulta las citas y gestiona cada atención.</p>
+</div>
+<button id="cargar" type="button">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M20 7v5h-5M4 17v-5h5m-4.9-1a8 8 0 0 1 13.2-5.5L20 8M4 16l2.7 2.5A8 8 0 0 0 19.9 13"/>
+</svg>Actualizar agenda</button>
+</div>
+<div class="filtros">
+<label>Fecha <input id="filtroFecha" type="date">
+</label>
+<label>Estado <select id="filtroEstado">
+<option value="">Todos</option>
+<option value="pendiente_abono">Pendiente de abono</option>
+<option value="confirmada">Confirmada</option>
+<option value="atendida">Atendida</option>
+<option value="no_atendida">No atendida</option>
+<option value="cancelada">Cancelada</option>
+</select>
+</label>
+<button id="limpiarFiltros" type="button">Limpiar filtros</button>
+</div>
+<div class="agenda-metricas" aria-label="Resumen de la agenda">
+<article>
+<small>Reservas en agenda</small>
+<strong id="totalReservas">0</strong>
+<span class="punto" aria-hidden="true"></span>
+</article>
+<article>
+<small>Para hoy</small>
+<strong id="reservasHoy">0</strong>
+<span class="punto" aria-hidden="true"></span>
+</article>
+<article>
+<small>Confirmadas</small>
+<strong id="reservasConfirmadas">0</strong>
+<span class="punto" aria-hidden="true"></span>
+</article>
+<article>
+<small>Pendientes de abono</small>
+<strong id="reservasPendientes">0</strong>
+<span class="punto" aria-hidden="true"></span>
+</article>
+</div>
+<p id="resumenReservas" role="status"></p>
+<div id="reservas"></div>
+</section>
+<section class="vista" data-vista="perfil" hidden aria-labelledby="tituloPerfil">
+<h2 id="tituloPerfil" tabindex="-1">Perfil del emprendimiento</h2>
+<p>Estos datos se muestran a las clientas en el catálogo.</p>
+<form id="perfil">
+<fieldset disabled>
+<label>Nombre <input name="nombre" required maxlength="150">
+</label>
+<label>Descripción <textarea name="descripcion" maxlength="1000" rows="3"></textarea>
+</label>
+<label>Dirección <input name="direccion" maxlength="200">
+</label>
+<label>Comuna <input name="comuna" maxlength="100">
+</label>
+<label>Teléfono <input name="telefono" type="tel" maxlength="20">
+</label>
+<p>
+<button type="submit">Guardar perfil</button>
+<button type="button" data-restaurar-perfil>Restaurar datos guardados</button>
+</p>
+</fieldset>
+</form>
+<p id="estadoPerfil" role="status" aria-live="polite"></p>
+</section>
+<section class="vista" data-vista="servicios" hidden aria-labelledby="tituloServicios">
+<h2 id="tituloServicios" tabindex="-1">Servicios</h2>
+<p>Los cambios de precio y duración se aplican a las nuevas reservas. Las citas existentes conservan sus datos.</p>
+<button type="button" id="actualizarServicios">Actualizar servicios</button>
+<div id="listaServicios"></div>
+<form id="servicioGestion">
+<h3 data-titulo-servicio>Nuevo servicio</h3>
+<fieldset disabled>
+<label>Nombre <input name="nombre" maxlength="150" required>
+</label>
+<label>Categoría <select name="id_categoria" required></select>
+</label>
+<label>Descripción <textarea name="descripcion" maxlength="1000" rows="3"></textarea>
+</label>
+<label>Precio ($ CLP) <input name="precio" type="number" min="0.01" max="99999999.99" step="0.01" required>
+</label>
+<label>Duración (minutos) <input name="duracion_min" type="number" min="1" max="2147483647" step="1" required>
+</label>
+<label>Abono ($ CLP) <input name="monto_abono" type="number" min="0" max="99999999.99" step="0.01" required>
+</label>
+<p>
+<button type="submit">Guardar servicio</button>
+<button type="button" data-nuevo-servicio>Nuevo servicio</button>
+</p>
+</fieldset>
+</form>
+<p id="estadoServicios" role="status" aria-live="polite"></p>
+</section>
+<section class="vista" data-vista="equipo" hidden aria-labelledby="tituloTrabajadoras">
+<h2 id="tituloTrabajadoras" tabindex="-1">Trabajadoras y servicios asignados</h2>
+<button id="actualizarTrabajadoras" type="button">Actualizar trabajadoras</button>
+<div id="listaTrabajadoras"></div>
+<form id="trabajadoraGestion">
+<h3 data-titulo-trabajadora>Nueva trabajadora</h3>
+<fieldset disabled>
+<label>Nombre <input name="nombre" maxlength="100" required>
+</label>
+<label>Apellido (opcional) <input name="apellido" maxlength="100">
+</label>
+<label>Descripción (opcional) <textarea name="descripcion" maxlength="1000" rows="3"></textarea>
+</label>
+<p>
+<button type="submit">Guardar trabajadora</button>
+<button type="button" data-nueva-trabajadora>Nueva trabajadora</button>
+</p>
+</fieldset>
+</form>
+<h3 id="tituloAsignaciones">Selecciona una trabajadora para administrar sus servicios.</h3>
+<div id="asignacionesTrabajadora"></div>
+<form id="asignacionGestion">
+<fieldset disabled>
+<label>Servicio para asignar <select name="id_servicio" required></select>
+</label>
+<button type="submit">Asignar servicio</button>
+</fieldset>
+</form>
+<p>Asignar un servicio no crea horas disponibles. La trabajadora también necesita un horario de atención configurado.</p>
+<p id="estadoTrabajadoras" role="status" aria-live="polite"></p>
+</section>
+<section class="vista" data-vista="horarios" hidden id="gestionHorarios" aria-labelledby="tituloHorarios">
+<h2 id="tituloHorarios" tabindex="-1">Horarios y bloqueos</h2>
+<p>Las horas y fechas corresponden a Chile. Cambiar un horario no cancela las citas existentes; revísalas en la agenda.</p>
+<label>Trabajadora <select id="trabajadoraHorario"></select>
+</label>
+<button id="actualizarHorarios" type="button">Actualizar horarios</button>
+<h3>Horarios semanales</h3>
+<div id="listaHorarios"></div>
+<form id="horarioGestion">
+<h3 id="tituloEdicionHorario">Nuevo horario semanal</h3>
+<fieldset disabled>
+<label>Día <select name="dia_semana" required>
+<option value="lunes">Lunes</option>
+<option value="martes">Martes</option>
+<option value="miercoles">Miércoles</option>
+<option value="jueves">Jueves</option>
+<option value="viernes">Viernes</option>
+<option value="sabado">Sábado</option>
+<option value="domingo">Domingo</option>
+</select>
+</label>
+<label>Inicio <input name="hora_inicio" type="time" step="1" required>
+</label>
+<label>Término <input name="hora_fin" type="time" step="1" required>
+</label>
+<p>
+<button type="submit">Guardar horario</button>
+<button id="nuevoHorario" type="button">Nuevo horario</button>
+</p>
+</fieldset>
+</form>
+<h3>Bloqueos por fecha</h3>
+<div id="listaBloqueos"></div>
+<form id="bloqueoGestion">
+<fieldset disabled>
+<label>Inicio del bloqueo <input name="fecha_inicio" type="datetime-local" step="60" required>
+</label>
+<label>Término del bloqueo <input name="fecha_fin" type="datetime-local" step="60" required>
+</label>
+<label>Motivo (opcional) <input name="motivo" maxlength="255">
+</label>
+<p>
+<button type="submit">Registrar bloqueo</button>
+</p>
+</fieldset>
+</form>
+<p>No se permiten bloqueos superpuestos ni sobre reservas pendientes de abono o confirmadas.</p>
+<p id="estadoHorarios" role="status" aria-live="polite"></p>
+</section>
+<section class="vista" data-vista="pagos" hidden>
+<h2 id="tituloPagos" tabindex="-1">Revisión de pagos</h2>
+<p>Selecciona un abono desde la agenda o escribe su número. Primero consulta su estado en Webpay.</p>
+<form id="pago">
+<label>Número de abono <input name="id" type="number" min="1" required>
+</label>
+<button name="accion" value="estado">Consultar en Webpay</button>
+<button id="recuperarPago" name="accion" value="recuperar" disabled>Registrar pago ya aprobado</button>
+</form>
+<p>Consultar solo revisa el estado: no cobra ni modifica la reserva. Registrar un pago aprobado verifica nuevamente Webpay y, si corresponde, confirma la reserva y gestiona su correo. No inicia otro cobro.</p>
+<div id="resultadoPago" role="status" aria-live="polite"></div>
+</section>
+<section class="vista" data-vista="suscripcion" hidden id="gestionSuscripcion" aria-labelledby="tituloSuscripcion">
+<h2 id="tituloSuscripcion" tabindex="-1">Suscripción mensual a Meraki</h2>
+<div id="detalleSuscripcion"></div>
+<p>Un mes calendario gratuito al inscribir tu tarjeta por primera vez. Después, $9.990 CLP mensuales con renovación automática hasta que la canceles. La inscripción no realiza el cobro mensual. No se acumulan cobros de meses atrasados.</p>
+<label id="consentimientoPlan">
+<input id="consentimientoSuscripcion" type="checkbox"> Autorizo la inscripción y los cobros automáticos de $9.990 CLP mensuales una vez terminado mi mes gratuito. Puedo cancelar la renovación desde este panel. Si ya usé la prueba gratuita, la reactivación no concede otro mes gratis y puede generar el cobro del período vencido.</label>
+<p>
+<button id="inscribirSuscripcion" type="button" disabled>Inscribir tarjeta y comenzar mes gratuito</button>
+<button id="cancelarSuscripcion" type="button" hidden>Cancelar renovación automática</button>
+<button id="reintentarSuscripcion" type="button" hidden>Autorizar otro intento de $9.990</button>
+<button id="actualizarSuscripcion" type="button">Actualizar suscripción</button>
+</p>
+<p>Las operaciones se realizan en el ambiente de integración de Transbank. No ingreses una tarjeta real en esta demostración.</p>
+<p id="estadoSuscripcion" role="status" aria-live="polite"></p>
+<h3>Últimos cobros</h3>
+<div id="pagosSuscripcion"></div>
+</section>
+<section class="vista" data-vista="notificaciones" hidden>
+<h2 id="tituloNotificaciones" tabindex="-1">Notificaciones</h2>
+<p>Antes de resolver un envío interrumpido, verifica su entrega en el proveedor y registra la evidencia. Un resultado incierto debe permanecer en revisión.</p>
+<button id="actualizar">Actualizar notificaciones</button>
+<div id="notificaciones"></div>
+</section>
+</div>
+</main>
+<script src="agenda.js"></script>
+<script src="pagos.js"></script>
+<script src="perfil.js?v=1"></script>
+<script src="servicios.js?v=acceso-1"></script>
+<script src="trabajadoras.js?v=acceso-1"></script>
+<script src="horarios.js?v=acceso-1"></script>
+<script src="suscripcion.js?v=gestion-1"></script>
+<script src="navegacion.js?v=gestion-1"></script>
+<script src="back.js?v=gestion-1"></script>
+</body>
+</html>

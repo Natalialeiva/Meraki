@@ -1,5 +1,22 @@
 const $=s=>document.querySelector(s);const estado=$('#estado');
-async function api(url,method='GET',data){const r=await fetch(url,{method,headers:{'Content-Type':'application/json','X-Meraki-Action':'1'},body:data?JSON.stringify(data):undefined});let d;try{d=JSON.parse(await r.text());}catch{throw Error('El servidor devolvió una respuesta inesperada. Intenta nuevamente.');}if(r.status===401){$('#panel').hidden=true;$('#login').hidden=false;}if(r.status===402)void suscripcion.cargar();if(!r.ok)throw Error(d.mensaje||'No se pudo completar la operación');return d;}
+const navegacion=MerakiNavegacion.montar({contenedor:$('#panel'),menu:$('#menuGestion'),titulo:$('#tituloVista'),descripcion:$('#descripcionVista')});
+const claveIngreso=$('#claveIngreso'),mostrarClave=$('#mostrarClave');
+function ocultarClave(){
+    claveIngreso.type='password';
+    mostrarClave.setAttribute('aria-label','Mostrar contraseña');
+    mostrarClave.title='Mostrar contraseña';
+    mostrarClave.setAttribute('aria-pressed','false');
+}
+mostrarClave.onclick=()=>{
+    const mostrar=claveIngreso.type==='password';
+    claveIngreso.type=mostrar?'text':'password';
+    const etiqueta=mostrar?'Ocultar contraseña':'Mostrar contraseña';
+    mostrarClave.setAttribute('aria-label',etiqueta);
+    mostrarClave.title=etiqueta;
+    mostrarClave.setAttribute('aria-pressed',String(mostrar));
+};
+$('#login').addEventListener('reset',ocultarClave);
+async function api(url,method='GET',data){const r=await fetch(url,{method,headers:{'Content-Type':'application/json','X-Meraki-Action':'1'},body:data?JSON.stringify(data):undefined});let d;try{d=JSON.parse(await r.text());}catch{throw Error('El servidor devolvió una respuesta inesperada. Intenta nuevamente.');}if(r.status===401){$('#panel').hidden=true;$('#login').hidden=false;$('#acceso').hidden=false;}if(r.status===402)void suscripcion.cargar();if(!r.ok)throw Error(d.mensaje||'No se pudo completar la operación');return d;}
 function mostrar(el,datos){el.replaceChildren();if(!datos.length)el.textContent='No hay registros.';for(const d of datos){const a=document.createElement('article');for(const [k,v] of Object.entries(d)){const p=document.createElement('p');p.textContent=k.replaceAll('_',' ')+': '+v;a.append(p);}el.append(a);}}
 
 let negociosPerfil=[];
@@ -30,17 +47,28 @@ const dinero=valor=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CL
 function textoArticulo(articulo,valor){const p=document.createElement('p');p.textContent=valor;articulo.append(p);}
 function renderAgenda(){
     const visibles=MerakiAgenda.filtrar(agendaReservas,$('#filtroFecha').value,$('#filtroEstado').value);
+    const hoy=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    $('#totalReservas').textContent=agendaReservas.length;
+    $('#reservasHoy').textContent=agendaReservas.filter(r=>r.fecha_hora_inicio.slice(0,10)===hoy).length;
+    $('#reservasConfirmadas').textContent=agendaReservas.filter(r=>r.estado==='confirmada').length;
+    $('#reservasPendientes').textContent=agendaReservas.filter(r=>r.estado==='pendiente_abono').length;
     const lista=$('#reservas');lista.replaceChildren();
     $('#resumenReservas').textContent=visibles.length+' de '+agendaReservas.length+' reservas';
-    if(!visibles.length){lista.textContent='No hay reservas para los filtros seleccionados.';return;}
+    if(!visibles.length){const vacio=document.createElement('div');vacio.className='sin-reservas';vacio.textContent='No hay reservas para los filtros seleccionados.';lista.append(vacio);return;}
     for(const r of visibles){
-        const a=document.createElement('article'),titulo=document.createElement('h3');
-        titulo.textContent='Reserva '+r.id_reserva+' · '+MerakiAgenda.estado(r.estado);a.append(titulo);
-        textoArticulo(a,r.clienta+' · '+r.servicio+' · '+r.trabajadora);
-        textoArticulo(a,'Inicio: '+r.fecha_hora_inicio.replace('T',' ')+' · Fin: '+r.fecha_hora_fin.replace('T',' '));
-        textoArticulo(a,'Servicio: '+dinero(r.precio_servicio)+' · Abono: '+dinero(r.monto_abono));
-        textoArticulo(a,r.id_abono?'Abono '+r.id_abono+': '+MerakiAgenda.estado(r.estado_abono):'Sin intentos de pago registrados.');
-        if(r.id_abono && ['pendiente_abono','confirmada'].includes(r.estado))textoArticulo(a,'La cancelación requiere gestionar primero el pago asociado.');
+        const a=document.createElement('article');a.className='reserva-card';
+        const cabecera=document.createElement('div');cabecera.className='reserva-cabecera';
+        const titulo=document.createElement('h3');titulo.textContent='Reserva #'+r.id_reserva;
+        const etiqueta=document.createElement('span');etiqueta.className='reserva-estado';etiqueta.dataset.estado=r.estado;etiqueta.textContent=MerakiAgenda.estado(r.estado);cabecera.append(titulo,etiqueta);a.append(cabecera);
+        const parrafo=(texto,clase)=>{const p=document.createElement('p');p.textContent=texto;p.className=clase;a.append(p);};
+        parrafo(r.clienta+' · '+r.servicio,'reserva-persona');
+        const fecha=new Intl.DateTimeFormat('es-CL',{day:'numeric',month:'short',year:'numeric'}).format(new Date(r.fecha_hora_inicio.slice(0,10)+'T12:00:00'));
+        parrafo(fecha+' · '+r.fecha_hora_inicio.slice(11,16)+' a '+r.fecha_hora_fin.slice(11,16)+' h','reserva-fecha');
+        parrafo('Profesional: '+r.trabajadora,'reserva-detalle');
+        parrafo('Servicio: '+dinero(r.precio_servicio)+' · Abono: '+dinero(r.monto_abono),'reserva-detalle');
+        parrafo(r.id_abono?'Abono '+r.id_abono+': '+MerakiAgenda.estado(r.estado_abono):'Sin intentos de pago registrados.','reserva-detalle');
+        if(r.id_abono&&['pendiente_abono','confirmada'].includes(r.estado))parrafo('Para cancelar esta reserva, primero revisa el pago asociado.','reserva-nota');
+        const acciones=document.createElement('div');acciones.className='acciones-reserva';
         for(const opcion of MerakiAgenda.acciones(r)){
             const b=document.createElement('button');b.type='button';b.textContent=opcion.texto;
             b.onclick=async()=>{
@@ -48,13 +76,13 @@ function renderAgenda(){
                 for(const x of a.querySelectorAll('button'))x.disabled=true;
                 try{const d=await api('/api/reservas/'+r.id_reserva+'/'+opcion.accion,'PATCH');estado.textContent=d.mensaje;await reservas();}
                 catch(e){estado.textContent=e.message;for(const x of a.querySelectorAll('button'))x.disabled=false;}
-            };a.append(b);
+            };acciones.append(b);
         }
         if(r.id_abono){
-            const b=document.createElement('button');b.type='button';b.textContent='Revisar abono '+r.id_abono;
-            b.onclick=()=>{$('#pago input[name="id"]').value=r.id_abono;invalidarConsultaPago();$('#resultadoPago').textContent='Abono '+r.id_abono+' seleccionado para la reserva '+r.id_reserva+'.';$('#pago').scrollIntoView({behavior:'smooth',block:'center'});};a.append(b);
+            const b=document.createElement('button');b.type='button';b.className='accion-abono';b.textContent='Revisar abono '+r.id_abono;
+            b.onclick=()=>{$('#pago input[name="id"]').value=r.id_abono;invalidarConsultaPago();$('#resultadoPago').textContent='Abono '+r.id_abono+' seleccionado para la reserva '+r.id_reserva+'.';navegacion.mostrar('pagos');$('#pago').scrollIntoView({behavior:'auto',block:'center'});};acciones.append(b);
         }
-        lista.append(a);
+        a.append(acciones);lista.append(a);
     }
 }
 async function reservas(){
@@ -69,8 +97,8 @@ $('#filtroFecha').onchange=$('#filtroEstado').onchange=renderAgenda;
 $('#limpiarFiltros').onclick=()=>{$('#filtroFecha').value='';$('#filtroEstado').value='';renderAgenda();};
 
 async function notificaciones(){const datos=await api('/api/notificaciones');mostrar($('#notificaciones'),datos);[...$('#notificaciones').children].forEach((a,i)=>{const n=datos[i];if(!n)return;const opciones=n.requiere_revision?[['entregado','Confirmar entrega'],['no_entregado','Confirmar que no se entregó']]:['fallido','pendiente'].includes(n.estado)&&n.intentos<3?[['reintentar','Reintentar envío']]:[];if(!opciones.length)return;const label=document.createElement('label'),e=document.createElement('textarea');label.textContent='Evidencia (sin enlaces privados ni datos personales)';e.minLength=10;e.maxLength=500;label.append(e);a.append(label);for(const [decision,titulo] of opciones){const b=document.createElement('button');b.textContent=titulo;b.onclick=async()=>{if(e.value.trim().length<10){estado.textContent='Registra al menos 10 caracteres de evidencia.';return;}if(!confirm(titulo+' para la reserva '+n.id_reserva+'?'))return;for(const x of a.querySelectorAll('button'))x.disabled=true;try{const d=await api('/api/notificaciones/'+n.id_notificacion+'/'+(decision==='reintentar'?'reintentar':'revisar'),'POST',{decision,evidencia:e.value});estado.textContent=d.requiereRevision?'Resultado incierto. Revisa el proveedor antes de reenviar.':d.enviado?'Proveedor aceptó el mensaje.':d.revisado?'Revisión registrada.':'No se envió. Consulta el estado actualizado.';await notificaciones();}catch(err){estado.textContent=err.message;for(const x of a.querySelectorAll('button'))x.disabled=false;}};a.append(b);}});}
-async function iniciar(){await api('/api/auth/yo');const negocios=await api('/api/mis-emprendimientos');negociosPerfil=negocios;$('#negocio').replaceChildren();for(const n of negocios){const o=document.createElement('option');o.value=n.id_emprendimiento;o.textContent=n.nombre;$('#negocio').append(o);}$('#login').hidden=true;$('#panel').hidden=false;cargarPerfil();if(negocios.length)await reservas();await servicios.cargar($('#negocio').value);await trabajadoras.cargar($('#negocio').value);await horarios.cargar($('#negocio').value);await suscripcion.cargar();await notificaciones();}
-$('#login').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{await api('/api/auth/login','POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await iniciar();estado.textContent='Sesión iniciada.';}catch(e){estado.textContent=e.message;}finally{b.disabled=false;}};
+async function iniciar(){await api('/api/auth/yo');const negocios=await api('/api/mis-emprendimientos');negociosPerfil=negocios;$('#negocio').replaceChildren();for(const n of negocios){const o=document.createElement('option');o.value=n.id_emprendimiento;o.textContent=n.nombre;$('#negocio').append(o);}$('#login').hidden=true;$('#acceso').hidden=true;$('#panel').hidden=false;navegacion.iniciar();cargarPerfil();if(negocios.length)await reservas();await servicios.cargar($('#negocio').value);await trabajadoras.cargar($('#negocio').value);await horarios.cargar($('#negocio').value);await suscripcion.cargar();await notificaciones();}
+$('#login').onsubmit=async e=>{e.preventDefault();ocultarClave();const b=e.submitter;b.disabled=true;try{await api('/api/auth/login','POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await iniciar();estado.textContent='Sesión iniciada.';}catch(e){estado.textContent=e.message;}finally{b.disabled=false;}};
 $('#salir').onclick=async()=>{try{await api('/api/auth/logout','POST');location.reload();}catch(e){estado.textContent=e.message;}};
 $('#cargar').onclick=()=>reservas().catch(e=>estado.textContent=e.message);
 $('#negocio').onchange=()=>{

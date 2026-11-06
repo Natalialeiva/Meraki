@@ -6,11 +6,14 @@
         function controles(){
             const s=datos?.suscripcion,pendiente=['iniciando','pendiente','confirmando','revision'].includes(s?.inscripcion);
             inscribir.disabled=ocupado||!datos||!acepta.checked||Boolean(s?.renovacion_automatica)||pendiente;
-            inscribir.textContent=s?.fecha_fin_prueba?'Inscribir tarjeta y reactivar renovación':'Inscribir tarjeta y comenzar mes gratuito';
+            inscribir.textContent=s?.renovacion_automatica?'Tarjeta inscrita':s?.fecha_fin_prueba?'Inscribir tarjeta y reactivar renovación':'Inscribir tarjeta y comenzar mes gratuito';
+            inscribir.hidden=Boolean(s?.renovacion_automatica)&&!pendiente;
             cancelar.hidden=!s||(!s.renovacion_automatica&&!pendiente);cancelar.disabled=ocupado;
             const ultimo=datos?.pagos?.[0];
             reintentar.hidden=!s?.renovacion_automatica||ultimo?.estado!=='rechazado'||ultimo?.proceso!=='finalizado';
             reintentar.disabled=ocupado||!acepta.checked;actualizar.disabled=ocupado;acepta.disabled=ocupado;
+            const consentimientoPlan=$('#consentimientoPlan');
+            if(consentimientoPlan)consentimientoPlan.hidden=Boolean(s?.renovacion_automatica)&&reintentar.hidden;
         }
         function parrafo(elemento,texto){const p=documento.createElement('p');p.textContent=texto;elemento.append(p);}
         function dibujar(){
