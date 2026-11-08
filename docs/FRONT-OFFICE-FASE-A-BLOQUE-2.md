@@ -1,5 +1,7 @@
 # Front Office — Fase A, bloque A2
 
+> Registro histórico. El puerto 3001 fue un entorno temporal de desarrollo. Los comandos y rutas de demo citados aquí se conservan como evidencia y ya no forman parte del proyecto. La plataforma vigente se ejecuta en localhost:3000.
+
 Estado vigente: **Bloque A2 aprobado por Adriana, pendiente de publicación manual**.
 El cierre A2.3 al final de este documento describe los recursos y resultados
 actuales. Las secciones anteriores son historial y no describen la versión final.

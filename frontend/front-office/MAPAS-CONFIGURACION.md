@@ -81,11 +81,10 @@ incluye A1/A2/A3, aislamiento de recursos y protección de demo. No es una prueb
 del servicio Google real; quedan pendientes restricciones reales, cuotas, errores
 de consola del SDK, atribución y accesibilidad del mapa con el proveedor habilitado.
 
-Para revisar sin Google: iniciar la demo habitual, abrir
-http://localhost:3001/front-office/, recargar y pulsar «Ver mapa». En otra terminal:
+Para revisar sin Google, abrir Meraki principal en http://localhost:3000/front-office/ y pulsar «Ver mapa». Ejecutar estas pruebas desde la raíz del repositorio:
 
 ```text
-node --test backend/test/front.test.js backend/test/geografia.test.js backend/test/ubicacion.test.js backend/test/mapa.test.js backend/test/mapa-google.test.js demo/server.test.cjs demo/verify.test.cjs
+node --test backend/test/front.test.js backend/test/geografia.test.js backend/test/ubicacion.test.js backend/test/mapa.test.js backend/test/mapa-google.test.js
 ```
 
 Fuentes de diseño:
@@ -119,7 +118,7 @@ cancelaciones, incluyendo A1/A2/A3, proveedores simulados y protección demo.
 Sintaxis y git diff --check correctos. No se ejecutó la regresión PostgreSQL.
 Chrome a 1440, 768 y 390 px: apertura, detalle, acción Ver servicios, cierre,
 filtro Lavanda, cero resultados y Ver todos correctos. Sin desbordamiento
-horizontal; ubicación simulada y negocios de meraki_demo, sin crear reservas.
+horizontal; ubicación simulada y negocios de meraki_demo, sin crear reservas. Esta evidencia corresponde al entorno temporal ya retirado.
 Ningún recurso externo ni SDK Google cargado, configuración ausente.
 Capturas guardadas fuera del repositorio con prefijo a3-4-3.
 

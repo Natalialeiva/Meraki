@@ -1,5 +1,7 @@
 # Demostración aislada de MERAKI
 
+> Registro histórico. El puerto 3001 fue un entorno temporal de desarrollo. Los comandos y rutas de demo citados aquí se conservan como evidencia y ya no forman parte del proyecto. La plataforma vigente se ejecuta en localhost:3000.
+
 ## Abrir y recorrer
 
 URL: **http://localhost:3001/front-office/**. El puerto 3000 conserva su entorno normal.

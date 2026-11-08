@@ -1,5 +1,7 @@
 # Front Office — Fase A, bloque 1
 
+> Registro histórico. El puerto 3001 fue un entorno temporal de desarrollo. Los comandos y rutas de demo citados aquí se conservan como evidencia y ya no forman parte del proyecto. La plataforma vigente se ejecuta en localhost:3000.
+
 Verificado en el computador de Adriana el 4 de noviembre de 2026.
 
 ## Punto de partida

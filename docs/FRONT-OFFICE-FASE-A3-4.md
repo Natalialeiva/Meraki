@@ -1,5 +1,7 @@
 # Front Office — continuidad A3.4.1–A3.4.3
 
+> Registro histórico. El puerto 3001 fue un entorno temporal de desarrollo. Los comandos y rutas de demo citados aquí se conservan como evidencia y ya no forman parte del proyecto. La plataforma vigente se ejecuta en localhost:3000.
+
 Registro de Adriana, 5 de noviembre de 2026. Bloques implementados y revisados;
 pendientes de publicación manual. Google Maps real sigue deshabilitado.
 

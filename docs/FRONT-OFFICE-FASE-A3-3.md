@@ -1,5 +1,7 @@
 # Continuidad A3.3 — distancias y cercanía
 
+> Registro histórico. El puerto 3001 fue un entorno temporal de desarrollo. Los comandos y rutas de demo citados aquí se conservan como evidencia y ya no forman parte del proyecto. La plataforma vigente se ejecuta en localhost:3000.
+
 Implementado sin cambios en backend, API, PostgreSQL, demo ni dependencias nuevas.
 Se reutilizan geografia.mjs y ubicacion.mjs. El catálogo conserva los resultados
 originales de la API en memoria. Calcula distancias al dibujar; no persiste resultados.

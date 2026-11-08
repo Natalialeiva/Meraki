@@ -1,5 +1,7 @@
 # Demo de cercanía con tres negocios
 
+> Registro histórico. El puerto 3001 fue un entorno temporal de desarrollo. Los comandos y rutas de demo citados aquí se conservan como evidencia y ya no forman parte del proyecto. La plataforma vigente se ejecuta en localhost:3000.
+
 Desde la raíz del repositorio, con dependencias backend instaladas:
 
 1. Si no existe el entorno demo, ejecutar `node demo/setup.cjs` según demo/README.md.
