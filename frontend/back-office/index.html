@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f7f5f8">
 <title>Mi negocio | Meraki</title>
-<link rel="stylesheet" href="gestion.css?v=a4-1a">
+<link rel="stylesheet" href="gestion.css?v=a4-1b">
 </head>
 <body>
 <a class="saltar" href="#tituloVista">Saltar al contenido</a>
@@ -187,6 +187,13 @@
 <strong id="reservasPorCerrar" role="status" aria-labelledby="etiquetaReservasPorCerrar">No disponible</strong>
 <span class="punto" aria-hidden="true"></span>
 </article>
+<article class="metrica-proxima" aria-labelledby="etiquetaProximaAtencion">
+<small id="etiquetaProximaAtencion">Próxima atención</small>
+<strong id="proximaAtencionFecha"></strong>
+<small id="proximaAtencionDetalle"></small>
+<p id="proximaAtencionEstado" role="status" aria-atomic="true">Próxima atención no disponible</p>
+<span class="punto" aria-hidden="true"></span>
+</article>
 </div>
 <p id="resumenReservas" role="status"></p>
 <div id="reservas"></div>
@@ -362,6 +369,7 @@
 </main>
 <script src="agenda.js"></script>
 <script src="resumen.js?v=a4-1a"></script>
+<script src="resumen-temporal.js?v=a4-1b"></script>
 <script src="pagos.js?v=webpay-proceso-1"></script>
 <script src="perfil.js?v=1"></script>
 <script src="servicios.js?v=acceso-1"></script>
@@ -369,6 +377,6 @@
 <script src="horarios.js?v=acceso-1"></script>
 <script src="suscripcion.js?v=gestion-1"></script>
 <script src="navegacion.js?v=gestion-1"></script>
-<script src="back.js?v=a4-1a"></script>
+<script src="back.js?v=a4-1b"></script>
 </body>
 </html>

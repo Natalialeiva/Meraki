@@ -5,8 +5,14 @@
 `resumen-temporal.js` exporta `disponible()`, `resolverHorasCiviles(grupos)` y
 `calcularResumenOperativo(entrada)` por CommonJS. Como script clásico expone
 `MerakiResumenTemporal`. Para usar el resumen completo en navegador, se carga
-después de `resumen.js`. El Back Office actual sigue cargando solo `resumen.js`
-y usando `calcularReservasPorCerrar`.
+después de `resumen.js`. La sexta tarjeta del Back Office usa el resolvedor
+rápido y conserva la llamada independiente a `calcularReservasPorCerrar`.
+
+La tarjeta usa la respuesta autorizada de la agenda completa. Se actualiza
+con la carga de Reservas y respeta la versión de solicitud, negocio y sesión.
+La fecha se muestra en America/Santiago con reloj de 24 horas. Los filtros
+visuales no cambian la próxima atención. Si falta soporte temporal, la tarjeta
+indica indisponibilidad y la agenda conserva su funcionamiento.
 
 El resolvedor recibe grupos por día civil con los horarios normalizados y
 rellena sus listas `instantes`. Recorre las transiciones de America/Santiago

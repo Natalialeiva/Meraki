@@ -64,7 +64,40 @@ const suscripcion=MerakiSuscripcion.montar({contenedor:$('#gestionSuscripcion'),
 }});
 let agendaReservas=null;
 let versionAgenda=0;
-function limpiarAgenda(mensaje){
+function mostrarProximaAtencion(mensaje,fecha='',detalle=''){
+    $('#proximaAtencionFecha').textContent=fecha;
+    $('#proximaAtencionDetalle').textContent=detalle;
+    const aviso=$('#proximaAtencionEstado');
+    aviso.className=fecha?'sr-only':'';
+    aviso.textContent=mensaje;
+}
+function actualizarProximaAtencion(entrada){
+    try{
+        const temporal=globalThis.MerakiResumenTemporal;
+        if(!temporal?.disponible()){
+            mostrarProximaAtencion('Próxima atención no disponible en este navegador');
+            return;
+        }
+        const {proximaAtencion}=temporal.calcularResumenOperativo({...entrada,ahoraEpochMs:Date.now()});
+        if(proximaAtencion.estado==='disponible'){
+            const fecha=new Intl.DateTimeFormat('es-CL',{
+                timeZone:'America/Santiago',dateStyle:'medium',timeStyle:'short',hourCycle:'h23'
+            }).format(proximaAtencion.inicioEpochMs);
+            const {servicio,trabajadora}=proximaAtencion.reserva;
+            const detalle=[servicio,trabajadora].filter(Boolean).join(' · ');
+            mostrarProximaAtencion(['Próxima atención',fecha,detalle].filter(Boolean).join('. '),fecha,detalle);
+        }else if(proximaAtencion.estado==='sin_proximas'){
+            mostrarProximaAtencion('No hay próximas reservas confirmadas');
+        }else if(proximaAtencion.estado==='pendiente_revision'){
+            mostrarProximaAtencion('No se pudo determinar la próxima atención con certeza');
+        }else{
+            mostrarProximaAtencion('No se pudo calcular la próxima atención');
+        }
+    }catch{
+        mostrarProximaAtencion('No se pudo calcular la próxima atención');
+    }
+}
+function limpiarAgenda(mensaje, mensajeProxima='Próxima atención no disponible'){
     agendaReservas=null;
     $('#reservas').replaceChildren();
     for(const id of ['totalReservas','reservasHoy','reservasConfirmadas','reservasPendientes']){
@@ -72,6 +105,7 @@ function limpiarAgenda(mensaje){
     }
     $('#reservasPorCerrar').textContent=mensaje;
     $('#resumenReservas').textContent=mensaje==='Cargando…'?'Cargando reservas…':'Reservas no disponibles.';
+    mostrarProximaAtencion(mensajeProxima);
 }
 const dinero=valor=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(Number(valor));
 function textoArticulo(articulo,valor){const p=document.createElement('p');p.textContent=valor;articulo.append(p);}
@@ -127,23 +161,25 @@ async function reservas(){
     }
     const vigente=()=>version===versionAgenda && sesion===versionSesion &&
         negocio===$('#negocio').value && !$('#panel').hidden;
-    limpiarAgenda('Cargando…');
+    limpiarAgenda('Cargando…','Buscando próxima atención…');
     try{
         const datos=await api('/api/reservas?id_emprendimiento='+encodeURIComponent(negocio),'GET',undefined,vigente);
         if(!vigente())return;
-        const indicador=MerakiResumen.calcularReservasPorCerrar({reservas:datos,contexto:{
+        const entrada={reservas:datos,contexto:{
             idEmprendimientoConsultado:id,
             idEmprendimientoSeleccionado:Number($('#negocio').value),
             consultaAutorizada:true,
             respuestaExitosa:true
-        }});
+        }};
+        const indicador=MerakiResumen.calcularReservasPorCerrar(entrada);
         if(indicador.estado!=='disponible')throw Error('La respuesta de reservas no es válida.');
         agendaReservas=datos;
         renderAgenda();
         $('#reservasPorCerrar').textContent=String(indicador.cantidad);
+        actualizarProximaAtencion(entrada);
     }catch(error){
         if(!vigente())return;
-        limpiarAgenda('No disponible');
+        limpiarAgenda('No disponible','No se pudo cargar la agenda');
         throw error;
     }
 }
