@@ -8,6 +8,16 @@ class Nodo {
     append(...hijos){this.children.push(...hijos);}
 }
 const documento={createElement:tag=>new Nodo(tag)};
+test('Evaluación distingue coordenadas disponibles de evidencia de confirmación',async()=>{
+    const {evaluarUbicacion}=await modulo;
+    const dato=Object.freeze({...negocio,ubicacion_confirmada:true});
+    const coordenadas={latitud:-33.4489,longitud:-70.6693};
+    assert.deepEqual(evaluarUbicacion(dato),{coordenadas,confirmada:false});
+    assert.deepEqual(evaluarUbicacion(dato,true),{coordenadas,confirmada:true});
+    assert.deepEqual(evaluarUbicacion({latitud:0},true),{coordenadas:null,confirmada:false});
+    assert.deepEqual(evaluarUbicacion({latitud:0,longitud:0},'true'),
+        {coordenadas:{latitud:0,longitud:0},confirmada:false});
+});
 test('Indicaciones exige confirmación separada explícita; no acepta indicadores inventados de API',async()=>{
     const {crearEnlaceIndicaciones}=await modulo;
     for(const prueba of [undefined,false,null,1,'true',{}])assert.equal(crearEnlaceIndicaciones(negocio,prueba),null);

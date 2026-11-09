@@ -217,3 +217,23 @@ personal ni añadirá origin.
 Sin cambios de PostgreSQL, migraciones, Back Office, Webpay, Oneclick, suscripciones,
 .env o configuración. Sin correos, reservas, abonos, commit ni push.
 Detenerse para revisión con Adriana y ChatGPT antes de publicar.
+
+### Validación reutilizable de ubicaciones públicas
+
+`GET /api/emprendimientos` devuelve comuna, dirección, latitud y longitud junto
+con los datos del negocio. No entrega evidencia de verificación. La utilidad
+`evaluarUbicacion(negocio, destinoConfirmado)` devuelve las coordenadas normalizadas
+o `null` y un indicador separado de confirmación. Este solo es verdadero cuando
+el par es válido y el consumidor aporta explícitamente una confirmación confiable.
+Las propiedades del objeto público no se interpretan como evidencia.
+
+La cercanía y los marcadores siguen usando pares válidos. Si falta alguno, se
+mantiene «Distancia no disponible» cuando corresponde y se omite el marcador.
+Las tarjetas y el mapa siguen mostrando «Ubicación exacta no disponible» para
+indicaciones. El enlace positivo solo se comprueba con datos ficticios.
+
+Para habilitar ubicaciones reales se requiere acordar con Natalia un contrato
+que publique evidencia explícita, emitida por el servidor y vinculada a las
+coordenadas exactas del negocio. Al cambiar el par, su confirmación debe
+invalidarse hasta una nueva revisión. Hasta que exista ese contrato, la API
+actual no habilita indicaciones.

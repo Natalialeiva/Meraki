@@ -3,12 +3,16 @@ import {validarCoordenadas} from './geografia.mjs';
 // Condición interna preparada para una fuente confiable futura. No se lee ni
 // se inventa un campo de confirmación en la API actual: los consumidores no
 // pasan true mientras esa fuente no exista. Una dirección libre no es alternativa.
+export function evaluarUbicacion(negocio, destinoConfirmado=false) {
+    const coordenadas=validarCoordenadas(negocio?.latitud,negocio?.longitud);
+    return {coordenadas, confirmada:coordenadas!==null && destinoConfirmado===true};
+}
+
 export function crearEnlaceIndicaciones(negocio, destinoConfirmado=false) {
-    if (destinoConfirmado!==true) return null;
-    const par=validarCoordenadas(negocio?.latitud,negocio?.longitud);
-    if (!par) return null;
+    const {coordenadas,confirmada}=evaluarUbicacion(negocio,destinoConfirmado);
+    if (!confirmada) return null;
     const enlace=new URL('https://www.google.com/maps/dir/');
-    enlace.search=new URLSearchParams({api:'1',destination:par.latitud+','+par.longitud}).toString();
+    enlace.search=new URLSearchParams({api:'1',destination:coordenadas.latitud+','+coordenadas.longitud}).toString();
     return enlace.href;
 }
 
