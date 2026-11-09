@@ -56,6 +56,20 @@ function medirRendimiento() {
 }
 if(process.argv.includes('--medir-rendimiento')) medirRendimiento();
 else {
+test('sin Temporal el navegador informa indisponibilidad y el contador conserva su contrato',()=>{
+    const entorno={Intl,Temporal:undefined};
+    vm.runInNewContext(fs.readFileSync(ruta,'utf8'),entorno);
+    vm.runInNewContext(fs.readFileSync(require.resolve('../../frontend/back-office/resumen-temporal.js'),'utf8'),entorno);
+    const datos=entrada([reserva(undefined,{puede_cerrar:true})]);
+    assert.equal(entorno.MerakiResumenTemporal.disponible(),false);
+    for(const modulo of [entorno.MerakiResumen,entorno.MerakiResumenTemporal]){
+        const salida=modulo.calcularResumenOperativo(datos);
+        assert.equal(salida.proximaAtencion.estado,'no_disponible');
+        assert.equal(salida.proximaAtencion.motivo,'zona_horaria_no_disponible');
+        assert.equal(salida.reservasPorCerrar.cantidad,1);
+    }
+    assert.equal(entorno.MerakiResumen.calcularReservasPorCerrar(datos).cantidad,1);
+});
 test('contador aislado distingue vacío válido, contexto inválido y carga fallida',()=>{
     assert.equal(calcularReservasPorCerrar(entrada()).cantidad,0);
     assert.deepEqual(calcularReservasPorCerrar(entrada([],{contexto:null})),

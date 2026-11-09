@@ -1,5 +1,53 @@
 # A4.1 — Resumen operativo independiente
 
+## A4.1b — Resolvedor rápido con Temporal nativo
+
+`resumen-temporal.js` exporta `disponible()`, `resolverHorasCiviles(grupos)` y
+`calcularResumenOperativo(entrada)` por CommonJS. Como script clásico expone
+`MerakiResumenTemporal`. Para usar el resumen completo en navegador, se carga
+después de `resumen.js`. El Back Office actual sigue cargando solo `resumen.js`
+y usando `calcularReservasPorCerrar`.
+
+El resolvedor recibe grupos por día civil con los horarios normalizados y
+rellena sus listas `instantes`. Recorre las transiciones de America/Santiago
+en la misma ventana UTC semiabierta que la referencia exhaustiva. Por cada
+tramo de offset constante calcula un candidato, comprueba sus límites y
+verifica la conversión de vuelta a la hora civil exacta. Preserva segundos,
+orden y coincidencias múltiples. El resto del cálculo comparte el contrato y
+los estados del resumen existente.
+
+La ruta rápida comprueba capacidades de Temporal en ejecución. Cuando hay
+horarios válidos que resolver y falta soporte, Próxima atención queda
+`no_disponible` con motivo `zona_horaria_no_disponible`. El contador sigue
+disponible con el contexto válido. El módulo original conserva la referencia
+exhaustiva por defecto en CommonJS para Node y pruebas. Una llamada en navegador
+sin resolvedor explícito no inicia el recorrido exhaustivo. Un respaldo
+interactivo exhaustivo requeriría una etapa separada, preferentemente en un
+Web Worker, porque puede tardar más de dos minutos en conjuntos dispersos.
+
+Verificación aislada en Chrome 156 con zona del equipo emulada Asia/Tokyo y
+Edge 157 con UTC. En cada navegador, 14 comparaciones de instantes y 7 de
+resultado completo coincidieron con la referencia. Incluyeron transiciones
+de abril y septiembre de 2026, segundos límite, historia de 1900 y 1910,
+cruce de año, fechas inválidas, desempate y pendiente de revisión. Firefox
+no se encontró instalado y queda por verificar. Node 24.21.0 ejecutó 66 pruebas
+de resumen, agenda e interfaz sin flags experimentales, fallos ni omisiones.
+
+Medianas en ms sobre datos ficticios, siete mediciones después de dos
+calentamientos. Cada celda indica resolución temporal / resumen completo.
+Los ceros reflejan la resolución del reloj del navegador.
+
+| Reservas | Chrome, 2 días | Chrome, una por día | Edge, 2 días | Edge, una por día |
+| ---: | ---: | ---: | ---: | ---: |
+| 10 | 0 / 0,2 | 0 / 0,2 | 0 / 0,2 | 0,1 / 0,2 |
+| 100 | 0,4 / 0,6 | 0,5 / 0,7 | 0,3 / 0,6 | 0,5 / 0,8 |
+| 500 | 1,7 / 2,5 | 3,0 / 3,3 | 1,5 / 2,3 | 2,8 / 3,0 |
+| 1.000 | 3,1 / 4,4 | 5,2 / 7,0 | 3,2 / 5,0 | 5,5 / 6,9 |
+
+Las reglas horarias provienen del motor del navegador y pueden variar entre
+versiones. Antes de una integración visual, repetir las comparaciones en los
+navegadores objetivo y decidir cómo mostrar la indisponibilidad.
+
 ## A4.1a — Reservas por cerrar en la agenda
 
 La quinta tarjeta de Reservas utiliza `calcularReservasPorCerrar({reservas, contexto})`. El servidor entrega `puede_cerrar` en la consulta autenticada de agenda y comprueba que el emprendimiento pertenezca a la sesión. El contador usa exclusivamente los valores booleanos `true` de la respuesta completa del emprendimiento seleccionado. Los filtros visuales afectan solo la lista y el indicador reutiliza la misma solicitud.
