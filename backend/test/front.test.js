@@ -46,7 +46,8 @@ function iniciar(config = {}) {
             let datos;
             if (url === '/api/categorias') datos = config.categorias ? await config.categorias() : [{id_categoria:4,nombre:'Belleza'}];
             else if (url.startsWith('/api/emprendimientos?')) datos = config.buscar ? await config.buscar(url) : [{id_emprendimiento:1,nombre:'Belleza Camila',comuna:'Santiago'}];
-            else if (/^\/api\/emprendimientos\/\d+\/servicios$/.test(url)) datos = config.servicios || [servicio(1,false),servicio(2)];
+            else if (/^\/api\/emprendimientos\/\d+\/servicios$/.test(url)) datos = typeof config.servicios === 'function'
+                ? await config.servicios(url) : config.servicios || [servicio(1,false),servicio(2)];
             else if (url.startsWith('/api/servicios/')) datos = config.profesionales ? await config.profesionales(url) : [{id_trabajadora:3,nombre:'Camila'},{id_trabajadora:8,nombre:'Profesional dos'}];
             else if (url.startsWith('/api/disponibilidad?')) datos = config.disponibilidad ? await config.disponibilidad(url) : [{hora_inicio:'11:00:00'},{hora_inicio:'12:00:00'}];
             else if (url === '/api/clientas') datos = {id_clienta:11};
@@ -336,6 +337,62 @@ test('Los mensajes de reserva permanecen dentro de la reserva y los de búsqueda
     assert.doesNotMatch(p.elementos['#estado'].textContent,/pendiente de abono/);
 });
 
+test('Al cambiar de negocio, carga y error son visibles y el botón permite reintentar',async()=>{
+    const fallo=diferida();
+    const a={id_emprendimiento:1,nombre:'Negocio A'}, b={id_emprendimiento:2,nombre:'Negocio B'};
+    let intentosB=0;
+    const p=iniciar({buscar:()=>[a,b],servicios:url=>url.includes('/2/') && ++intentosB===1
+        ? fallo.promise : [servicio(url.includes('/2/')?2:1)]});
+    await p.preparar();
+    const e=p.elementos, aviso=e['#estado'], catalogo=e['#estadoCatalogo'];
+    const boton=e['#resultados'].children[1].children[2];
+    assert.equal(boton.tag,'button');
+    assert.equal(boton.type,'button');
+    boton.focus();
+    const carga=boton.onclick();
+    assert.equal(aviso.parentElement,catalogo);
+    assert.equal(catalogo.hidden,false);
+    assert.match(aviso.textContent,/Cargando servicios de Negocio B/);
+    assert.equal(e['#reserva'].hidden,true);
+    assert.equal(e['#listaServicios'].children.length,0);
+    for(const id of ['#servicio','#profesional','#hora','#fecha']) assert.equal(e[id].value,'');
+    assert.equal(e['#crearReserva'].disabled,true);
+    assert.equal(e['#resultados'].children.length,2);
+    fallo.reject(Error('Fallo ficticio'));
+    await carga;
+    assert.equal(aviso.parentElement,catalogo);
+    assert.equal(catalogo.children.filter(n=>n===aviso).length,1);
+    assert.equal(aviso.dataset.tipo,'error');
+    assert.match(aviso.textContent,/Negocio B.*reintentar/);
+    assert.match(html,/<p id="estado" role="status" aria-live="polite" aria-atomic="true">/);
+    assert.equal(boton.focused,true);
+    await boton.onclick();
+    assert.equal(e['#reserva'].hidden,false);
+    assert.equal(e['#servicio'].value,'2');
+    assert.equal(aviso.parentElement,e['#estadoReserva']);
+    assert.equal(catalogo.children.includes(aviso),false);
+});
+
+test('A → B → A ignora errores y respuestas de servicios obsoletos',async()=>{
+    const primera=diferida(), segunda=diferida(), vigente=diferida();
+    const respuestas=[primera,segunda,vigente];
+    const a={id_emprendimiento:1,nombre:'Negocio A'}, b={id_emprendimiento:2,nombre:'Negocio B'};
+    const p=iniciar({buscar:()=>[a,b],servicios:()=>respuestas.shift().promise});
+    await pausa();
+    const botones=p.elementos['#resultados'].children.map(t=>t.children[2]);
+    const cargas=[botones[0].onclick(),botones[1].onclick(),botones[0].onclick()];
+    segunda.reject(Error('Fallo obsoleto de B'));
+    await cargas[1];
+    assert.match(p.elementos['#estado'].textContent,/Cargando servicios de Negocio A/);
+    vigente.resolve([servicio(3)]);
+    await cargas[2];
+    primera.resolve([servicio(1)]);
+    await cargas[0];
+    assert.equal(p.elementos['#servicio'].value,'3');
+    assert.equal(p.elementos['#tituloReserva'].textContent,'Reserva en Negocio A');
+    assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoReserva']);
+    assert.equal(p.creadas(),0);
+});
 
 test('Errores aparecen solo en campos interactuados o al intentar continuar', async () => {
     const p = iniciar(); await p.seleccionar();

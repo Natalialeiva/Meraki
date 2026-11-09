@@ -134,9 +134,22 @@ async function profesionales() {
 }
 async function seleccionar(dato) {
     if (enviando) return;
-    const version = ++versionSeleccion; versionProfesional++; limpiarHoras();
+    const version = ++versionSeleccion;
+    versionProfesional++;
+    // El aviso anterior puede estar en la reserva que se va a ocultar.
+    $('#estadoCatalogo').append(estado);
+    const cambioNegocio = negocio?.id_emprendimiento !== dato.id_emprendimiento;
     negocio = dato; creada = false; servicios = [];
     $('#camposReserva').disabled = false; $('#consulta').hidden = true; $('#nuevaReserva').hidden = true; $('#reserva').hidden = true;
+    opciones($('#servicio'), [], 'id_servicio', undefined, 'Selecciona un servicio');
+    opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional');
+    $('#listaServicios').replaceChildren();
+    $('#avisoServicio').textContent = '';
+    if (cambioNegocio) {
+        $('#fecha').value = '';
+        errorCampo($('#fecha'), '#errorFecha', '');
+    }
+    limpiarHoras();
     informar('Cargando servicios de ' + dato.nombre + '…', 'carga');
     try {
         const datos = await api('/api/emprendimientos/' + dato.id_emprendimiento + '/servicios');
@@ -148,7 +161,9 @@ async function seleccionar(dato) {
         $('#estadoReserva').append(estado);
         informar(primera ? 'Elige profesional, fecha y hora.' : datos.length ? noDisponible : 'No hay servicios publicados por el momento.');
         await profesionales();
-    } catch (error) { if (version === versionSeleccion) informar(error.message, 'error'); }
+    } catch {
+        if (version === versionSeleccion) informar('No se pudieron cargar los servicios de ' + dato.nombre + '. Vuelve a elegir el emprendimiento para reintentar.', 'error');
+    }
 }
 
 // Solo memoria de esta visita; las distancias se derivan al dibujar y no se guardan.
