@@ -126,7 +126,7 @@ $('#pago').onsubmit=async e=>{
     if(!Number.isSafeInteger(id)||id<1){estado.textContent='Indica un número de abono válido.';return;}
     if(accion==='recuperar'){
         if(!consultaPago||consultaPago.id!==id||!consultaPago.permitida){estado.textContent='Consulta primero este abono en Webpay.';return;}
-        if(!confirm('¿Registrar el pago aprobado del abono '+id+' para la reserva '+consultaPago.reserva+'? Se verificará nuevamente Webpay; no se generará otro cobro.'))return;
+        if(!confirm('¿Verificar el abono '+id+' de la reserva '+consultaPago.reserva+' en Webpay y registrar su resultado si es concluyente? No se generará otro cobro.'))return;
     }
     const version=++versionConsultaPago;procesandoPago=true;
     const campo=e.target.querySelector('input[name="id"]');campo.disabled=true;

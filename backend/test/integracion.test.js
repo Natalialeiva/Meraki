@@ -5,7 +5,7 @@ require('dotenv').config({path:path.join(__dirname,'../.env')});
 test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:process.env.MERAKI_DB_TEST!=='1'},async t=>{
  const schema='meraki_test_'+Date.now();assert.match(schema,/^meraki_test_\d+$/);
  const config={host:process.env.DB_HOST,port:Number(process.env.DB_PORT),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD};
- const admin=new Pool(config);let pool;let app;let enviados=0;let modo='ok';let notificacionId=1;let transaccionesCreadas=0;let alCrearWebpay;let status={status:'AUTHORIZED',response_code:0,amount:5000,buy_order:'orden-test',authorization_code:'TEST'};
+ const admin=new Pool(config);let pool;let app;let enviados=0;let modo='ok';let notificacionId=1;let transaccionesCreadas=0;let alCrearWebpay;let alConfirmarWebpay;let status={status:'AUTHORIZED',response_code:0,amount:5000,buy_order:'orden-test',authorization_code:'TEST'};
  try{
   // La extensión debe estar instalada previamente: las pruebas no la instalan en la base principal.
   assert.equal((await admin.query("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='btree_gist') AS instalada")).rows[0].instalada,true);
@@ -22,7 +22,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   // Las pruebas operativas parten de un plan vigente, sin inventar pagos en Transbank.
   await pool.query("INSERT INTO suscripcion(id_emprendedora,fecha_inicio,monto_mensual,estado,acceso_hasta) SELECT id_emprendedora,CURRENT_DATE,9990,'prueba',DATE '2099-01-01' FROM emprendedora");
   await pool.query("UPDATE reserva SET token_consulta='11111111-1111-4111-8111-111111111111',estado='pendiente_abono'");
-  await pool.query("INSERT INTO abono(id_reserva,monto,token_transaccion,buy_order) VALUES(1,5000,'token-prueba','orden-test')");
+  await pool.query("INSERT INTO abono(id_reserva,monto,token_transaccion,buy_order) VALUES(1,5000,repeat('a',64),'orden-test')");
   await t.test('Migración de Webpay conserva el abono histórico y las garantías de unicidad',async()=>{
    const previo=(await pool.query('SELECT to_jsonb(a) AS abono FROM abono a WHERE id_abono=1')).rows[0].abono;
    await pool.query(fs.readFileSync(path.join(__dirname,'../../database/009_intentos_webpay.sql'),'utf8'));
@@ -33,9 +33,15 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
     assert(indices.some(indice=>patron.test(indice)),String(patron));
    }
   });
+  const previo010=(await pool.query('SELECT to_jsonb(a) AS fila FROM abono a WHERE id_abono=1')).rows[0].fila;
+  await pool.query(fs.readFileSync(path.join(__dirname,'../../database/010_procesamiento_webpay.sql'),'utf8'));
+  const historico=(await pool.query('SELECT to_jsonb(a) AS fila FROM abono a WHERE id_abono=1')).rows[0].fila;
+  assert.deepEqual(historico,{...previo010,operacion_webpay:null,tipo_operacion_webpay:null,
+   estado_proceso_webpay:null,fecha_operacion_webpay:null,commit_webpay_reclamado_en:null});
+  const financiero=async id=>(await pool.query('SELECT id_abono,id_reserva,estado,monto,buy_order,token_transaccion,codigo_autorizacion,fecha_pago FROM abono WHERE id_abono=$1',[id])).rows;
   const enviar=async()=>{enviados++;if(modo!=='ok'){const e=new Error('fallo simulado');e.code=modo;throw e;}return{idMensaje:'mensaje-test'};};
   const req=createRequire(path.join(__dirname,'../index.js'));const module={exports:{}};
-  const wrapped=n=>n==='./db'?pool:n==='./notificaciones'?{...req(n),crearNotificaciones:p=>crearNotificaciones(p,enviar)}:n==='transbank-sdk'?{WebpayPlus:{Transaction:class{async status(){return status;} async create(order,session,amount){if(alCrearWebpay)await alCrearWebpay(order,session,amount);status={status:"AUTHORIZED",response_code:0,amount,buy_order:order,authorization_code:"TEST"};return {token:String(++transaccionesCreadas).padStart(64,"a"),url:"https://webpay3gint.transbank.cl/webpayserver/initTransaction"};} async commit(){return status;}}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}}:req(n);
+  const wrapped=n=>n==='./db'?pool:n==='./notificaciones'?{...req(n),crearNotificaciones:p=>crearNotificaciones(p,enviar)}:n==='transbank-sdk'?{WebpayPlus:{Transaction:class{async status(){return status;} async create(order,session,amount){if(alCrearWebpay)await alCrearWebpay(order,session,amount);status={status:"AUTHORIZED",response_code:0,amount,buy_order:order,authorization_code:"TEST"};return {token:String(++transaccionesCreadas).padStart(64,"a"),url:"https://webpay3gint.transbank.cl/webpayserver/initTransaction"};} async commit(token){return alConfirmarWebpay?alConfirmarWebpay(token):status;}}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}}:req(n);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../index.js'),'utf8'),{require:wrapped,module,__dirname:path.join(__dirname,'..'),process,console,URL,Buffer,setTimeout,clearTimeout});app=module.exports;
   const agent=request.agent(app);
   await t.test('Anónimo no lista ni reintenta',async()=>{await request(app).get('/api/notificaciones').expect(401);await request(app).post('/api/notificaciones/'+notificacionId+'/reintentar').expect(401);});
@@ -281,6 +287,13 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.equal((await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body.find(s=>s.id_servicio===1).reservable,true);
    await pool.query("UPDATE suscripcion SET estado='prueba' WHERE id_emprendedora=1");
   });
+  await t.test('Consulta Webpay solo habilita recuperación de una autorización válida y coincidente',async()=>{
+   await request(app).get('/api/abonos/1/estado').expect(401);
+   const valida=(await agent.get('/api/abonos/1/estado').expect(200)).body;assert.equal(valida.puede_recuperar,true);
+   status.response_code=null;assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);
+   status.response_code=0;status.amount=99;assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);
+   status.amount=5000;status.status='INITIALIZED';assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);status.status='AUTHORIZED';
+  });
   await t.test('Webpay inconsistente no confirma ni envía',async()=>{status.amount=99;await agent.post('/api/abonos/1/recuperar').expect(409);assert.equal(enviados,0);status.amount=5000;});
   await t.test('INITIALIZED e incompleto no recuperan pago',async()=>{
    status.status='INITIALIZED';await agent.post('/api/abonos/1/recuperar').expect(200);assert.equal(enviados,0);
@@ -288,7 +301,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   });
   await t.test('Webpay sin código de autorización válido no habilita recuperación ni modifica datos',async()=>{
    const codigo=status.authorization_code;
-   const antesAbono=(await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows;
+   const antesAbono=await financiero(1);
    const antesReserva=(await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows;
    const antesNotificaciones=(await pool.query('SELECT * FROM notificacion_correo')).rows;
    const antesEnvios=enviados;
@@ -297,7 +310,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
      status.authorization_code=invalido;
      assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);
      await agent.post('/api/abonos/1/recuperar').expect(409);
-     assert.deepEqual((await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows,antesAbono);
+     assert.deepEqual(await financiero(1),antesAbono);
      assert.deepEqual((await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows,antesReserva);
      assert.deepEqual((await pool.query('SELECT * FROM notificacion_correo')).rows,antesNotificaciones);
      assert.equal(enviados,antesEnvios);
@@ -309,16 +322,17 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    const tokenOriginal=(await pool.query('SELECT token_transaccion FROM abono WHERE id_abono=1')).rows[0].token_transaccion;
    const token='b'.repeat(64);
    await pool.query('UPDATE abono SET token_transaccion=$1 WHERE id_abono=1',[token]);
-   const antesAbono=(await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows;
+   const antesAbono=await financiero(1);
    const antesReserva=(await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows;
    const antesNotificaciones=(await pool.query('SELECT * FROM notificacion_correo')).rows;
    const antesEnvios=enviados;
    try{
     for(const invalido of [undefined,null,'','   ',123,'x'.repeat(101)]){
      status.authorization_code=invalido;
+     await pool.query("UPDATE abono SET operacion_webpay=NULL,tipo_operacion_webpay=NULL,estado_proceso_webpay=NULL,fecha_operacion_webpay=NULL,commit_webpay_reclamado_en=NULL WHERE id_abono=1");
      await request(app).get('/api/abonos/retorno').query({token_ws:token}).expect(409);
      await request(app).post('/api/abonos/retorno').send({token_ws:token}).expect(409);
-     assert.deepEqual((await pool.query('SELECT * FROM abono WHERE id_abono=1')).rows,antesAbono);
+     assert.deepEqual(await financiero(1),antesAbono);
      assert.deepEqual((await pool.query('SELECT * FROM reserva WHERE id_reserva=1')).rows,antesReserva);
      assert.deepEqual((await pool.query('SELECT * FROM notificacion_correo')).rows,antesNotificaciones);
      assert.equal(enviados,antesEnvios);
@@ -331,13 +345,6 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.equal((await pool.query('SELECT estado FROM abono WHERE id_abono=1')).rows[0].estado,'pendiente');
    assert.equal((await pool.query('SELECT estado FROM reserva WHERE id_reserva=1')).rows[0].estado,'pendiente_abono');assert.equal(enviados,0);
    await pool.query('ALTER TABLE notificacion_correo DROP CONSTRAINT prueba_bloqueo');
-  });
-  await t.test('Consulta Webpay solo habilita recuperación de una autorización válida y coincidente',async()=>{
-   await request(app).get('/api/abonos/1/estado').expect(401);
-   const valida=(await agent.get('/api/abonos/1/estado').expect(200)).body;assert.equal(valida.puede_recuperar,true);
-   status.response_code=null;assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);
-   status.response_code=0;status.amount=99;assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);
-   status.amount=5000;status.status='INITIALIZED';assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);status.status='AUTHORIZED';
   });
   await t.test('Pago autorizado recupera, confirma y envía una sola vez',async()=>{await agent.post('/api/abonos/1/recuperar').expect(200);assert.equal(enviados,1);assert.equal((await agent.get('/api/abonos/1/estado').expect(200)).body.puede_recuperar,false);const n=(await pool.query('SELECT * FROM notificacion_correo')).rows[0];notificacionId=n.id_notificacion;assert.equal(n.estado,'enviado');assert.equal(n.intentos,1);await agent.post('/api/abonos/1/recuperar').expect(409);assert.equal(enviados,1);});
   await t.test('Reclamo concurrente solo realiza un envío',async()=>{await pool.query("UPDATE notificacion_correo SET estado='pendiente',intentos=0");const n=crearNotificaciones(pool,enviar);await Promise.all(Array.from({length:8},()=>n.notificar(1)));assert.equal(enviados,2);});
@@ -372,7 +379,8 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    await request(app).post('/api/abonos/retorno').send({token_ws:pago.token}).expect(502);
    assert.equal((await pool.query('SELECT estado FROM reserva WHERE id_reserva=$1',[r.id_reserva])).rows[0].estado,'pendiente_abono');
    await pool.query('ALTER TABLE notificacion_correo DROP CONSTRAINT prueba_retorno');
-   modo='EAUTH';await request(app).post('/api/abonos/retorno').send({token_ws:pago.token}).expect(200);
+   await request(app).post('/api/abonos/retorno').send({token_ws:pago.token}).expect(409);
+   modo='EAUTH';await agent.post('/api/abonos/'+pago.id_abono+'/recuperar').expect(200);
    const resultado=(await pool.query('SELECT r.estado,n.estado AS correo FROM reserva r JOIN notificacion_correo n ON n.id_reserva=r.id_reserva WHERE r.id_reserva=$1',[r.id_reserva])).rows[0];assert.equal(resultado.estado,'confirmada');assert.equal(resultado.correo,'fallido');
    await request(app).post('/api/abonos/retorno').send({token_ws:pago.token}).expect(409);
   });
@@ -572,7 +580,133 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
     }
    });
   });
-  await t.test('Propietaria ajena no puede ver ni modificar notificación',async()=>{const r=await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Otra','Prueba','otro','otra@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)]);await pool.query('UPDATE emprendimiento SET id_emprendedora=$1 WHERE id_emprendimiento=1',[r.rows[0].id_emprendedora]);await agent.get('/api/notificaciones').expect(200,[]);await agent.get('/api/reservas?id_emprendimiento=1').expect(403);await agent.get('/api/abonos/1/estado').expect(404);for(const accion of ['atender','no-atendida','cancelar'])await agent.patch('/api/reservas/1/'+accion).expect(404);await agent.post('/api/notificaciones/'+notificacionId+'/reintentar').set('X-Meraki-Action','1').send({evidencia:'Configuración revisada por operadora'}).expect(404);});
+  await t.test('Procesamiento durable de retorno y recuperación',async t=>{
+   const {randomBytes,randomUUID}=require('node:crypto');
+   const {crearProcesamientoWebpay}=require('../procesamiento-webpay');
+   let dia=0;
+   async function nueva(conToken=true){
+    const token=conToken?randomBytes(32).toString('hex'):null;
+    const orden='PROC-'+String(++dia);
+    const r=(await pool.query(`
+      INSERT INTO reserva(id_emprendimiento,id_servicio,id_trabajadora,id_clienta,fecha_hora_inicio,fecha_hora_fin,estado,precio_servicio,monto_abono,token_consulta)
+      SELECT id_emprendimiento,id_servicio,id_trabajadora,id_clienta,
+        TIMESTAMP '2033-01-01 10:00'+$1::int*INTERVAL '1 day',
+        TIMESTAMP '2033-01-01 11:00'+$1::int*INTERVAL '1 day',
+        'pendiente_abono',precio_servicio,5000,$2 FROM reserva WHERE id_reserva=1 RETURNING id_reserva
+    `,[dia,randomUUID()])).rows[0];
+    const a=(await pool.query('INSERT INTO abono(id_reserva,monto,token_transaccion,buy_order) VALUES($1,5000,$2,$3) RETURNING id_abono',[r.id_reserva,token,orden])).rows[0];
+    return {...r,...a,token,orden};
+   }
+   const aprobado=a=>({status:'AUTHORIZED',response_code:0,authorization_code:'SIMULADO',amount:5000,buy_order:a.orden});
+   const retorno=a=>request(app).post('/api/abonos/retorno').send({token_ws:a.token});
+   const recuperar=a=>agent.post('/api/abonos/'+a.id_abono+'/recuperar');
+   const fila=async a=>(await pool.query('SELECT * FROM abono WHERE id_abono=$1',[a.id_abono])).rows[0];
+   await t.test('GET, POST y recuperación concurrentes realizan un solo commit sin retener bloqueos',async()=>{
+    const a=await nueva();
+    let llamadas=0, confirmarEntrada, soltar;
+    const entrada=new Promise(r=>confirmarEntrada=r);
+    const espera=new Promise(r=>soltar=r);
+    const correos=enviados;
+    alConfirmarWebpay=async()=>{llamadas++;confirmarEntrada();await espera;return aprobado(a);};
+    const primero=request(app).get('/api/abonos/retorno').query({token_ws:a.token}).then(r=>r);
+    try{
+     await Promise.race([entrada,primero.then(r=>{throw Error('El proveedor no fue llamado: '+r.status);})]);
+     const f=await fila(a);
+     assert.equal(f.fase_webpay,null);assert(f.commit_webpay_reclamado_en);
+     assert.equal(f.estado_proceso_webpay,'en_proceso');
+     const otro=await pool.connect();
+     try{
+      await otro.query('BEGIN');
+      await otro.query('SELECT id_reserva FROM reserva WHERE id_reserva=$1 FOR UPDATE NOWAIT',[a.id_reserva]);
+      await otro.query('SELECT id_abono FROM abono WHERE id_abono=$1 FOR UPDATE NOWAIT',[a.id_abono]);
+     }finally{await otro.query('ROLLBACK');otro.release();}
+     await Promise.all([retorno(a).expect(409),recuperar(a).expect(409)]);
+     const local=(await agent.get('/api/abonos/'+a.id_abono+'/estado').expect(200)).body;
+     assert.equal(local.estado_proceso_webpay,'en_proceso');
+     assert.equal(local.puede_recuperar,false);
+    }finally{soltar();await primero;alConfirmarWebpay=null;}
+    assert.equal((await primero).status,200);
+    assert.equal(llamadas,1);
+    await retorno(a).expect(409);
+    assert.equal((await fila(a)).estado,'aprobado');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM notificacion_correo WHERE id_reserva=$1',[a.id_reserva])).rows[0].n,1);
+    assert.equal(enviados,correos+1);
+   });
+   await t.test('Rechazo requiere monto y orden coincidentes; token inválido o ausente no consulta Webpay',async()=>{
+    for(const diferencia of [{buy_order:'otra-orden'},{amount:1},{}]){
+     const a=await nueva();
+     alConfirmarWebpay=async()=>({...aprobado(a),status:'FAILED',response_code:-1,...diferencia});
+     try{await retorno(a).expect(Object.keys(diferencia).length?409:200);}finally{alConfirmarWebpay=null;}
+     assert.equal((await fila(a)).estado,Object.keys(diferencia).length?'pendiente':'rechazado');
+    }
+    const a=await nueva(false);
+    await retorno({token:'inválido'}).expect(400);
+    await request(app).post('/api/abonos/'+a.id_abono+'/recuperar').expect(401);
+    await recuperar(a).expect(409);
+    const local=(await agent.get('/api/abonos/'+a.id_abono+'/estado').expect(200)).body;
+    assert.equal(local.revision_manual,true);assert.equal(local.puede_reconciliar,false);
+   });
+   await t.test('Respuesta perdida del COMMIT local no llama al proveedor, ni después de reiniciar',async()=>{
+    const a=await nueva();
+    const conexion={query:pool.query.bind(pool),async connect(){
+     const db=await pool.connect();
+     return {release:error=>db.release(error),async query(sql,args){
+      const r=await db.query(sql,args);
+      if(sql==='COMMIT')throw Error('Respuesta local perdida');
+      return r;
+     }};
+    }};
+    let llamadas=0;
+    const webpay={commit:async()=>{llamadas++;return aprobado(a);}};
+    const params={pool:conexion,webpay,registrar:async()=>{},notificar:async()=>{}};
+    const acceso={tipo:'commit',token:a.token};
+    assert.equal((await crearProcesamientoWebpay(params).procesar(acceso)).codigo,502);
+    assert((await fila(a)).commit_webpay_reclamado_en);
+    assert.equal((await crearProcesamientoWebpay({...params,pool}).procesar(acceso)).codigo,409);
+    assert.equal(llamadas,0);
+   });
+   await t.test('Timeout, reinicio y respuesta tardía preservan la revisión hasta reconciliar explícitamente',async()=>{
+    const a=await nueva();
+    let tardia, llamadas=0;
+    const webpay={commit:()=>{llamadas++;return new Promise(r=>tardia=r);},
+     status:async()=>({...aprobado(a),status:'INITIALIZED'})};
+    const params={pool,webpay,registrar:async()=>{},notificar:async()=>{},plazoMs:25};
+    const acceso={tipo:'commit',token:a.token};
+    assert.equal((await crearProcesamientoWebpay(params).procesar(acceso)).codigo,502);
+    assert.equal((await fila(a)).estado_proceso_webpay,'incierto');
+    assert.equal((await crearProcesamientoWebpay(params).procesar(acceso)).codigo,409);
+    tardia(aprobado(a));
+    const revision={tipo:'status',id:a.id_abono,propietaria:1};
+    assert.equal((await crearProcesamientoWebpay(params).procesar(revision)).codigo,200);
+    assert.equal((await fila(a)).estado,'pendiente');
+    assert.equal((await fila(a)).estado_proceso_webpay,'incierto');
+    status=aprobado(a);
+    await recuperar(a).expect(200);
+    assert.equal((await fila(a)).estado,'aprobado');
+    assert.equal(llamadas,1);
+   });
+   await t.test('Una respuesta de un reclamo sustituido no puede revertir el resultado más reciente',async()=>{
+    const a=await nueva();
+    let entrar,soltar;
+    const entrada=new Promise(r=>entrar=r);
+    const espera=new Promise(r=>soltar=r);
+    const webpay={
+     commit:async()=>{entrar();await espera;return {...aprobado(a),status:'FAILED',response_code:-1};},
+     status:async()=>aprobado(a)
+    };
+    const servicio=crearProcesamientoWebpay({pool,webpay,registrar:async()=>{},notificar:async()=>{}});
+    const anterior=servicio.procesar({tipo:'commit',token:a.token});
+    try{
+     await Promise.race([entrada,anterior.then(r=>{throw Error('No se reclamó: '+r.codigo);})]);
+     await pool.query("UPDATE abono SET fecha_operacion_webpay=clock_timestamp()-INTERVAL '2 minutes' WHERE id_abono=$1",[a.id_abono]);
+     const actual=await servicio.procesar({tipo:'status',id:a.id_abono,propietaria:1});
+     assert.equal(actual.codigo,200);
+    }finally{soltar();await anterior;}
+    assert.equal((await anterior).codigo,409);
+    assert.equal((await fila(a)).estado,'aprobado');
+   });
+  });
+  await t.test('Propietaria ajena no puede ver ni modificar notificación',async()=>{const r=await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Otra','Prueba','otro','otra@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)]);await pool.query('UPDATE emprendimiento SET id_emprendedora=$1 WHERE id_emprendimiento=1',[r.rows[0].id_emprendedora]);await agent.get('/api/notificaciones').expect(200,[]);await agent.get('/api/reservas?id_emprendimiento=1').expect(403);await agent.get('/api/abonos/1/estado').expect(404);await agent.post('/api/abonos/1/recuperar').expect(404);for(const accion of ['atender','no-atendida','cancelar'])await agent.patch('/api/reservas/1/'+accion).expect(404);await agent.post('/api/notificaciones/'+notificacionId+'/reintentar').set('X-Meraki-Action','1').send({evidencia:'Configuración revisada por operadora'}).expect(404);});
   await t.test('Consulta privada no expone token y no se almacena en caché',async()=>{const r=await request(app).get('/api/reservas/consulta/11111111-1111-4111-8111-111111111111').expect(200);assert.equal(r.headers['cache-control'],'no-store');assert(!JSON.stringify(r.body).includes('11111111'));await request(app).get('/consulta/').expect(200);await request(app).get('/front-office/').expect(200);await request(app).get('/back-office/').expect(200);});
  }finally{
   if(pool)await pool.end();await admin.query('DROP SCHEMA '+schema+' CASCADE');await admin.end();

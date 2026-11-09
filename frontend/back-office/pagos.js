@@ -8,6 +8,16 @@
         if(local)lineas.push('Estado en Meraki: '+(etiquetas[local]||local));
         let titulo=datos.mensaje||'Consulta completada';
         let puedeRecuperar=false;
+        if(datos.requiere_revision===true && (datos.estado_proceso_webpay||datos.revision_manual)){
+            titulo='El abono requiere revisión';
+            puedeRecuperar=datos.puede_reconciliar===true;
+            lineas.push(datos.revision_manual?'Sin token válido. Requiere revisión manual.':
+                puedeRecuperar?'Verificación disponible. Puedes consultar y registrar un resultado concluyente.':'Consulta nuevamente el estado local para saber si hay una verificación disponible.');
+            return {titulo,lineas,puedeRecuperar};
+        }
+        if(datos.estado_proceso_webpay==='en_proceso'){
+            return {titulo:'Abono en proceso',lineas,puedeRecuperar:false};
+        }
         if(datos.fase_webpay){
             if(datos.fase_webpay==='pendiente_respuesta_pago'){
                 titulo=local==='pendiente'?'Pendiente de respuesta del pago':'Resultado registrado en Meraki';

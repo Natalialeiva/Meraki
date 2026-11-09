@@ -1,5 +1,13 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {interpretar}=require('../../frontend/back-office/pagos');
 const consulta={id_abono:9,id_reserva:20,monto:'5000',estado_local:'pendiente',datos_coinciden:true};
+test('Procesamiento y revisión habilitan acciones solo según la capacidad local del servidor',()=>{
+    const activo=interpretar({...consulta,estado_proceso_webpay:'en_proceso',puede_recuperar:true});
+    assert.equal(activo.puedeRecuperar,false);
+    assert.match(activo.titulo,/en proceso/i);
+    const incierto={...consulta,estado_proceso_webpay:'incierto',requiere_revision:true};
+    assert.equal(interpretar({...incierto,revision_manual:true}).puedeRecuperar,false);
+    assert.equal(interpretar({...incierto,puede_reconciliar:true}).puedeRecuperar,true);
+});
 test('Las fases de creación muestran estado local y no habilitan recuperación',()=>{
     for(const [fase,revision,titulo] of [
         ['creacion_en_curso',false,/Creación en curso/],
