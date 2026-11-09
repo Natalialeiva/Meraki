@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const {execFileSync}=require('node:child_process');
 const ruta=require.resolve('../../frontend/back-office/resumen.js');
-const {calcularResumenOperativo:calcular}=require(ruta);
+const {calcularResumenOperativo:calcular,calcularReservasPorCerrar}=require(ruta);
 const contexto={idEmprendimientoConsultado:1,idEmprendimientoSeleccionado:1,consultaAutorizada:true,respuestaExitosa:true};
 const referencia=Date.UTC(2026,10,9,13);
 const reserva=(fecha='2026-11-09T11:00',extra={})=>({id_reserva:1,estado:'confirmada',fecha_hora_inicio:fecha,puede_cerrar:false,...extra});
@@ -26,7 +26,7 @@ function resolverAnterior(grupos,relojes) {
 function cargarVersion({anterior=false,contar=false}={}) {
     let fuente=fs.readFileSync(ruta,'utf8'), llamadas=0;
     if(anterior) {
-        const inicio=fuente.indexOf('    function resolver('),fin=fuente.indexOf('    function calcularResumenOperativo(');
+        const inicio=fuente.indexOf('    function resolver('),fin=fuente.indexOf('    function calcularReservasPorCerrar(');
         assert.ok(inicio>=0 && fin>inicio);
         fuente=fuente.slice(0,inicio)+resolverAnterior.toString().replace('resolverAnterior','resolver')+'\n'+fuente.slice(fin);
     }
@@ -56,6 +56,21 @@ function medirRendimiento() {
 }
 if(process.argv.includes('--medir-rendimiento')) medirRendimiento();
 else {
+test('contador aislado distingue vacío válido, contexto inválido y carga fallida',()=>{
+    assert.equal(calcularReservasPorCerrar(entrada()).cantidad,0);
+    assert.deepEqual(calcularReservasPorCerrar(entrada([],{contexto:null})),
+        {estado:'no_disponible',cantidad:null,motivo:'contexto_no_valido'});
+    assert.equal(calcularReservasPorCerrar(entrada([],{contexto:{...contexto,respuestaExitosa:false}})).cantidad,null);
+    assert.equal(calcularReservasPorCerrar(entrada(null)).cantidad,null);
+});
+test('contador solo acepta true y funciona sin soporte para la próxima atención',()=>{
+    const entorno={module:{exports:{}},Intl:{DateTimeFormat(){throw Error('No se puede resolver la fecha');}}};
+    vm.runInNewContext(fs.readFileSync(ruta,'utf8'),entorno);
+    const datos=entrada([true,false,null,undefined,'true',1,true].map(puede_cerrar=>({puede_cerrar,estado:'confirmada'})));
+    const modulo=entorno.module.exports;
+    assert.equal(modulo.calcularReservasPorCerrar(datos).cantidad,2);
+    assert.equal(modulo.calcularResumenOperativo(datos).proximaAtencion.motivo,'zona_horaria_no_disponible');
+});
 test('contexto autorizado y vacío válido distinguen cero de indisponibilidad',()=>{
     const r=calcular(entrada());
     assert.equal(r.idEmprendimiento,1);

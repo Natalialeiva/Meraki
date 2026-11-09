@@ -60,14 +60,24 @@
             }
         }
     }
-    function calcularResumenOperativo(entrada) {
-        const {reservas,contexto,ahoraEpochMs}=objeto(entrada)?entrada:{};
+    function calcularReservasPorCerrar(entrada) {
+        const {reservas,contexto}=objeto(entrada)?entrada:{};
         if (!objeto(contexto) || !idValido(contexto.idEmprendimientoConsultado) ||
             !idValido(contexto.idEmprendimientoSeleccionado) || contexto.consultaAutorizada!==true ||
-            contexto.idEmprendimientoConsultado!==contexto.idEmprendimientoSeleccionado) return noDisponible('contexto_no_valido');
-        if (contexto.respuestaExitosa!==true || !Array.isArray(reservas)) return noDisponible('respuesta_no_disponible');
+            contexto.idEmprendimientoConsultado!==contexto.idEmprendimientoSeleccionado) {
+            return {estado:'no_disponible',cantidad:null,motivo:'contexto_no_valido'};
+        }
+        if (contexto.respuestaExitosa!==true || !Array.isArray(reservas)) {
+            return {estado:'no_disponible',cantidad:null,motivo:'respuesta_no_disponible'};
+        }
+        return {estado:'disponible',cantidad:reservas.filter(r=>objeto(r) && r.puede_cerrar===true).length,motivo:null};
+    }
+    function calcularResumenOperativo(entrada) {
+        const {estado,cantidad,motivo}=calcularReservasPorCerrar(entrada);
+        if (estado!=='disponible') return noDisponible(motivo);
+        const {reservas,contexto,ahoraEpochMs}=entrada;
         const resultado={idEmprendimiento:contexto.idEmprendimientoConsultado,
-            reservasPorCerrar:{estado:'disponible',cantidad:reservas.filter(r=>objeto(r) && r.puede_cerrar===true).length},
+            reservasPorCerrar:{estado,cantidad},
             proximaAtencion:proxima('sin_proximas'),exclusiones:null};
         if (!Number.isSafeInteger(ahoraEpochMs) || !Number.isFinite(new Date(ahoraEpochMs).getTime())) {
             resultado.proximaAtencion=proxima('no_disponible','referencia_temporal_no_valida');return resultado;
@@ -125,7 +135,7 @@
         }
         return resultado;
     }
-    const api={calcularResumenOperativo};
+    const api={calcularReservasPorCerrar,calcularResumenOperativo};
     if (typeof module!=='undefined' && module.exports) module.exports=api;
     else raiz.MerakiResumen=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

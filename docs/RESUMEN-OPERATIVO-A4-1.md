@@ -1,10 +1,22 @@
 # A4.1 — Resumen operativo independiente
 
-Sin integración visual, endpoints nuevos, dependencias, acceso a PostgreSQL ni proveedores externos. No modifica los indicadores actuales de Natalia.
+## A4.1a — Reservas por cerrar en la agenda
+
+La quinta tarjeta de Reservas utiliza `calcularReservasPorCerrar({reservas, contexto})`. El servidor entrega `puede_cerrar` en la consulta autenticada de agenda y comprueba que el emprendimiento pertenezca a la sesión. El contador usa exclusivamente los valores booleanos `true` de la respuesta completa del emprendimiento seleccionado. Los filtros visuales afectan solo la lista y el indicador reutiliza la misma solicitud.
+
+La función devuelve `{estado, cantidad, motivo}`. Una respuesta válida puede dar cero. Sin contexto autorizado o con una respuesta inválida, devuelve `no_disponible` y cantidad nula. La interfaz muestra «Cargando…» mientras espera y «No disponible» ante un fallo vigente. Al iniciar una carga se retiran los datos anteriores. La versión de solicitud, el negocio seleccionado y la versión de sesión deben coincidir para publicar un resultado o aplicar un error de la agenda, incluido un 401.
+
+El contador no consulta fechas ni llama a A4.1b. El resumen operativo completo conserva su contrato y reutiliza el contador. El valor corresponde al momento de la última consulta autorizada y se actualiza al recargar la agenda, incluso tras una acción de reserva o la recuperación de abono existente. El paso del tiempo por sí solo no refresca el dato.
+
+Verificación aislada con `node --test backend/test/resumen.test.js backend/test/reservas-activas-ui.test.js backend/test/agenda.test.js backend/test/pagos.test.js`. Resultado de 72 pruebas aprobadas, sin fallos ni omisiones. Las pruebas de interfaz usan un DOM simulado y respuestas HTTP controladas, sin backend activo, PostgreSQL ni proveedores externos. En Chrome se verificó la cuadrícula con una página local aislada a 320, 560, 768, 1100 y 1440 px, sin desborde en las tarjetas.
+
+El resto del documento describe el módulo original y la investigación de rendimiento de A4.1b.
+
+El resumen completo permanece independiente de la interfaz. A4.1a conserva las métricas de agenda existentes y reutiliza la API de reservas.
 
 ## Contrato
 
-`frontend/back-office/resumen.js` exporta `calcularResumenOperativo` por CommonJS para pruebas y `globalThis.MerakiResumen` en navegador. No está incorporado a ninguna página.
+`frontend/back-office/resumen.js` exporta `calcularResumenOperativo` y `calcularReservasPorCerrar` por CommonJS para pruebas y `globalThis.MerakiResumen` en navegador. La agenda invoca únicamente el contador.
 
 Entrada:
 
