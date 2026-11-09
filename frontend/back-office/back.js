@@ -113,7 +113,7 @@ $('#actualizar').onclick=()=>notificaciones().catch(e=>estado.textContent=e.mess
 let consultaPago=null;
 let versionConsultaPago=0;
 let procesandoPago=false;
-function invalidarConsultaPago(){versionConsultaPago++;consultaPago=null;$('#recuperarPago').disabled=true;$('#resultadoPago').replaceChildren();}
+function invalidarConsultaPago(){versionConsultaPago++;consultaPago=null;$('#recuperarPago').disabled=true;$('#verificarPagoWebpay').hidden=true;$('#resultadoPago').replaceChildren();}
 $('#pago input[name="id"]').oninput=invalidarConsultaPago;
 function resultadoPago(datos){
     const vista=MerakiPagos.interpretar(datos);const panel=$('#resultadoPago');panel.replaceChildren();
@@ -131,13 +131,16 @@ $('#pago').onsubmit=async e=>{
     const version=++versionConsultaPago;procesandoPago=true;
     const campo=e.target.querySelector('input[name="id"]');campo.disabled=true;
     for(const b of e.target.querySelectorAll('button'))b.disabled=true;
-    $('#resultadoPago').textContent=accion==='estado'?'Consultando Webpay…':'Verificando y registrando el pago…';
+    $('#verificarPagoWebpay').hidden=true;
+    $('#resultadoPago').textContent=accion==='recuperar'?'Verificando y registrando el pago…':'Consultando el abono…';
     consultaPago=null;
     try{
-        const datos=await api('/api/abonos/'+id+'/'+accion,accion==='estado'?'GET':'POST');
+        const ruta=accion==='verificar'?'estado?verificar=1':accion;
+        const datos=await api('/api/abonos/'+id+'/'+ruta,accion==='recuperar'?'POST':'GET');
         if(version!==versionConsultaPago)return;
         const vista=resultadoPago(datos);
-        if(accion==='estado')consultaPago={id,reserva:datos.id_reserva,permitida:vista.puedeRecuperar};
+        if(accion!=='recuperar')consultaPago={id,reserva:datos.id_reserva,permitida:vista.puedeRecuperar};
+        $('#verificarPagoWebpay').hidden=datos.puede_consultar_webpay!==true;
         if(accion==='recuperar'){await notificaciones();if($('#negocio').value)await reservas();}
     }catch(error){if(version===versionConsultaPago)$('#resultadoPago').textContent=error.message;}
     finally{

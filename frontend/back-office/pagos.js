@@ -8,6 +8,16 @@
         if(local)lineas.push('Estado en Meraki: '+(etiquetas[local]||local));
         let titulo=datos.mensaje||'Consulta completada';
         let puedeRecuperar=false;
+        if(datos.fase_webpay){
+            if(datos.fase_webpay==='pendiente_respuesta_pago'){
+                titulo=local==='pendiente'?'Pendiente de respuesta del pago':'Resultado registrado en Meraki';
+                if(local==='pendiente')lineas.push('Puedes verificar la transacción en Webpay si necesitas revisar su resultado.');
+            }else{
+                titulo=datos.requiere_revision===true||datos.fase_webpay==='resultado_incierto'?'El intento requiere revisión':'Creación en curso';
+                lineas.push('Sin token registrado. No se puede recuperar automáticamente ni iniciar otro intento.');
+            }
+            return {titulo,lineas,puedeRecuperar};
+        }
         if(datos.datos_coinciden===false){titulo='Los datos del pago no coinciden';lineas.push('Requiere revisión. No inicies otro pago ni intentes registrarlo.');}
         else if(datos.estado_transbank==='INITIALIZED'){titulo='El pago todavía no se ha completado';lineas.push('La reserva continúa pendiente. No se registró un pago aprobado.');}
         else if(datos.estado_transbank==='AUTHORIZED'){

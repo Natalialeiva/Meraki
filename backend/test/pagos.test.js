@@ -1,5 +1,17 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {interpretar}=require('../../frontend/back-office/pagos');
 const consulta={id_abono:9,id_reserva:20,monto:'5000',estado_local:'pendiente',datos_coinciden:true};
+test('Las fases de creación muestran estado local y no habilitan recuperación',()=>{
+    for(const [fase,revision,titulo] of [
+        ['creacion_en_curso',false,/Creación en curso/],
+        ['creacion_en_curso',true,/requiere revisión/],
+        ['resultado_incierto',true,/requiere revisión/],
+        ['pendiente_respuesta_pago',false,/Pendiente de respuesta/]
+    ]){
+        const vista=interpretar({...consulta,fase_webpay:fase,requiere_revision:revision,puede_recuperar:true});
+        assert.match(vista.titulo,titulo);
+        assert.equal(vista.puedeRecuperar,false);
+    }
+});
 test('Pago iniciado no se presenta como aprobado ni permite recuperación',()=>{const v=interpretar({...consulta,estado_transbank:'INITIALIZED',puede_recuperar:false});assert.equal(v.puedeRecuperar,false);assert.match(v.titulo,/no se ha completado/);assert.match(v.lineas.join(' '),/Reserva 20/);});
 test('AUTHORIZED requiere permiso explícito del servidor para recuperar',()=>{assert.equal(interpretar({...consulta,estado_transbank:'AUTHORIZED'}).puedeRecuperar,false);assert.equal(interpretar({...consulta,estado_transbank:'AUTHORIZED',puede_recuperar:true}).puedeRecuperar,true);});
 test('Inconsistencia impide recuperación incluso si otro campo la habilita',()=>{const v=interpretar({...consulta,estado_transbank:'AUTHORIZED',datos_coinciden:false,puede_recuperar:true});assert.equal(v.puedeRecuperar,false);assert.match(v.titulo,/no coinciden/);});

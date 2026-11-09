@@ -325,6 +325,7 @@
 </label>
 <button name="accion" value="estado">Consultar en Webpay</button>
 <button id="recuperarPago" name="accion" value="recuperar" disabled>Registrar pago ya aprobado</button>
+<button id="verificarPagoWebpay" name="accion" value="verificar" hidden>Verificar en Webpay</button>
 </form>
 <p>Consultar solo revisa el estado: no cobra ni modifica la reserva. Registrar un pago aprobado verifica nuevamente Webpay y, si corresponde, confirma la reserva y gestiona su correo. No inicia otro cobro.</p>
 <div id="resultadoPago" role="status" aria-live="polite"></div>
@@ -355,13 +356,13 @@
 </div>
 </main>
 <script src="agenda.js"></script>
-<script src="pagos.js"></script>
+<script src="pagos.js?v=webpay-durable-1"></script>
 <script src="perfil.js?v=1"></script>
 <script src="servicios.js?v=acceso-1"></script>
 <script src="trabajadoras.js?v=acceso-1"></script>
 <script src="horarios.js?v=acceso-1"></script>
 <script src="suscripcion.js?v=gestion-1"></script>
 <script src="navegacion.js?v=gestion-1"></script>
-<script src="back.js?v=gestion-1"></script>
+<script src="back.js?v=webpay-durable-1"></script>
 </body>
 </html>
