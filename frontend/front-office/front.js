@@ -192,6 +192,24 @@ function dibujarCatalogo() {
 }
 $('#ordenCercania').onchange = dibujarCatalogo;
 
+async function cargarCategorias() {
+    const selector = $('#categoriaBusqueda');
+    const estadoCategorias = $('#estadoCategorias');
+    try {
+        const categorias = await api('/api/categorias');
+        if (!Array.isArray(categorias) || categorias.some(c =>
+            !c || !Number.isSafeInteger(c.id_categoria) || c.id_categoria < 1 ||
+            typeof c.nombre !== 'string' || !c.nombre.trim())) {
+            throw Error('Categorías inválidas');
+        }
+        opciones(selector, categorias, 'id_categoria', c => c.nombre, 'Todas las categorías');
+        selector.disabled = categorias.length === 0;
+        estadoCategorias.textContent = categorias.length ? '' : 'No hay categorías disponibles.';
+    } catch {
+        estadoCategorias.textContent = 'Las categorías no están disponibles temporalmente. Puedes buscar por nombre y comuna.';
+    }
+}
+
 $('#buscar').onsubmit = async evento => {
     evento.preventDefault(); if (enviando) return;
     const version = ++versionBusqueda; versionSeleccion++; versionProfesional++; limpiarHoras();
@@ -199,13 +217,20 @@ $('#buscar').onsubmit = async evento => {
     $('#estadoCatalogo').append(estado);
     try {
         const filtros = new URLSearchParams(new FormData(evento.target));
+        if (!filtros.get('id_categoria')) filtros.delete('id_categoria');
         const datos = await api('/api/emprendimientos?' + filtros);
         if (version !== versionBusqueda) return;
         resultadosCatalogo = datos; dibujarCatalogo();
-        informar(datos.length ? datos.length + ' emprendimiento(s). Selecciona uno para ver sus servicios.' : 'No encontramos emprendimientos con esos filtros. Prueba solo con el nombre o pulsa Ver todos.');
+        informar(datos.length ? datos.length + ' emprendimiento(s). Selecciona uno para ver sus servicios.' : 'No encontramos emprendimientos con esos filtros. Prueba quitando algún filtro o pulsa Ver todos.');
     } catch (error) { if (version === versionBusqueda) informar(error.message, 'error'); }
 };
-$('#limpiarBusqueda').onclick = () => { if (enviando) return; $('#buscar').reset(); $('#buscar').requestSubmit(); };
+$('#limpiarBusqueda').onclick = () => {
+    if (enviando) return;
+    const orden = $('#ordenCercania').value;
+    $('#buscar').reset();
+    $('#ordenCercania').value = orden;
+    return $('#buscar').requestSubmit();
+};
 $('#servicio').onchange = profesionales;
 $('#profesional').onchange = () => { limpiarHoras(); $('#disponibilidad').disabled = !$('#profesional').value; };
 $('#fecha').onchange = () => { limpiarHoras(); errorCampo($('#fecha'), '#errorFecha', !$('#fecha').value ? 'Selecciona una fecha.' : $('#fecha').value < $('#fecha').min ? 'Elige hoy o una fecha posterior.' : ''); };
@@ -251,3 +276,4 @@ $('#formReserva').onsubmit = async evento => {
 $('#nuevaReserva').onclick = () => { if (enviando) return; $('#formReserva').reset(); camposInteractuados.clear(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
 $('#fecha').min = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Santiago', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
 opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional'); limpiarHoras(); $('#buscar').requestSubmit();
+void cargarCategorias();
