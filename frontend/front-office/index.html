@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#f6f0eb">
 <meta name="description" content="Explora emprendimientos de cuidado personal, elige un servicio y consulta sus horarios disponibles en Meraki.">
 <title>Meraki | Belleza y bienestar</title>
-<link rel="stylesheet" href="styles.css?v=filtro-categoria-1">
+<link rel="stylesheet" href="styles.css?v=filtros-aplicados-1">
 </head>
 <body>
 <a class="saltar" href="#buscar">Saltar a la búsqueda</a>
@@ -55,6 +55,8 @@
     <section id="catalogo" class="catalogo" aria-labelledby="tituloCatalogo">
         <div class="encabezadoSeccion"><div><p class="etiqueta">Catálogo</p><h2 id="tituloCatalogo" tabindex="-1">Emprendimientos para explorar</h2></div><p>Consulta sus servicios, precios y disponibilidad antes de reservar.</p></div>
         <div id="estadoCatalogo"><p id="estado" role="status" aria-live="polite" aria-atomic="true"></p></div>
+        <ul id="filtrosAplicados" class="filtrosAplicados" aria-label="Filtros aplicados" hidden></ul>
+        <button id="reintentarBusqueda" class="secundario" type="button" hidden>Reintentar búsqueda</button>
         <div class="acciones"><button id="verMapa" type="button" class="secundario" aria-expanded="false" aria-controls="panelMapa">Ver mapa</button></div>
         <section id="panelMapa" class="mapaPreparacion" hidden aria-labelledby="tituloMapa">
             <h3 id="tituloMapa">Vista de preparación del mapa</h3>
@@ -111,7 +113,7 @@
     </section>
 </main>
 <footer class="pie"><p>Catálogo de servicios de cuidado personal</p><a href="#inicio">Volver al inicio <span aria-hidden="true">↑</span></a></footer>
-<script src="front.js?v=filtro-categoria-1"></script>
+<script src="front.js?v=filtros-aplicados-1"></script>
 <script type="module" src="ubicacion.mjs?v=a3-2"></script>
 <script type="module" src="mapa.mjs?v=a3-4-1"></script>
 </body>

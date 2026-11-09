@@ -324,6 +324,20 @@ main {
 .camposBusqueda label { min-width:0 }
 #categoriaBusqueda { max-width:100%; text-overflow:ellipsis }
 #estadoCategorias:empty { display:none }
+.filtrosAplicados {
+    display:flex;
+    flex-wrap:wrap;
+    gap:.5rem;
+    padding:0;
+    list-style:none
+}
+.filtrosAplicados li { min-width:0; max-width:100% }
+.filtrosAplicados button {
+    min-height:44px;
+    max-width:100%;
+    overflow-wrap:anywhere;
+    text-align:left
+}
 .acciones {
     display:flex;
     gap:.65rem;

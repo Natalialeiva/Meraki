@@ -36,6 +36,7 @@ function iniciar(config = {}) {
     categoria.name = 'id_categoria';
     categoria.disabled = true;
     elementos['#buscar'].campos = [filtroNombre,comuna,categoria];
+    elementos['#buscar'].elements = {namedItem: clave => elementos['#buscar'].campos.find(c => c.name === clave)};
     const peticiones = []; let reservasCreadas = 0;
     const contexto = vm.createContext({Intl,Date,URLSearchParams,console,
         document:{querySelector:s => { assert(elementos[s], 'Selector existente: ' + s); return elementos[s]; }, createElement:tag => new Elemento(tag)},
@@ -68,6 +69,52 @@ function iniciar(config = {}) {
     };
     return p;
 }
+
+test('Quitar un filtro conserva los demás valores de la búsqueda aplicada y devuelve el foco', async () => {
+    const p = iniciar();
+    await pausa();
+    p.filtroNombre.value = 'Camila';
+    p.comuna.value = 'Santiago';
+    p.elementos['#categoriaBusqueda'].value = '4';
+    await p.elementos['#buscar'].requestSubmit();
+    const lista = p.elementos['#filtrosAplicados'];
+    assert.deepEqual(lista.children.map(li => li.children[0].attributes['aria-label']), [
+        'Quitar filtro Nombre: Camila', 'Quitar filtro Comuna: Santiago', 'Quitar filtro Categoría: Belleza'
+    ]);
+    p.filtroNombre.value = 'Borrador';
+    await lista.children[1].children[0].onclick();
+    assert.equal(p.peticiones.at(-1).url, '/api/emprendimientos?nombre=Camila&comuna=&id_categoria=4');
+    assert.equal(p.comuna.focused, true);
+    assert.equal(lista.children.length, 2);
+    await p.elementos['#limpiarBusqueda'].onclick();
+    assert.equal(lista.hidden, true);
+});
+
+test('El reintento usa los filtros fallidos y anuncia carga y vacío', async () => {
+    const respuesta = diferida();
+    let intentos = 0;
+    const p = iniciar({buscar:() => {
+        intentos++;
+        if (intentos === 1) return [];
+        if (intentos === 2) throw Error('Error simulado');
+        return respuesta.promise;
+    }});
+    await pausa();
+    p.comuna.value = 'Santiago';
+    await p.elementos['#buscar'].requestSubmit();
+    const boton = p.elementos['#reintentarBusqueda'];
+    assert.equal(boton.hidden, false);
+    p.comuna.value = 'Borrador';
+    const reintento = boton.onclick();
+    assert.equal(boton.hidden, true);
+    assert.equal(p.elementos['#resultados'].attributes['aria-busy'], 'true');
+    assert.equal(p.elementos['#tituloCatalogo'].focused, true);
+    assert.match(p.peticiones.at(-1).url, /comuna=Santiago/);
+    respuesta.resolve([]);
+    await reintento;
+    assert.equal(p.elementos['#resultados'].attributes['aria-busy'], 'false');
+    assert.match(p.elementos['#estado'].textContent, /No encontramos/);
+});
 
 test('Categorías se cargan una vez y se combinan con nombre y comuna', async () => {
     const opciones = diferida();
