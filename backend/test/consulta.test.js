@@ -4,12 +4,12 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 function pantalla(respuestas) {
-    const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar'].map(id=>['#'+id,{hidden:true,disabled:false,replaceChildren(){},append(){}}]));
+    const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar','actualizar'].map(id=>['#'+id,{hidden:true,disabled:false,replaceChildren(){},append(){}}]));
     const peticiones = [];
     const contexto = vm.createContext({
         location:{hash:'#11111111-1111-4111-8111-111111111111'},URL,confirm:()=>true,
         document:{querySelector:s=>elementos[s],createElement:()=>({})},
-        fetch:async(url,opciones)=>{peticiones.push({url,method:opciones.method});const r=respuestas.shift();return {ok:r.status===200,status:r.status,text:async()=>r.texto};}
+        fetch:async(url,opciones)=>{peticiones.push({url,method:opciones.method});const r=await respuestas.shift();return {ok:r.status===200,status:r.status,text:async()=>r.texto};}
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../../frontend/consulta/consulta.js'),'utf8'),contexto);
     return {elementos,peticiones};
@@ -48,4 +48,48 @@ test('Cancelación permitida actualiza estado y oculta las acciones',async()=>{
     await new Promise(setImmediate);await p.elementos['#cancelar'].onclick();
     assert.equal(p.elementos['#cancelar'].hidden,true);assert.equal(p.elementos['#pagar'].hidden,true);
     assert.equal(p.peticiones[1].method,'PATCH');assert.equal(p.peticiones.length,3);
+});
+const pendiente={id_reserva:1,estado:'pendiente_abono'};
+const disponible={estado:'disponible',puede_iniciar:true,motivo:null};
+const revision={estado:'en_revision',puede_iniciar:false,motivo:'intento_bloqueante'};
+const datos=(pago,reserva=pendiente)=>({status:200,texto:JSON.stringify({reserva,pago})});
+const esperar=()=>new Promise(setImmediate);
+
+test('Solo un contrato de pago completo y habilitado muestra el botón',async()=>{
+    for(const pago of [undefined,{puede_iniciar:true},{...disponible,motivo:undefined},revision]){
+        const p=pantalla([datos(pago)]);await esperar();
+        assert.equal(p.elementos['#pagar'].hidden,true);
+        if(pago===revision)assert.match(p.elementos['#estado'].textContent,/Pago en revisión/);
+    }
+    const confirmada=pantalla([datos(disponible,reserva)]);await esperar();
+    assert.equal(confirmada.elementos['#pagar'].hidden,true);
+    const p=pantalla([datos({...disponible,estado:'rechazado'})]);await esperar();
+    assert.equal(p.elementos['#pagar'].hidden,false);
+    assert.equal(p.elementos['#pagar'].textContent,'Intentar de nuevo');
+});
+
+test('Doble clic envía un solo POST y un fallo exige volver a consultar',async()=>{
+    let resolver;
+    const inicio=new Promise(r=>resolver=r);
+    const p=pantalla([datos(disponible),inicio,datos(revision)]);
+    await esperar();
+    const boton=p.elementos['#pagar'];
+    assert.equal(boton.hidden,false);
+    const intento=boton.onclick();
+    assert.equal(boton.disabled,true);
+    await boton.onclick();
+    resolver({status:502,texto:'{}'});
+    await intento;
+    assert.deepEqual(p.peticiones.map(x=>x.method),['GET','POST','GET']);
+    assert.equal(boton.hidden,true);
+});
+
+test('Una respuesta atrasada no habilita el pago después de una consulta fallida',async()=>{
+    let resolver;
+    const antigua=new Promise(r=>resolver=r);
+    const p=pantalla([antigua,{status:500,texto:'{}'}]);
+    await p.elementos['#actualizar'].onclick();
+    resolver(datos(disponible));await esperar();
+    assert.equal(p.elementos['#pagar'].hidden,true);
+    assert.match(p.elementos['#estado'].textContent,/No se pudo completar/);
 });

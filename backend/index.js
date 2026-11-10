@@ -2770,7 +2770,8 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
         const resultado = await pool.query(`
             SELECT
                 r.id_reserva,
-                EXISTS (SELECT 1 FROM abono a WHERE a.id_reserva=r.id_reserva) AS tiene_abonos,
+                pagos.*,
+                r.monto_abono,
                 r.estado,
                 r.fecha_hora_inicio,
                 r.fecha_hora_fin,
@@ -2781,6 +2782,18 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
                 ON r.id_servicio = s.id_servicio
             INNER JOIN emprendimiento e
                 ON r.id_emprendimiento = e.id_emprendimiento
+            CROSS JOIN LATERAL (
+                SELECT count(*) > 0 AS tiene_abonos,
+                       COALESCE(bool_or(a.estado = 'aprobado'), false) AS aprobado,
+                       COALESCE(bool_or(a.estado = 'pendiente'), false) AS pendiente,
+                       COALESCE(bool_and((
+                           a.estado = 'rechazado' AND a.estado_proceso_webpay = 'resuelto'
+                           AND a.token_transaccion ~ '^[a-zA-Z0-9]{64}$'
+                           AND btrim(a.buy_order) <> ''
+                           AND a.monto > 0 AND trunc(a.monto) = a.monto
+                       ) IS TRUE), false) AS rechazos_concluyentes
+                FROM abono a WHERE a.id_reserva = r.id_reserva
+            ) pagos
             WHERE r.token_consulta = $1;
         `, [token]);
 
@@ -2791,10 +2804,24 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
         }
 
         // No devolvemos datos personales ni el token privado.
-        const {tiene_abonos, ...reservaPublica} = resultado.rows[0];
+        const {tiene_abonos, aprobado, pendiente, rechazos_concluyentes, monto_abono, ...reservaPublica} = resultado.rows[0];
+        const monto = Number(monto_abono);
+        let pago;
+        if (aprobado || reservaPublica.estado === 'confirmada') {
+            pago = {estado:'confirmado',puede_iniciar:false,motivo:'reserva_o_abono_confirmado'};
+        } else if (reservaPublica.estado !== 'pendiente_abono') {
+            pago = {estado:'no_disponible',puede_iniciar:false,motivo:'estado_reserva'};
+        } else if (pendiente || (tiene_abonos && !rechazos_concluyentes)) {
+            pago = {estado:'en_revision',puede_iniciar:false,motivo:'intento_bloqueante'};
+        } else if (!Number.isSafeInteger(monto) || monto <= 0 || !process.env.WEBPAY_RETURN_URL?.trim()) {
+            pago = {estado:'no_disponible',puede_iniciar:false,motivo:'pago_no_disponible'};
+        } else {
+            pago = {estado:rechazos_concluyentes?'rechazado':'disponible',puede_iniciar:true,motivo:null};
+        }
         return res.status(200).json({
             mensaje: "Reserva encontrada",
             reserva: reservaPublica,
+            pago,
             capacidades: {
                 cancelar: !tiene_abonos && ["pendiente_abono", "confirmada"].includes(reservaPublica.estado),
                 motivoCancelacion: tiene_abonos

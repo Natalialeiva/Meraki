@@ -4,6 +4,9 @@ const estado = document.querySelector('#estado');
 const detalle = document.querySelector('#detalle');
 const pagar = document.querySelector('#pagar');
 const cancelar = document.querySelector('#cancelar');
+const actualizar = document.querySelector('#actualizar');
+let version = 0;
+let iniciandoPago = false;
 
 async function api(url, method = 'GET', data) {
     const respuesta = await fetch(url, {
@@ -30,28 +33,48 @@ async function api(url, method = 'GET', data) {
 }
 
 const ruta = '/api/reservas/consulta/' + encodeURIComponent(token);
-async function cargar() {
+async function cargar(aviso = '') {
+    const actual = ++version;
+    pagar.hidden = true;
+    cancelar.hidden = true;
     try {
         if (!token) throw Error('Abre el enlace privado recibido por correo.');
         const datos = await api(ruta);
+        if (actual !== version) return;
         if (!datos.reserva) throw Error('No se pudo obtener la reserva.');
         const soloConsulta = datos.capacidades?.soloConsulta === true;
+        const pago = datos.pago;
+        const permitido = !soloConsulta && datos.reserva.estado === 'pendiente_abono' &&
+            pago?.puede_iniciar === true && pago.motivo === null && ['disponible','rechazado'].includes(pago.estado);
+        const mensajePago = pago?.estado === 'en_revision' ? 'Pago en revisión. Consulta nuevamente antes de intentar pagar.' :
+            pago?.estado === 'rechazado' && permitido ? 'El abono anterior no fue aprobado. Puedes solicitar otro intento.' :
+            pago?.estado === 'no_disponible' && datos.reserva.estado === 'pendiente_abono' ? 'El pago no está disponible por ahora.' : '';
         estado.textContent = soloConsulta
             ? 'Reserva de prueba: solo consulta. Los pagos y las cancelaciones están deshabilitados.'
-            : [datos.mensaje, datos.capacidades?.motivoCancelacion].filter(Boolean).join(' ');
+            : [aviso, datos.mensaje, mensajePago, datos.capacidades?.motivoCancelacion].filter(Boolean).join(' ');
         detalle.replaceChildren();
         for (const [clave, valor] of Object.entries(datos.reserva)) {
             const p = document.createElement('p');
             p.textContent = clave.replaceAll('_', ' ') + ': ' + valor;
             detalle.append(p);
         }
-        pagar.hidden = soloConsulta || datos.reserva.estado !== 'pendiente_abono';
+        pagar.textContent = permitido && pago.estado === 'rechazado' ? 'Intentar de nuevo' : 'Pagar abono con Webpay';
+        pagar.hidden = !permitido || iniciandoPago;
         cancelar.hidden = soloConsulta || datos.capacidades?.cancelar === false || !['pendiente_abono', 'confirmada'].includes(datos.reserva.estado);
-    } catch (error) { estado.textContent = error.message; }
+    } catch (error) {
+        if (actual !== version) return;
+        detalle.replaceChildren();
+        estado.textContent = [aviso,error.message].filter(Boolean).join(' ');
+    }
 }
 
 pagar.onclick = async () => {
+    if (iniciandoPago || pagar.hidden || pagar.disabled) return;
+    iniciandoPago = true;
+    ++version;
     pagar.disabled = true;
+    actualizar.disabled = true;
+    cancelar.hidden = true;
     try {
         const datos = await api('/api/abonos/cliente/iniciar', 'POST', {token_consulta: token});
         const url = new URL(datos.url);
@@ -61,8 +84,15 @@ pagar.onclick = async () => {
         const campo = document.createElement('input');
         campo.type = 'hidden'; campo.name = 'token_ws'; campo.value = datos.token;
         formulario.append(campo); document.body.append(formulario); formulario.submit();
-    } catch (error) { estado.textContent = error.message; pagar.disabled = false; }
+    } catch (error) {
+        pagar.hidden = true;
+        iniciandoPago = false;
+        await cargar(error.message);
+        pagar.disabled = false;
+        actualizar.disabled = false;
+    }
 };
+actualizar.onclick = () => cargar();
 cancelar.onclick = async () => {
     if (!confirm('¿Cancelar esta reserva?')) return;
     cancelar.disabled = true;
