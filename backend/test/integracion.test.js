@@ -586,6 +586,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    let dia=0;
    async function nueva(conToken=true){
     const token=conToken?randomBytes(32).toString('hex'):null;
+    const tokenConsulta=randomUUID();
     const orden='PROC-'+String(++dia);
     const r=(await pool.query(`
       INSERT INTO reserva(id_emprendimiento,id_servicio,id_trabajadora,id_clienta,fecha_hora_inicio,fecha_hora_fin,estado,precio_servicio,monto_abono,token_consulta)
@@ -593,14 +594,139 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
         TIMESTAMP '2033-01-01 10:00'+$1::int*INTERVAL '1 day',
         TIMESTAMP '2033-01-01 11:00'+$1::int*INTERVAL '1 day',
         'pendiente_abono',precio_servicio,5000,$2 FROM reserva WHERE id_reserva=1 RETURNING id_reserva
-    `,[dia,randomUUID()])).rows[0];
+    `,[dia,tokenConsulta])).rows[0];
     const a=(await pool.query('INSERT INTO abono(id_reserva,monto,token_transaccion,buy_order) VALUES($1,5000,$2,$3) RETURNING id_abono',[r.id_reserva,token,orden])).rows[0];
-    return {...r,...a,token,orden};
+    return {...r,...a,token,orden,tokenConsulta};
    }
    const aprobado=a=>({status:'AUTHORIZED',response_code:0,authorization_code:'SIMULADO',amount:5000,buy_order:a.orden});
    const retorno=a=>request(app).post('/api/abonos/retorno').send({token_ws:a.token});
    const recuperar=a=>agent.post('/api/abonos/'+a.id_abono+'/recuperar');
    const fila=async a=>(await pool.query('SELECT * FROM abono WHERE id_abono=$1',[a.id_abono])).rows[0];
+   async function comprobarPendiente(a, correos){
+    assert.equal((await fila(a)).estado,'pendiente');
+    const reserva=(await pool.query('SELECT estado FROM reserva WHERE id_reserva=$1',[a.id_reserva])).rows[0];
+    assert.equal(reserva.estado,'pendiente_abono');
+    const avisos=await pool.query('SELECT 1 FROM notificacion_correo WHERE id_reserva=$1',[a.id_reserva]);
+    assert.equal(avisos.rowCount,0);
+    assert.equal(enviados,correos);
+   }
+   async function comprobarBloqueoDeInicio(a){
+    const inicial=transaccionesCreadas;
+    await agent.post('/api/abonos/iniciar').send({id_reserva:a.id_reserva}).expect(409);
+    await request(app).post('/api/abonos/cliente/iniciar').send({token_consulta:a.tokenConsulta}).expect(409);
+    assert.equal(transaccionesCreadas,inicial);
+    const intentos=await pool.query('SELECT id_abono FROM abono WHERE id_reserva=$1',[a.id_reserva]);
+    assert.deepEqual(intentos.rows,[{id_abono:a.id_abono}]);
+   }
+   for(const [nombre,metodo,parametros] of [
+    ['Abandono con TBK_TOKEN','post',a=>({TBK_TOKEN:a.token})],
+    ['Abandono con TBK_ORDEN_COMPRA y TBK_ID_SESION','get',a=>({TBK_ORDEN_COMPRA:a.orden,TBK_ID_SESION:'SESION-FICTICIA'})]
+   ]){
+    await t.test(nombre+' deja el pago pendiente sin llamar a commit',async()=>{
+     const a=await nueva(), antes=await fila(a), correos=enviados;
+     let llamadas=0;
+     alConfirmarWebpay=async()=>{llamadas++;return aprobado(a);};
+     try{
+      const solicitud=request(app)[metodo]('/api/abonos/retorno');
+      const r=await (metodo==='get'?solicitud.query(parametros(a)):solicitud.send(parametros(a))).expect(200);
+      assert.equal(r.body.estado,'requiere_verificacion');
+      assert.match(r.body.mensaje,/consulta su estado/i);
+      assert.equal(llamadas,0);
+      assert.deepEqual(await fila(a),antes);
+      await comprobarBloqueoDeInicio(a);
+      await comprobarPendiente(a,correos);
+     }finally{alConfirmarWebpay=null;}
+    });
+   }
+   await t.test('ECONNRESET en commit bloquea reintentos y solo permite revisión autorizada',async()=>{
+    const a=await nueva(), correos=enviados, estadoAnterior=status;
+    let llamadas=0;
+    alConfirmarWebpay=async()=>{
+     llamadas++;
+     throw Object.assign(new Error('Conexión reiniciada simulada'),{code:'ECONNRESET'});
+    };
+    try{
+     const respuesta=await retorno(a).expect(502);
+     assert.match(respuesta.body.mensaje,/requiere revisión/i);
+     const incierto=await fila(a);
+     assert.equal(incierto.estado_proceso_webpay,'incierto');
+     assert.ok(incierto.commit_webpay_reclamado_en);
+     await retorno(a).expect(409);
+     assert.equal(llamadas,1);
+     assert.deepEqual(await fila(a),incierto);
+     await comprobarBloqueoDeInicio(a);
+     await request(app).post('/api/abonos/'+a.id_abono+'/recuperar').expect(401);
+     const local=(await agent.get('/api/abonos/'+a.id_abono+'/estado').expect(200)).body;
+     assert.equal(local.puede_recuperar,false);
+     assert.equal(local.puede_reconciliar,true);
+     assert.deepEqual(await fila(a),incierto);
+     status={...aprobado(a),status:'INITIALIZED'};
+     const revision=await recuperar(a).expect(200);
+     assert.equal(revision.body.estado_transbank,'INITIALIZED');
+     assert.equal((await fila(a)).tipo_operacion_webpay,'status');
+     assert.equal((await fila(a)).estado_proceso_webpay,'incierto');
+     assert.equal(llamadas,1);
+     await comprobarBloqueoDeInicio(a);
+     await comprobarPendiente(a,correos);
+    }finally{alConfirmarWebpay=null;status=estadoAnterior;}
+   });
+   await t.test('Inicio desde Back Office con reserva inexistente devuelve 404 sin efectos',async()=>{
+    const capturar=async()=>(await pool.query(`
+     SELECT (SELECT jsonb_agg(to_jsonb(r) ORDER BY id_reserva) FROM reserva r) AS reservas,
+            (SELECT jsonb_agg(to_jsonb(a) ORDER BY id_abono) FROM abono a) AS abonos
+    `)).rows[0];
+    const antes=await capturar(), inicial=transaccionesCreadas, correos=enviados;
+    const id=Math.max(...antes.reservas.map(r=>r.id_reserva))+1;
+    const r=await agent.post('/api/abonos/iniciar').send({id_reserva:id}).expect(404);
+    assert.equal(r.body.mensaje,'No se encontró la reserva');
+    assert.equal(transaccionesCreadas,inicial);
+    assert.equal(enviados,correos);
+    assert.deepEqual(await capturar(),antes);
+   });
+   await t.test('Ambas rutas bloquean una reserva con abono aprobado',async()=>{
+    const a=await nueva(), correos=enviados;
+    // La reserva aún pendiente aísla la protección del abono aprobado de la validación de estado de reserva.
+    await pool.query("UPDATE abono SET estado='aprobado',fecha_pago=CURRENT_TIMESTAMP WHERE id_abono=$1",[a.id_abono]);
+    const reserva=async()=>(await pool.query('SELECT * FROM reserva WHERE id_reserva=$1',[a.id_reserva])).rows[0];
+    const antes=await fila(a), reservaAntes=await reserva();
+    await comprobarBloqueoDeInicio(a);
+    assert.deepEqual(await fila(a),antes);
+    assert.deepEqual(await reserva(),reservaAntes);
+    assert.equal(enviados,correos);
+   });
+   await t.test('Interrupción después de confirmar el pago deja un solo correo pendiente',async()=>{
+    const a=await nueva(), correos=enviados;
+    let llamadas=0, observacion;
+    async function leer(db){
+     return (await db.query(`
+      SELECT a.estado AS abono,r.estado AS reserva,
+       (SELECT array_agg(n.estado ORDER BY n.id_notificacion) FROM notificacion_correo n WHERE n.id_reserva=r.id_reserva) AS avisos,
+       (SELECT count(*)::int FROM abono otro WHERE otro.id_reserva=r.id_reserva) AS intentos
+      FROM abono a JOIN reserva r USING(id_reserva) WHERE a.id_abono=$1
+     `,[a.id_abono])).rows[0];
+    }
+    const notificaciones=crearNotificaciones(pool,enviar);
+    const dependencias={
+     pool,registrar:notificaciones.registrar,
+     webpay:{commit:async()=>{llamadas++;return aprobado(a);}},
+     async notificar(){
+      // El procesador llama este gancho después de finalizar. Otro pool comprueba
+      // que PostgreSQL ya hizo visible el resultado antes de interrumpir el envío.
+      const otro=new Pool({...config,options:'-c search_path='+schema});
+      try{observacion=await leer(otro);}finally{await otro.end();}
+      throw Error('Interrupción simulada antes del envío');
+     }
+    };
+    const acceso={tipo:'commit',token:a.token};
+    const resultado=await crearProcesamientoWebpay(dependencias).procesar(acceso);
+    assert.equal(resultado.codigo,200);
+    const esperado={abono:'aprobado',reserva:'confirmada',avisos:['pendiente'],intentos:1};
+    assert.deepEqual(observacion,esperado);
+    assert.equal((await crearProcesamientoWebpay(dependencias).procesar(acceso)).codigo,409);
+    assert.deepEqual(await leer(pool),esperado);
+    assert.equal(llamadas,1);
+    assert.equal(enviados,correos);
+   });
    await t.test('GET, POST y recuperación concurrentes realizan un solo commit sin retener bloqueos',async()=>{
     const a=await nueva();
     let llamadas=0, confirmarEntrada, soltar;
