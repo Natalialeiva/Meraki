@@ -41,7 +41,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   const financiero=async id=>(await pool.query('SELECT id_abono,id_reserva,estado,monto,buy_order,token_transaccion,codigo_autorizacion,fecha_pago FROM abono WHERE id_abono=$1',[id])).rows;
   const enviar=async()=>{enviados++;if(modo!=='ok'){const e=new Error('fallo simulado');e.code=modo;throw e;}return{idMensaje:'mensaje-test'};};
   const req=createRequire(path.join(__dirname,'../index.js'));const module={exports:{}};
-  const wrapped=n=>n==='./db'?pool:n==='./notificaciones'?{...req(n),crearNotificaciones:p=>crearNotificaciones(p,enviar)}:n==='transbank-sdk'?{WebpayPlus:{Transaction:class{async status(){consultasWebpay++;return status;} async create(order,session,amount){if(alCrearWebpay)await alCrearWebpay(order,session,amount);status={status:"AUTHORIZED",response_code:0,amount,buy_order:order,authorization_code:"TEST"};return {token:String(++transaccionesCreadas).padStart(64,"a"),url:"https://webpay3gint.transbank.cl/webpayserver/initTransaction"};} async commit(token){return alConfirmarWebpay?alConfirmarWebpay(token):status;}}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}}:req(n);
+  const wrapped=n=>n==='./db'?pool:n==='./notificaciones'?{...req(n),crearNotificaciones:p=>crearNotificaciones(p,enviar)}:n==='transbank-sdk'?{WebpayPlus:{Transaction:class{async status(){consultasWebpay++;return status;} async create(order,session,amount,returnUrl){if(alCrearWebpay)await alCrearWebpay(order,session,amount,returnUrl);status={status:"AUTHORIZED",response_code:0,amount,buy_order:order,authorization_code:"TEST"};return {token:String(++transaccionesCreadas).padStart(64,"a"),url:"https://webpay3gint.transbank.cl/webpayserver/initTransaction"};} async commit(token){return alConfirmarWebpay?alConfirmarWebpay(token):status;}}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}}:req(n);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../index.js'),'utf8'),{require:wrapped,module,__dirname:path.join(__dirname,'..'),process,console,URL,Buffer,setTimeout,clearTimeout});app=module.exports;
   const agent=request.agent(app);
   await t.test('Anónimo no lista ni reintenta',async()=>{await request(app).get('/api/notificaciones').expect(401);await request(app).post('/api/notificaciones/'+notificacionId+'/reintentar').expect(401);});
@@ -602,6 +602,105 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    const retorno=a=>request(app).post('/api/abonos/retorno').send({token_ws:a.token});
    const recuperar=a=>agent.post('/api/abonos/'+a.id_abono+'/recuperar');
    const fila=async a=>(await pool.query('SELECT * FROM abono WHERE id_abono=$1',[a.id_abono])).rows[0];
+   await t.test('La ruta visual redirige con GET o POST sin depender de las cabeceras',async()=>{
+    const correos=enviados, consultas=consultasWebpay;
+    const leer=ref=>request(app).get('/api/abonos/resultado').set('X-Meraki-Resultado',ref);
+    const ref=r=>{
+     assert.equal(r.text,'');
+     assert.equal(r.headers['cache-control'],'no-store');
+     assert.equal(r.headers['referrer-policy'],'no-referrer');
+     assert.match(r.headers.location,/^\/consulta\/resultado\.html#[A-Za-z0-9_-]+$/);
+     return r.headers.location.split('#')[1];
+    };
+    let llamadas=0;
+    for(const [i,estado] of ['aprobado','rechazado','abandonado','incierto','conexion','pendiente'].entries()){
+     const a=await nueva();
+     await pool.query('DELETE FROM abono WHERE id_abono=$1',[a.id_abono]);
+     let urlEnviada;
+     alCrearWebpay=async (_orden,_sesion,_monto,url)=>{urlEnviada=url;};
+     let inicio;
+     try{inicio=(await request(app).post('/api/abonos/cliente/iniciar').send({
+      token_consulta:a.tokenConsulta,returnUrl:'https://no-usar.example/'
+     }).expect(201)).body;}finally{alCrearWebpay=null;}
+     const configurada=new URL(process.env.WEBPAY_RETURN_URL);
+     assert.equal(urlEnviada,configurada.origin+'/api/abonos/retorno/navegador'+configurada.search);
+     assert.match(inicio.correlacion,/^[A-Za-z0-9_-]{43}$/);
+     const anterior=llamadas;
+     const pagar=async()=>{llamadas++;
+      if(estado==='conexion')throw Object.assign(Error('Simulado'),{code:'ECONNRESET'});
+      return {...status,
+       status:estado==='rechazado'?'FAILED':'AUTHORIZED',
+       response_code:estado==='rechazado'?-1:0,
+       amount:estado==='incierto'?1:status.amount};
+     };
+     alConfirmarWebpay=pagar;
+     try{
+      const ruta='/api/abonos/retorno/navegador';
+      if(estado==='pendiente')await pool.query(`
+       UPDATE abono SET operacion_webpay=$2,tipo_operacion_webpay='commit',estado_proceso_webpay='en_proceso',
+        fecha_operacion_webpay=clock_timestamp(),commit_webpay_reclamado_en=clock_timestamp()
+       WHERE id_abono=$1
+      `,[inicio.id_abono,randomUUID()]);
+      const datos=estado==='abandonado'?{TBK_TOKEN:inicio.token}:{token_ws:inicio.token};
+      const ejecutar=()=>{
+       const r=i%2?request(app).post(ruta).type('form').send(datos):request(app).get(ruta).query(datos);
+       if(i<4)r.set('Accept',i<2?'text/html':'*/*');
+       if(i===2)r.set('Sec-Fetch-Mode','navigate');
+       if(i===3)r.set('Sec-Fetch-Dest','empty');
+       return r;
+      };
+      const referencia=ref(await ejecutar().expect(303));
+      for(const secreto of [inicio.token,a.tokenConsulta,inicio.correlacion])assert(!referencia.includes(secreto));
+      for(let j=0;j<2;j++){
+       const lectura=await leer(referencia).expect(200);
+       assert.deepEqual(lectura.body,{estado,correlacion:inicio.correlacion});
+      }
+      await leer((referencia[0]==='A'?'B':'A')+referencia.slice(1)).expect(404);
+      await ejecutar().expect(303);
+      assert.equal(llamadas,anterior+(['abandonado','pendiente'].includes(estado)?0:1));
+      const filas=await pool.query('SELECT count(*)::int AS n FROM abono WHERE id_reserva=$1',[a.id_reserva]);
+      assert.equal(filas.rows[0].n,1);
+      const avisos=await pool.query('SELECT count(*)::int AS n FROM notificacion_correo WHERE id_reserva=$1',[a.id_reserva]);
+      assert.equal(avisos.rows[0].n,estado==='aprobado'?1:0);
+      if(estado==='pendiente'){
+       await pool.query("UPDATE abono SET estado='rechazado',estado_proceso_webpay='resuelto' WHERE id_abono=$1",[inicio.id_abono]);
+       assert.equal((await leer(referencia).expect(200)).body.estado,'rechazado');
+      }
+     }finally{alConfirmarWebpay=null;}
+    }
+    assert.equal(enviados,correos+1);
+    assert.equal(consultasWebpay,consultas);
+    const anonimo=ref(await request(app).get('/api/abonos/retorno/navegador').query({TBK_ORDEN_COMPRA:'SIN-SESION'}).expect(303));
+    assert.deepEqual((await leer(anonimo).expect(200)).body,{estado:'abandonado'});
+    await request(app).get('/api/abonos/resultado').expect(404);
+   });
+   await t.test('La ruta heredada conserva JSON y Back Office conserva su URL configurada',async()=>{
+    let llamadas=0;
+    for(const metodo of ['get','post']){
+     const a=await nueva();
+     if(metodo==='post'){
+      await pool.query('DELETE FROM abono WHERE id_abono=$1',[a.id_abono]);
+      let urlEnviada;
+      alCrearWebpay=async (_orden,_sesion,_monto,url)=>{urlEnviada=url;};
+      let inicio;
+      try{inicio=(await agent.post('/api/abonos/iniciar').send({id_reserva:a.id_reserva}).expect(201)).body;}
+      finally{alCrearWebpay=null;}
+      assert.equal(urlEnviada,process.env.WEBPAY_RETURN_URL);
+      a.token=inicio.token;a.orden=status.buy_order;
+     }
+     alConfirmarWebpay=async()=>{llamadas++;return {...aprobado(a),status:'FAILED',response_code:-1};};
+     try{
+      const retorno=()=>{
+       const r=request(app)[metodo]('/api/abonos/retorno').set('Accept','text/html').set('Sec-Fetch-Mode','navigate');
+       return metodo==='get'?r.query({token_ws:a.token}):r.type('form').send({token_ws:a.token});
+      };
+      const r=await retorno().expect(200).expect('Content-Type',/json/);
+      assert.equal(r.body.estado_abono,'rechazado');
+      await retorno().expect(409).expect('Content-Type',/json/);
+     }finally{alConfirmarWebpay=null;}
+    }
+    assert.equal(llamadas,2);
+   });
    await t.test('Consulta privada calcula el permiso de pago con evidencia local y sin devolver identificadores del abono',async()=>{
     const inicial=transaccionesCreadas;
     const consultasIniciales=consultasWebpay;

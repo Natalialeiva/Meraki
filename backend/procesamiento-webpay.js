@@ -1,4 +1,5 @@
 const {randomUUID} = require('node:crypto');
+const {RETORNO_JSON,RETORNO_VISUAL,cabecerasPrivadas} = require('./resultado-webpay');
 
 const PLAZO_WEBPAY_MS = 15000;
 const REVISION_MS = 60000;
@@ -181,12 +182,44 @@ function crearProcesamientoWebpay({pool, webpay, registrar, notificar, plazoMs =
     return {procesar, buscar, elegible};
 }
 
-function montarProcesamientoWebpay(app, {pool, webpay, registrar, notificar, verificarSesion}) {
+function montarProcesamientoWebpay(app, {pool, webpay, registrar, notificar, verificarSesion, referencias}) {
     const servicio = crearProcesamientoWebpay({pool, webpay, registrar, notificar});
 
-    async function retorno(req, res) {
+    async function resultadoVisual(res, estado, token, orden, sesion) {
+        let abono;
+        try {
+            if(token || (orden && sesion)){
+                const {rows}=await pool.query(`
+                    SELECT id_abono,token_transaccion FROM abono
+                    WHERE ($1::text IS NOT NULL OR ($2::text IS NOT NULL AND $3::text IS NOT NULL))
+                      AND ($1::text IS NULL OR token_transaccion=$1)
+                      AND ($2::text IS NULL OR buy_order=$2)
+                      AND ($3::text IS NULL OR sesion_webpay=$3)
+                `,[token??null,orden??null,sesion??null]);
+                if(rows.length===1&&tokenValido(rows[0].token_transaccion))abono=rows[0];
+            }
+        } catch {
+            estado='conexion';
+        }
+        const ref=referencias.emitir(abono?.id_abono??null,abono?referencias.correlacion(abono.token_transaccion):null,estado);
+        return res.status(303).set('Location','/consulta/resultado.html#'+ref).end();
+    }
+
+    async function retorno(req, res, visual) {
+        cabecerasPrivadas(res);
         const parametros = {...req.query, ...req.body};
         if (parametros.TBK_TOKEN || parametros.TBK_ORDEN_COMPRA || parametros.TBK_ID_SESION) {
+            if(visual){
+                const {TBK_TOKEN:token,TBK_ORDEN_COMPRA:orden,TBK_ID_SESION:sesion}=parametros;
+                const texto=(v,max)=>typeof v==='string'&&v.length>0&&v.length<=max;
+                const inconsistente=['TBK_TOKEN','TBK_ORDEN_COMPRA','TBK_ID_SESION','token_ws'].some(k=>
+                    req.query[k]!==undefined&&req.body?.[k]!==undefined&&req.query[k]!==req.body[k]);
+                if(inconsistente||parametros.token_ws||(token!==undefined&&!tokenValido(token))||
+                    (orden!==undefined&&!texto(orden,26))||(sesion!==undefined&&!texto(sesion,61))){
+                    return resultadoVisual(res,'abandonado');
+                }
+                return resultadoVisual(res,'abandonado',token,orden,sesion);
+            }
             return res.json({
                 mensaje:'El pago fue interrumpido o terminó sin confirmación. Consulta su estado antes de intentar nuevamente.',
                 estado:'requiere_verificacion'
@@ -194,14 +227,16 @@ function montarProcesamientoWebpay(app, {pool, webpay, registrar, notificar, ver
         }
         const token = parametros.token_ws;
         if (!tokenValido(token) || (req.query.token_ws && req.body?.token_ws && req.query.token_ws !== req.body.token_ws)) {
+            if(visual)return resultadoVisual(res,'incierto');
             return res.status(400).json({mensaje:'No se recibió un token válido de pago'});
         }
         const r = await servicio.procesar({tipo:'commit',token});
+        if(visual)return resultadoVisual(res,r.codigo===502?'conexion':r.codigo===404?'incierto':'pendiente',token);
         return res.status(r.codigo).json(r.cuerpo);
     }
 
-    app.get('/api/abonos/retorno', retorno);
-    app.post('/api/abonos/retorno', retorno);
+    app.route(RETORNO_VISUAL).get((req,res)=>retorno(req,res,true)).post((req,res)=>retorno(req,res,true));
+    app.route(RETORNO_JSON).get((req,res)=>retorno(req,res,false)).post((req,res)=>retorno(req,res,false));
 
     function accesoPrivado(req) {
         const id = Number(req.params.id);

@@ -11,6 +11,7 @@ const {
 } = require("transbank-sdk");
 
 const {montarProcesamientoWebpay, PLAZO_WEBPAY_MS} = require('./procesamiento-webpay');
+const {crearReferenciasWebpay, montarLecturaResultado, urlRetornoVisual} = require('./resultado-webpay');
 
 // Configuración de Webpay Plus para pruebas.
 // No se utilizan credenciales de producción.
@@ -56,6 +57,8 @@ const {registrar:registrarNotificacionConfirmacion,notificar:notificarReservaCon
 if (!process.env.SESSION_SECRET) {
     throw new Error("Falta SESSION_SECRET en el archivo .env");
 }
+const referenciasWebpay = crearReferenciasWebpay(process.env.SESSION_SECRET);
+montarLecturaResultado(app,pool,referenciasWebpay);
 
 // Mensaje temporal para verificar que el servidor
 // está cargando la configuración actual de sesiones.
@@ -2813,7 +2816,7 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
             pago = {estado:'no_disponible',puede_iniciar:false,motivo:'estado_reserva'};
         } else if (pendiente || (tiene_abonos && !rechazos_concluyentes)) {
             pago = {estado:'en_revision',puede_iniciar:false,motivo:'intento_bloqueante'};
-        } else if (!Number.isSafeInteger(monto) || monto <= 0 || !process.env.WEBPAY_RETURN_URL?.trim()) {
+        } else if (!Number.isSafeInteger(monto) || monto <= 0 || !urlRetornoVisual(process.env.WEBPAY_RETURN_URL)) {
             pago = {estado:'no_disponible',puede_iniciar:false,motivo:'pago_no_disponible'};
         } else {
             pago = {estado:rechazos_concluyentes?'rechazado':'disponible',puede_iniciar:true,motivo:null};
@@ -2983,7 +2986,12 @@ app.post('/api/abonos/cliente/iniciar', async (req, res) => {
     if (typeof token !== 'string' || !formatoUUID.test(token)) {
         return res.status(400).json({mensaje: 'El token de la reserva no es válido'});
     }
-    const resultado = await iniciarAbonoWebpay({token}, process.env.WEBPAY_RETURN_URL);
+    res.set('Cache-Control','no-store');
+    res.set('Referrer-Policy','no-referrer');
+    const retorno = urlRetornoVisual(process.env.WEBPAY_RETURN_URL);
+    if(!retorno)return res.status(502).json({mensaje:'El pago no está disponible por ahora.'});
+    const resultado = await iniciarAbonoWebpay({token}, retorno);
+    if(resultado.codigo===201)resultado.cuerpo.correlacion=referenciasWebpay.correlacion(resultado.cuerpo.token);
     return res.status(resultado.codigo).json(resultado.cuerpo);
 });
 
@@ -2992,7 +3000,7 @@ app.post('/api/abonos/cliente/iniciar', async (req, res) => {
 // ============================================================
 
 montarProcesamientoWebpay(app, {
-    pool, webpay, verificarSesion,
+    pool, webpay, verificarSesion, referencias:referenciasWebpay,
     registrar: registrarNotificacionConfirmacion, notificar: notificarReservaConfirmada
 });
 

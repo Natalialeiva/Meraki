@@ -1,0 +1,9 @@
+:root { color-scheme: light; font: 100% system-ui, sans-serif; color: #382a34; background: #faf6f3; }
+body { margin: 0; padding: clamp(1rem, 5vw, 4rem); }
+main { box-sizing: border-box; max-width: 36rem; margin: 2rem auto; padding: clamp(1.25rem, 5vw, 2.5rem); background: #fff; border: 1px solid #e7dce5; border-radius: 1rem; }
+.marca { color: #62445d; font-weight: 700; }
+h1 { font-size: clamp(1.5rem, 6vw, 2.25rem); }
+p { line-height: 1.55; }
+a { display: inline-block; padding: .8rem 1.1rem; color: #fff; background: #623c58; border-radius: .55rem; font-weight: 650; }
+a:focus-visible { outline: 3px solid #382a34; outline-offset: 4px; }
+[hidden] { display: none; }

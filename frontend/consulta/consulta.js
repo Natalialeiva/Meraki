@@ -79,6 +79,22 @@ pagar.onclick = async () => {
         const datos = await api('/api/abonos/cliente/iniciar', 'POST', {token_consulta: token});
         const url = new URL(datos.url);
         if (url.protocol !== 'https:' || !['webpay3gint.transbank.cl', 'webpay3g.transbank.cl'].includes(url.hostname)) throw Error('Destino de pago inválido');
+        try {
+            if (/^[A-Za-z0-9_-]{43}$/.test(datos.correlacion) && /^[a-f0-9-]{36}$/i.test(token)) {
+                const prefijo = 'meraki:webpay:';
+                for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                    const clave = sessionStorage.key(i);
+                    if (clave?.startsWith(prefijo)) {
+                        let item;
+                        try { item = JSON.parse(sessionStorage.getItem(clave)); } catch {}
+                        if (!(item?.vence > Date.now())) sessionStorage.removeItem(clave);
+                    }
+                }
+                sessionStorage.setItem(prefijo + datos.correlacion, JSON.stringify({
+                    enlace:'/consulta/#'+encodeURIComponent(token), vence:Date.now()+30*60*1000
+                }));
+            }
+        } catch { /* La consulta original sigue disponible si la pestaña no permite almacenamiento. */ }
         const formulario = document.createElement('form');
         formulario.method = 'POST'; formulario.action = url.href;
         const campo = document.createElement('input');
