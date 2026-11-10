@@ -134,9 +134,22 @@ async function profesionales() {
 }
 async function seleccionar(dato) {
     if (enviando) return;
-    const version = ++versionSeleccion; versionProfesional++; limpiarHoras();
+    const version = ++versionSeleccion;
+    versionProfesional++;
+    // El aviso anterior puede estar en la reserva que se va a ocultar.
+    $('#estadoCatalogo').append(estado);
+    const cambioNegocio = negocio?.id_emprendimiento !== dato.id_emprendimiento;
     negocio = dato; creada = false; servicios = [];
     $('#camposReserva').disabled = false; $('#consulta').hidden = true; $('#nuevaReserva').hidden = true; $('#reserva').hidden = true;
+    opciones($('#servicio'), [], 'id_servicio', undefined, 'Selecciona un servicio');
+    opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional');
+    $('#listaServicios').replaceChildren();
+    $('#avisoServicio').textContent = '';
+    if (cambioNegocio) {
+        $('#fecha').value = '';
+        errorCampo($('#fecha'), '#errorFecha', '');
+    }
+    limpiarHoras();
     informar('Cargando servicios de ' + dato.nombre + '…', 'carga');
     try {
         const datos = await api('/api/emprendimientos/' + dato.id_emprendimiento + '/servicios');
@@ -148,7 +161,9 @@ async function seleccionar(dato) {
         $('#estadoReserva').append(estado);
         informar(primera ? 'Elige profesional, fecha y hora.' : datos.length ? noDisponible : 'No hay servicios publicados por el momento.');
         await profesionales();
-    } catch (error) { if (version === versionSeleccion) informar(error.message, 'error'); }
+    } catch {
+        if (version === versionSeleccion) informar('No se pudieron cargar los servicios de ' + dato.nombre + '. Vuelve a elegir el emprendimiento para reintentar.', 'error');
+    }
 }
 
 // Solo memoria de esta visita; las distancias se derivan al dibujar y no se guardan.
@@ -192,20 +207,98 @@ function dibujarCatalogo() {
 }
 $('#ordenCercania').onchange = dibujarCatalogo;
 
+async function cargarCategorias() {
+    const selector = $('#categoriaBusqueda');
+    const estadoCategorias = $('#estadoCategorias');
+    try {
+        const categorias = await api('/api/categorias');
+        if (!Array.isArray(categorias) || categorias.some(c =>
+            !c || !Number.isSafeInteger(c.id_categoria) || c.id_categoria < 1 ||
+            typeof c.nombre !== 'string' || !c.nombre.trim())) {
+            throw Error('Categorías inválidas');
+        }
+        opciones(selector, categorias, 'id_categoria', c => c.nombre, 'Todas las categorías');
+        selector.disabled = categorias.length === 0;
+        estadoCategorias.textContent = categorias.length ? '' : 'No hay categorías disponibles.';
+    } catch {
+        estadoCategorias.textContent = 'Las categorías no están disponibles temporalmente. Puedes buscar por nombre y comuna.';
+    }
+}
+
+const camposBusqueda = {nombre:'Nombre', comuna:'Comuna', id_categoria:'Categoría'};
+let ultimaBusqueda = new URLSearchParams();
+
+function repetirBusqueda(filtros, campoFoco) {
+    if (enviando) return;
+    const formulario = $('#buscar');
+    for (const clave of Object.keys(camposBusqueda)) {
+        formulario.elements.namedItem(clave).value = filtros.get(clave) || '';
+    }
+    if (campoFoco) formulario.elements.namedItem(campoFoco).focus();
+    else $('#tituloCatalogo').focus();
+    return formulario.requestSubmit();
+}
+
+function mostrarFiltros(filtros) {
+    const lista = $('#filtrosAplicados');
+    lista.replaceChildren();
+    for (const [clave, etiqueta] of Object.entries(camposBusqueda)) {
+        const valor = filtros.get(clave)?.trim();
+        if (!valor) continue;
+        const visible = clave === 'id_categoria'
+            ? $('#categoriaBusqueda').selectedOptions[0]?.textContent || valor
+            : valor;
+        const item = document.createElement('li');
+        const quitar = document.createElement('button');
+        quitar.type = 'button';
+        quitar.className = 'secundario';
+        quitar.textContent = etiqueta + ': ' + visible + ' ×';
+        quitar.setAttribute('aria-label', 'Quitar filtro ' + etiqueta + ': ' + visible);
+        quitar.onclick = () => {
+            const restantes = new URLSearchParams(filtros);
+            restantes.delete(clave);
+            return repetirBusqueda(restantes, clave);
+        };
+        item.append(quitar);
+        lista.append(item);
+    }
+    lista.hidden = lista.children.length === 0;
+}
+
+$('#reintentarBusqueda').onclick = () => repetirBusqueda(ultimaBusqueda);
+
 $('#buscar').onsubmit = async evento => {
     evento.preventDefault(); if (enviando) return;
+    const filtros = new URLSearchParams(new FormData(evento.target));
+    if (!filtros.get('id_categoria')) filtros.delete('id_categoria');
+    ultimaBusqueda = filtros;
+    mostrarFiltros(filtros);
     const version = ++versionBusqueda; versionSeleccion++; versionProfesional++; limpiarHoras();
-    $('#reserva').hidden = true; resultadosCatalogo = []; receptorMapa?.([]); $('#resultados').replaceChildren(); informar('Buscando emprendimientos…', 'carga');
+    $('#reserva').hidden = true; resultadosCatalogo = []; receptorMapa?.([]); $('#resultados').replaceChildren();
+    $('#resultados').setAttribute('aria-busy', 'true');
+    $('#reintentarBusqueda').hidden = true;
     $('#estadoCatalogo').append(estado);
+    informar('Buscando emprendimientos…', 'carga');
     try {
-        const filtros = new URLSearchParams(new FormData(evento.target));
         const datos = await api('/api/emprendimientos?' + filtros);
         if (version !== versionBusqueda) return;
         resultadosCatalogo = datos; dibujarCatalogo();
-        informar(datos.length ? datos.length + ' emprendimiento(s). Selecciona uno para ver sus servicios.' : 'No encontramos emprendimientos con esos filtros. Prueba solo con el nombre o pulsa Ver todos.');
-    } catch (error) { if (version === versionBusqueda) informar(error.message, 'error'); }
+        informar(datos.length ? datos.length + ' emprendimiento(s). Selecciona uno para ver sus servicios.' : 'No encontramos emprendimientos con esos filtros. Prueba quitando algún filtro o pulsa Ver todos.');
+    } catch (error) {
+        if (version !== versionBusqueda) return;
+        informar(error.message, 'error');
+        $('#reintentarBusqueda').hidden = false;
+    } finally {
+        if (version === versionBusqueda) $('#resultados').setAttribute('aria-busy', 'false');
+    }
 };
-$('#limpiarBusqueda').onclick = () => { if (enviando) return; $('#buscar').reset(); $('#buscar').requestSubmit(); };
+$('#limpiarBusqueda').onclick = () => {
+    if (enviando) return;
+    const orden = $('#ordenCercania').value;
+    $('#buscar').reset();
+    $('#ordenCercania').value = orden;
+    return $('#buscar').requestSubmit();
+};
 $('#servicio').onchange = profesionales;
 $('#profesional').onchange = () => { limpiarHoras(); $('#disponibilidad').disabled = !$('#profesional').value; };
 $('#fecha').onchange = () => { limpiarHoras(); errorCampo($('#fecha'), '#errorFecha', !$('#fecha').value ? 'Selecciona una fecha.' : $('#fecha').value < $('#fecha').min ? 'Elige hoy o una fecha posterior.' : ''); };
@@ -251,3 +344,4 @@ $('#formReserva').onsubmit = async evento => {
 $('#nuevaReserva').onclick = () => { if (enviando) return; $('#formReserva').reset(); camposInteractuados.clear(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
 $('#fecha').min = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Santiago', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
 opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional'); limpiarHoras(); $('#buscar').requestSubmit();
+void cargarCategorias();

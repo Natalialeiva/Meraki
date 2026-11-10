@@ -1,5 +1,6 @@
 (function(raiz) {
     'use strict';
+    const commonJS=typeof module!=='undefined' && module.exports;
     const DIA=86400000;
     const objeto=valor=>valor!==null && typeof valor==='object' && !Array.isArray(valor);
     const idValido=valor=>Number.isSafeInteger(valor) && valor>0;
@@ -60,14 +61,24 @@
             }
         }
     }
-    function calcularResumenOperativo(entrada) {
-        const {reservas,contexto,ahoraEpochMs}=objeto(entrada)?entrada:{};
+    function calcularReservasPorCerrar(entrada) {
+        const {reservas,contexto}=objeto(entrada)?entrada:{};
         if (!objeto(contexto) || !idValido(contexto.idEmprendimientoConsultado) ||
             !idValido(contexto.idEmprendimientoSeleccionado) || contexto.consultaAutorizada!==true ||
-            contexto.idEmprendimientoConsultado!==contexto.idEmprendimientoSeleccionado) return noDisponible('contexto_no_valido');
-        if (contexto.respuestaExitosa!==true || !Array.isArray(reservas)) return noDisponible('respuesta_no_disponible');
+            contexto.idEmprendimientoConsultado!==contexto.idEmprendimientoSeleccionado) {
+            return {estado:'no_disponible',cantidad:null,motivo:'contexto_no_valido'};
+        }
+        if (contexto.respuestaExitosa!==true || !Array.isArray(reservas)) {
+            return {estado:'no_disponible',cantidad:null,motivo:'respuesta_no_disponible'};
+        }
+        return {estado:'disponible',cantidad:reservas.filter(r=>objeto(r) && r.puede_cerrar===true).length,motivo:null};
+    }
+    function calcularResumenOperativo(entrada, resolverHoras=commonJS?resolver:null) {
+        const {estado,cantidad,motivo}=calcularReservasPorCerrar(entrada);
+        if (estado!=='disponible') return noDisponible(motivo);
+        const {reservas,contexto,ahoraEpochMs}=entrada;
         const resultado={idEmprendimiento:contexto.idEmprendimientoConsultado,
-            reservasPorCerrar:{estado:'disponible',cantidad:reservas.filter(r=>objeto(r) && r.puede_cerrar===true).length},
+            reservasPorCerrar:{estado,cantidad},
             proximaAtencion:proxima('sin_proximas'),exclusiones:null};
         if (!Number.isSafeInteger(ahoraEpochMs) || !Number.isFinite(new Date(ahoraEpochMs).getTime())) {
             resultado.proximaAtencion=proxima('no_disponible','referencia_temporal_no_valida');return resultado;
@@ -89,7 +100,12 @@
             if (!grupo.has(civil.civilMs)) grupo.set(civil.civilMs,{...civil,instantes:[]});
             confirmadas.push({reserva:r,indice,horario:grupo.get(civil.civilMs)});
         }
-        try {resolver(grupos,relojes);} catch {
+        try {
+            // El navegador requiere un resolvedor explícito para evitar un
+            // recorrido exhaustivo en el hilo de interfaz.
+            if (!resolverHoras && grupos.size) throw Error('Resolvedor no disponible');
+            resolverHoras?.(grupos,relojes);
+        } catch {
             resultado.proximaAtencion=proxima('no_disponible','zona_horaria_no_disponible');
             resultado.exclusiones=null;return resultado;
         }
@@ -125,7 +141,7 @@
         }
         return resultado;
     }
-    const api={calcularResumenOperativo};
-    if (typeof module!=='undefined' && module.exports) module.exports=api;
+    const api={calcularReservasPorCerrar,calcularResumenOperativo};
+    if (commonJS) module.exports=api;
     else raiz.MerakiResumen=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -708,6 +708,38 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   });
   await t.test('Propietaria ajena no puede ver ni modificar notificación',async()=>{const r=await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Otra','Prueba','otro','otra@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)]);await pool.query('UPDATE emprendimiento SET id_emprendedora=$1 WHERE id_emprendimiento=1',[r.rows[0].id_emprendedora]);await agent.get('/api/notificaciones').expect(200,[]);await agent.get('/api/reservas?id_emprendimiento=1').expect(403);await agent.get('/api/abonos/1/estado').expect(404);await agent.post('/api/abonos/1/recuperar').expect(404);for(const accion of ['atender','no-atendida','cancelar'])await agent.patch('/api/reservas/1/'+accion).expect(404);await agent.post('/api/notificaciones/'+notificacionId+'/reintentar').set('X-Meraki-Action','1').send({evidencia:'Configuración revisada por operadora'}).expect(404);});
   await t.test('Consulta privada no expone token y no se almacena en caché',async()=>{const r=await request(app).get('/api/reservas/consulta/11111111-1111-4111-8111-111111111111').expect(200);assert.equal(r.headers['cache-control'],'no-store');assert(!JSON.stringify(r.body).includes('11111111'));await request(app).get('/consulta/').expect(200);await request(app).get('/front-office/').expect(200);await request(app).get('/back-office/').expect(200);});
+  await t.test('Catálogo público combina categoría, nombre y comuna sin duplicar negocios',async()=>{
+   const categoria=await pool.query("INSERT INTO categoria(nombre) VALUES('Categoría aislada catálogo') RETURNING id_categoria");
+   const id=categoria.rows[0].id_categoria;
+   const negocio=async(nombre,comuna,activo)=>{
+    const cuenta=await pool.query(`INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash)
+      VALUES($1,'Prueba',$2,$3,'hash simulado') RETURNING id_emprendedora`,[nombre,nombre,nombre+'@example.test']);
+    const datos=await pool.query(`INSERT INTO emprendimiento(id_emprendedora,nombre,comuna,estado)
+      VALUES($1,$2,$3,$4) RETURNING id_emprendimiento`,[cuenta.rows[0].id_emprendedora,nombre,comuna,activo]);
+    return datos.rows[0].id_emprendimiento;
+   };
+   const norte=await negocio('Zeta Norte','Santiago',true);
+   const sur=await negocio('Zeta Sur','Providencia',true);
+   const inactivo=await negocio('Zeta Inactivo','Santiago',false);
+   const sinActivos=await negocio('Zeta Sin activos','Santiago',true);
+   await pool.query(`INSERT INTO servicio(id_emprendimiento,id_categoria,nombre,precio,duracion_min,monto_abono,activo)
+     VALUES($1,$5,'Uno',10000,30,0,true),($1,$5,'Dos',10000,30,0,true),($2,$5,'Tres',10000,30,0,true),
+           ($3,$5,'Cuatro',10000,30,0,true),($4,$5,'Cinco',10000,30,0,false)`,[norte,sur,inactivo,sinActivos,id]);
+   const buscar=async filtros=>(await request(app).get('/api/emprendimientos').query(filtros).expect(200)).body.map(n=>n.id_emprendimiento);
+   assert.deepEqual(await buscar({nombre:'Zeta'}),[norte,sinActivos,sur]);
+   assert.deepEqual(await buscar({id_categoria:id}),[norte,sur]);
+   assert.deepEqual(await buscar({id_categoria:id,nombre:'sur'}),[sur]);
+   assert.deepEqual(await buscar({id_categoria:id,comuna:'santiago'}),[norte]);
+   assert.deepEqual(await buscar({id_categoria:id,nombre:'Norte',comuna:'Santiago'}),[norte]);
+   assert.deepEqual(await buscar({id_categoria:id,nombre:'Norte',comuna:'Providencia'}),[]);
+   assert.deepEqual(await buscar({id_categoria:2147483647}),[]);
+   for(const valor of ['', '0', '-1', '1.5', '1e2', '2147483648','1&id_categoria=2']){
+    await request(app).get('/api/emprendimientos?id_categoria='+valor).expect(400);
+   }
+   const servicios=(await request(app).get('/api/emprendimientos/'+norte+'/servicios').expect(200)).body;
+   assert.equal(servicios.length,2);
+   assert.ok(servicios.every(s=>s.reservable===false));
+  });
  }finally{
   if(pool)await pool.end();await admin.query('DROP SCHEMA '+schema+' CASCADE');await admin.end();
  }

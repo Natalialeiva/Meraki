@@ -3863,7 +3863,15 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
 app.get("/api/emprendimientos", async (req, res) => {
     try {
         // Recibimos los filtros opcionales de la URL.
-        const { nombre, comuna } = req.query;
+        const { nombre, comuna, id_categoria } = req.query;
+
+        const categoria = typeof id_categoria === "string" ? Number(id_categoria) : null;
+        if (id_categoria !== undefined && (
+            typeof id_categoria !== "string" || !/^\d+$/.test(id_categoria) ||
+            !Number.isSafeInteger(categoria) || categoria < 1 || categoria > 2147483647
+        )) {
+            return res.status(400).json({ mensaje: "Indica una categoría válida" });
+        }
 
         // Validamos que los filtros sean textos.
         if (
@@ -3893,19 +3901,25 @@ app.get("/api/emprendimientos", async (req, res) => {
         // ILIKE permite buscar sin distinguir mayúsculas y minúsculas.
         const resultado = await pool.query(`
             SELECT
-                id_emprendimiento,
+                e.id_emprendimiento,
                 nombre,
                 descripcion,
                 comuna,
                 direccion,
                 latitud,
                 longitud
-            FROM emprendimiento
+            FROM emprendimiento e
             WHERE estado = TRUE
               AND nombre ILIKE '%' || $1 || '%'
               AND COALESCE(comuna, '') ILIKE '%' || $2 || '%'
+              AND ($3::integer IS NULL OR EXISTS (
+                  SELECT 1 FROM servicio s
+                  WHERE s.id_emprendimiento = e.id_emprendimiento
+                    AND s.id_categoria = $3
+                    AND s.activo = TRUE
+              ))
             ORDER BY nombre;
-        `, [nombreBuscado, comunaBuscada]);
+        `, [nombreBuscado, comunaBuscada, categoria]);
 
         // Respondemos con los resultados encontrados.
         return res.status(200).json(resultado.rows);

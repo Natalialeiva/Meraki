@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#f6f0eb">
 <meta name="description" content="Explora emprendimientos de cuidado personal, elige un servicio y consulta sus horarios disponibles en Meraki.">
 <title>Meraki | Belleza y bienestar</title>
-<link rel="stylesheet" href="styles.css?v=fase-a-2-3-final">
+<link rel="stylesheet" href="styles.css?v=filtros-aplicados-1">
 </head>
 <body>
 <a class="saltar" href="#buscar">Saltar a la búsqueda</a>
@@ -33,9 +33,15 @@
             <div class="camposBusqueda">
                 <label>Nombre del emprendimiento <input name="nombre" maxlength="150" placeholder="Ej.: Camila" autocomplete="off"></label>
                 <label>Comuna <input name="comuna" maxlength="100" placeholder="Ej.: Santiago" autocomplete="address-level2"></label>
+                <label>Categoría
+                    <select id="categoriaBusqueda" name="id_categoria" aria-describedby="ayudaBusqueda estadoCategorias" disabled>
+                        <option value="">Todas las categorías</option>
+                    </select>
+                </label>
             </div>
             <div class="acciones accionesBusqueda"><button>Buscar <span aria-hidden="true">→</span></button><button id="limpiarBusqueda" class="secundario" type="button">Ver todos</button></div>
-            <small class="ayuda">Si completas nombre y comuna, ambos deben coincidir. Elige un emprendimiento para ver sus servicios y precios.</small>
+            <small id="ayudaBusqueda" class="ayuda">Los filtros se combinan. La categoría muestra emprendimientos con servicios activos de esa categoría. Al abrir un emprendimiento puedes ver todos sus servicios publicados.</small>
+            <small id="estadoCategorias" class="ayuda" role="status">Cargando categorías…</small>
             <div class="ubicacion">
                 <p id="privacidadUbicacion" class="ayuda">Tu ubicación se utilizará para mostrar emprendimientos cercanos. No se almacenará ni se enviará al servidor.</p>
                 <div class="acciones"><button id="usarUbicacion" type="button" class="secundario" aria-describedby="privacidadUbicacion">Usar mi ubicación</button><button id="dejarUbicacion" type="button" class="secundario" hidden>Dejar de usar mi ubicación</button></div>
@@ -49,6 +55,8 @@
     <section id="catalogo" class="catalogo" aria-labelledby="tituloCatalogo">
         <div class="encabezadoSeccion"><div><p class="etiqueta">Catálogo</p><h2 id="tituloCatalogo" tabindex="-1">Emprendimientos para explorar</h2></div><p>Consulta sus servicios, precios y disponibilidad antes de reservar.</p></div>
         <div id="estadoCatalogo"><p id="estado" role="status" aria-live="polite" aria-atomic="true"></p></div>
+        <ul id="filtrosAplicados" class="filtrosAplicados" aria-label="Filtros aplicados" hidden></ul>
+        <button id="reintentarBusqueda" class="secundario" type="button" hidden>Reintentar búsqueda</button>
         <div class="acciones"><button id="verMapa" type="button" class="secundario" aria-expanded="false" aria-controls="panelMapa">Ver mapa</button></div>
         <section id="panelMapa" class="mapaPreparacion" hidden aria-labelledby="tituloMapa">
             <h3 id="tituloMapa">Vista de preparación del mapa</h3>
@@ -105,7 +113,7 @@
     </section>
 </main>
 <footer class="pie"><p>Catálogo de servicios de cuidado personal</p><a href="#inicio">Volver al inicio <span aria-hidden="true">↑</span></a></footer>
-<script src="front.js?v=fase-a-2-3-final"></script>
+<script src="front.js?v=avisos-servicios-1"></script>
 <script type="module" src="ubicacion.mjs?v=a3-2"></script>
 <script type="module" src="mapa.mjs?v=a3-4-1"></script>
 </body>

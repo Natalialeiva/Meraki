@@ -318,8 +318,25 @@ main {
 }
 .camposBusqueda {
     display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-columns:repeat(3,minmax(0,1fr));
     gap:1rem
+}
+.camposBusqueda label { min-width:0 }
+#categoriaBusqueda { max-width:100%; text-overflow:ellipsis }
+#estadoCategorias:empty { display:none }
+.filtrosAplicados {
+    display:flex;
+    flex-wrap:wrap;
+    gap:.5rem;
+    padding:0;
+    list-style:none
+}
+.filtrosAplicados li { min-width:0; max-width:100% }
+.filtrosAplicados button {
+    min-height:44px;
+    max-width:100%;
+    overflow-wrap:anywhere;
+    text-align:left
 }
 .acciones {
     display:flex;

@@ -32,16 +32,22 @@ function iniciar(config = {}) {
     for (const [clave,campo] of Object.entries({nombre,correo,telefono})) { campo.name = clave; elementos['#formReserva input[name="' + clave + '"]'] = campo; }
     elementos['#formReserva'].campos = [nombre,correo,telefono,elementos['#fecha'],elementos['#servicio'],elementos['#profesional'],elementos['#hora']];
     const filtroNombre = new Elemento('input'), comuna = new Elemento('input'); filtroNombre.name = 'nombre'; comuna.name = 'comuna';
-    elementos['#buscar'].campos = [filtroNombre,comuna];
+    const categoria = elementos['#categoriaBusqueda'];
+    categoria.name = 'id_categoria';
+    categoria.disabled = true;
+    elementos['#buscar'].campos = [filtroNombre,comuna,categoria];
+    elementos['#buscar'].elements = {namedItem: clave => elementos['#buscar'].campos.find(c => c.name === clave)};
     const peticiones = []; let reservasCreadas = 0;
     const contexto = vm.createContext({Intl,Date,URLSearchParams,console,
         document:{querySelector:s => { assert(elementos[s], 'Selector existente: ' + s); return elementos[s]; }, createElement:tag => new Elemento(tag)},
-        FormData:class { constructor(form) { this.form = form; } *[Symbol.iterator]() { for (const c of this.form.campos || []) if (c.name) yield [c.name,c.value]; } },
+        FormData:class { constructor(form) { this.form = form; } *[Symbol.iterator]() { for (const c of this.form.campos || []) if (c.name && !c.disabled) yield [c.name,c.value]; } },
         fetch:async (url, opciones) => {
             peticiones.push({url, method:opciones.method, body:opciones.body ? JSON.parse(opciones.body) : undefined});
             let datos;
-            if (url.startsWith('/api/emprendimientos?')) datos = config.buscar ? await config.buscar(url) : [{id_emprendimiento:1,nombre:'Belleza Camila',comuna:'Santiago'}];
-            else if (/^\/api\/emprendimientos\/\d+\/servicios$/.test(url)) datos = config.servicios || [servicio(1,false),servicio(2)];
+            if (url === '/api/categorias') datos = config.categorias ? await config.categorias() : [{id_categoria:4,nombre:'Belleza'}];
+            else if (url.startsWith('/api/emprendimientos?')) datos = config.buscar ? await config.buscar(url) : [{id_emprendimiento:1,nombre:'Belleza Camila',comuna:'Santiago'}];
+            else if (/^\/api\/emprendimientos\/\d+\/servicios$/.test(url)) datos = typeof config.servicios === 'function'
+                ? await config.servicios(url) : config.servicios || [servicio(1,false),servicio(2)];
             else if (url.startsWith('/api/servicios/')) datos = config.profesionales ? await config.profesionales(url) : [{id_trabajadora:3,nombre:'Camila'},{id_trabajadora:8,nombre:'Profesional dos'}];
             else if (url.startsWith('/api/disponibilidad?')) datos = config.disponibilidad ? await config.disponibilidad(url) : [{hora_inicio:'11:00:00'},{hora_inicio:'12:00:00'}];
             else if (url === '/api/clientas') datos = {id_clienta:11};
@@ -64,6 +70,114 @@ function iniciar(config = {}) {
     };
     return p;
 }
+
+test('Quitar un filtro conserva los demás valores de la búsqueda aplicada y devuelve el foco', async () => {
+    const p = iniciar();
+    await pausa();
+    p.filtroNombre.value = 'Camila';
+    p.comuna.value = 'Santiago';
+    p.elementos['#categoriaBusqueda'].value = '4';
+    await p.elementos['#buscar'].requestSubmit();
+    const lista = p.elementos['#filtrosAplicados'];
+    assert.deepEqual(lista.children.map(li => li.children[0].attributes['aria-label']), [
+        'Quitar filtro Nombre: Camila', 'Quitar filtro Comuna: Santiago', 'Quitar filtro Categoría: Belleza'
+    ]);
+    p.filtroNombre.value = 'Borrador';
+    await lista.children[1].children[0].onclick();
+    assert.equal(p.peticiones.at(-1).url, '/api/emprendimientos?nombre=Camila&comuna=&id_categoria=4');
+    assert.equal(p.comuna.focused, true);
+    assert.equal(lista.children.length, 2);
+    await p.elementos['#limpiarBusqueda'].onclick();
+    assert.equal(lista.hidden, true);
+});
+
+test('El reintento usa los filtros fallidos y anuncia carga y vacío', async () => {
+    const respuesta = diferida();
+    let intentos = 0;
+    const p = iniciar({buscar:() => {
+        intentos++;
+        if (intentos === 1) return [];
+        if (intentos === 2) throw Error('Error simulado');
+        return respuesta.promise;
+    }});
+    await pausa();
+    p.comuna.value = 'Santiago';
+    await p.elementos['#buscar'].requestSubmit();
+    const boton = p.elementos['#reintentarBusqueda'];
+    assert.equal(boton.hidden, false);
+    p.comuna.value = 'Borrador';
+    const reintento = boton.onclick();
+    assert.equal(boton.hidden, true);
+    assert.equal(p.elementos['#resultados'].attributes['aria-busy'], 'true');
+    assert.equal(p.elementos['#tituloCatalogo'].focused, true);
+    assert.match(p.peticiones.at(-1).url, /comuna=Santiago/);
+    respuesta.resolve([]);
+    await reintento;
+    assert.equal(p.elementos['#resultados'].attributes['aria-busy'], 'false');
+    assert.match(p.elementos['#estado'].textContent, /No encontramos/);
+});
+
+test('Categorías se cargan una vez y se combinan con nombre y comuna', async () => {
+    const opciones = diferida();
+    const p = iniciar({categorias:() => opciones.promise});
+    const selector = p.elementos['#categoriaBusqueda'];
+    assert.equal(selector.disabled, true);
+    assert.equal(p.peticiones[0].url.includes('id_categoria'), false);
+    opciones.resolve([{id_categoria:4,nombre:'Belleza'}]);
+    await pausa();
+    assert.deepEqual(selector.children.map(o => [o.value,o.textContent]), [['','Todas las categorías'],['4','Belleza']]);
+    assert.equal(selector.disabled, false);
+    assert.equal(p.peticiones.length, 2);
+    selector.value = '4';
+    p.filtroNombre.value = 'Camila';
+    p.comuna.value = 'Santiago';
+    await p.elementos['#buscar'].requestSubmit();
+    const parametros = new URLSearchParams(p.peticiones.at(-1).url.split('?')[1]);
+    assert.deepEqual(Object.fromEntries(parametros), {nombre:'Camila',comuna:'Santiago',id_categoria:'4'});
+    await p.seleccionar();
+    assert.equal(p.peticiones.some(r => r.url === '/api/emprendimientos/1/servicios'), true);
+    assert.match(textos(p.elementos['#listaServicios']), /Servicio 1[\s\S]*Servicio 2/);
+});
+
+test('Fallo de categorías conserva la búsqueda manual y distingue vacío de fallo de búsqueda', async () => {
+    let fallar = false;
+    const p = iniciar({categorias:async () => {throw Error('Sin categorías');},buscar:async () => {
+        if (fallar) throw Error('Error de catálogo');
+        return [];
+    }});
+    await pausa();
+    assert.match(p.elementos['#estadoCategorias'].textContent, /no están disponibles/);
+    assert.equal(p.elementos['#categoriaBusqueda'].disabled, true);
+    assert.match(p.elementos['#estado'].textContent, /No encontramos/);
+    p.comuna.value = 'Santiago';
+    fallar = true;
+    await p.elementos['#buscar'].requestSubmit();
+    assert.match(p.peticiones.at(-1).url, /comuna=Santiago/);
+    assert.equal(p.elementos['#estado'].dataset.tipo, 'error');
+    assert.equal(p.elementos['#estado'].textContent, 'Error de catálogo');
+});
+
+test('Ver todos invalida la búsqueda por categoría pendiente y conserva el orden local', async () => {
+    const antigua = diferida();
+    const nueva = [{id_emprendimiento:1,nombre:'Lejano',latitud:8,longitud:0},{id_emprendimiento:2,nombre:'Cercano',latitud:1,longitud:0}];
+    const p = iniciar({buscar:url => url.includes('id_categoria=4') ? antigua.promise : nueva});
+    await pausa();
+    const mapa = [];
+    p.suscribirMapa(datos => mapa.push(Array.from(datos, d => d.id_emprendimiento)));
+    p.actualizar({latitud:0,longitud:0}, (a,b,c) => c);
+    p.elementos['#ordenCercania'].value = 'cercania';
+    p.elementos['#categoriaBusqueda'].value = '4';
+    p.filtroNombre.value = 'Otro';
+    p.comuna.value = 'Otra';
+    const pendiente = p.elementos['#buscar'].requestSubmit();
+    await p.elementos['#limpiarBusqueda'].onclick();
+    antigua.resolve([{id_emprendimiento:3,nombre:'Antiguo'}]);
+    await pendiente;
+    assert.equal(p.elementos['#categoriaBusqueda'].value, '');
+    assert.equal(p.peticiones.at(-1).url, '/api/emprendimientos?nombre=&comuna=');
+    assert.deepEqual(mapa.at(-1), [1,2]);
+    assert.deepEqual(p.elementos['#resultados'].children.map(el => el.dataset.idNegocio), ['2','1']);
+});
 
 test('Front Office usa mensajes neutrales para todos los servicios no reservables', async () => {
     const p = iniciar({servicios:[servicio(1,false)]}); await p.seleccionar();
@@ -223,6 +337,62 @@ test('Los mensajes de reserva permanecen dentro de la reserva y los de búsqueda
     assert.doesNotMatch(p.elementos['#estado'].textContent,/pendiente de abono/);
 });
 
+test('Al cambiar de negocio, carga y error son visibles y el botón permite reintentar',async()=>{
+    const fallo=diferida();
+    const a={id_emprendimiento:1,nombre:'Negocio A'}, b={id_emprendimiento:2,nombre:'Negocio B'};
+    let intentosB=0;
+    const p=iniciar({buscar:()=>[a,b],servicios:url=>url.includes('/2/') && ++intentosB===1
+        ? fallo.promise : [servicio(url.includes('/2/')?2:1)]});
+    await p.preparar();
+    const e=p.elementos, aviso=e['#estado'], catalogo=e['#estadoCatalogo'];
+    const boton=e['#resultados'].children[1].children[2];
+    assert.equal(boton.tag,'button');
+    assert.equal(boton.type,'button');
+    boton.focus();
+    const carga=boton.onclick();
+    assert.equal(aviso.parentElement,catalogo);
+    assert.equal(catalogo.hidden,false);
+    assert.match(aviso.textContent,/Cargando servicios de Negocio B/);
+    assert.equal(e['#reserva'].hidden,true);
+    assert.equal(e['#listaServicios'].children.length,0);
+    for(const id of ['#servicio','#profesional','#hora','#fecha']) assert.equal(e[id].value,'');
+    assert.equal(e['#crearReserva'].disabled,true);
+    assert.equal(e['#resultados'].children.length,2);
+    fallo.reject(Error('Fallo ficticio'));
+    await carga;
+    assert.equal(aviso.parentElement,catalogo);
+    assert.equal(catalogo.children.filter(n=>n===aviso).length,1);
+    assert.equal(aviso.dataset.tipo,'error');
+    assert.match(aviso.textContent,/Negocio B.*reintentar/);
+    assert.match(html,/<p id="estado" role="status" aria-live="polite" aria-atomic="true">/);
+    assert.equal(boton.focused,true);
+    await boton.onclick();
+    assert.equal(e['#reserva'].hidden,false);
+    assert.equal(e['#servicio'].value,'2');
+    assert.equal(aviso.parentElement,e['#estadoReserva']);
+    assert.equal(catalogo.children.includes(aviso),false);
+});
+
+test('A → B → A ignora errores y respuestas de servicios obsoletos',async()=>{
+    const primera=diferida(), segunda=diferida(), vigente=diferida();
+    const respuestas=[primera,segunda,vigente];
+    const a={id_emprendimiento:1,nombre:'Negocio A'}, b={id_emprendimiento:2,nombre:'Negocio B'};
+    const p=iniciar({buscar:()=>[a,b],servicios:()=>respuestas.shift().promise});
+    await pausa();
+    const botones=p.elementos['#resultados'].children.map(t=>t.children[2]);
+    const cargas=[botones[0].onclick(),botones[1].onclick(),botones[0].onclick()];
+    segunda.reject(Error('Fallo obsoleto de B'));
+    await cargas[1];
+    assert.match(p.elementos['#estado'].textContent,/Cargando servicios de Negocio A/);
+    vigente.resolve([servicio(3)]);
+    await cargas[2];
+    primera.resolve([servicio(1)]);
+    await cargas[0];
+    assert.equal(p.elementos['#servicio'].value,'3');
+    assert.equal(p.elementos['#tituloReserva'].textContent,'Reserva en Negocio A');
+    assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoReserva']);
+    assert.equal(p.creadas(),0);
+});
 
 test('Errores aparecen solo en campos interactuados o al intentar continuar', async () => {
     const p = iniciar(); await p.seleccionar();
