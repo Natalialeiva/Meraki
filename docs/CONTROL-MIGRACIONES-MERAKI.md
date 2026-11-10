@@ -6,7 +6,7 @@ Actualizado el 9 de noviembre de 2026. Este inventario coordina el trabajo en `N
 
 Los respaldos se guardan fuera de Git. GitHub comparte el código y los archivos de migración, pero no sincroniza las bases PostgreSQL. Cada computador verifica y aplica las mismas migraciones faltantes para mantener el esquema compatible con el código, conservando sus datos locales.
 
-- **Natalia, PC actual.** Base `meraki_traslado_20261104`. El 9 de noviembre se consultó `public.abono` en solo lectura. Se encontraron las tres columnas y la restricción `abono_fase_webpay_valida` de la 009. No se encontraron las cinco columnas ni la restricción de la 010. La verificación anterior de aplicación de la 009 también comprobó índices y conservación de abonos históricos.
+- **Natalia, PC actual.** Base `meraki_traslado_20261104`. El 9 de noviembre de 2026 se confirmó la 009 y se aplicó la 010 del commit `5c87d341e1e4cc1e1fa0d3510a289cd8e976472f` con el backend detenido. Se creó un respaldo privado previo a la 010 que incluye la 009 y se verificaron su índice y sus conteos sin restaurarlo. La comprobación posterior en solo lectura confirmó las cinco columnas nuevas, la restricción de proceso y el índice único de operación. Las huellas anteriores y posteriores coincidieron para clientas, reservas, abonos históricos, suscripciones, inscripciones y pagos de suscripción. Los 14 abonos históricos conservaron sus valores y las cinco columnas nuevas quedaron en `NULL`. El backend quedó detenido.
 - **Adriana.** Base reportada `meraki_db`. Falta verificar directamente su esquema y las migraciones aplicadas.
 - **Natalia, segundo PC.** Base y migraciones pendientes de identificación y verificación directa.
 
@@ -23,7 +23,7 @@ En la tabla, **Por verificar** significa que no se ha confirmado en el computado
 | `007_nombre_reserva.sql` | Conservar en cada reserva el nombre informado para la cita. Requiere `reserva`. | `0b8f69b` | Por verificar | Por verificar | Por verificar | Verificar la columna sin mostrar nombres ni rellenar registros anteriores. |
 | `008_suscripcion_oneclick.sql` | Incorporar inscripción, datos de renovación, intentos de cobro y auditoría de suscripciones. Requiere `suscripcion` y `pago_suscripcion`. | `f5ee04e` | Por verificar | Por verificar | Por verificar | Revisar tablas, columnas e índices, y detectar suscripciones duplicadas antes de aplicar. Mantener apagadas las renovaciones. |
 | `009_intentos_webpay.sql` | Persistir la fase de creación, sesión y fecha del intento. Requiere `abono`, el estado financiero y sus columnas de orden y token. | `3c5e75f` | **Aplicada** | Por verificar | Por verificar | Verificación directa el 9 de noviembre en el PC actual. Revisar unicidad de orden, token y estados antes de aplicar en otro equipo. |
-| `010_procesamiento_webpay.sql` | Añadir reclamo durable de retorno y recuperación, tipo, estado técnico, fecha y marca de posible envío de `commit`. Requiere `abono`; el backend que la utiliza requiere también la 009. | Local, sin commit | **Sin aplicar** | Por verificar | Por verificar | Ausencia confirmada el 9 de noviembre en el PC actual. Probada antes en PostgreSQL aislado. Aplicarla únicamente con autorización, respaldo verificado y backend detenido. |
+| `010_procesamiento_webpay.sql` | Añadir reclamo durable de retorno y recuperación, tipo, estado técnico, fecha y marca de posible envío de `commit`. Requiere `abono` y el backend que la utiliza requiere también la 009. | `5c87d34` | **Aplicada** | Por verificar | Por verificar | Aplicada y verificada el 9 de noviembre de 2026 en el PC actual de Natalia. En otros equipos, confirmar si falta y aplicarla únicamente con autorización, respaldo verificado y backend detenido. |
 
 `schema.sql` define el esquema inicial, `seed.sql` carga datos de prueba y `consulta_disponibilidad.sql` contiene una consulta. No forman parte de la secuencia de migraciones incrementales de una base existente.
 
@@ -36,7 +36,7 @@ En la tabla, **Por verificar** significa que no se ha confirmado en el computado
 5. Aplicar solo los archivos faltantes y autorizados. Mantener el backend detenido cuando el código nuevo dependa de columnas ausentes.
 6. Verificar el esquema y los registros después de aplicar. Durante las pruebas, mantener `MERAKI_SUSCRIPCIONES_AUTOMATICAS=0`.
 
-## Aplicación futura de la 010
+## Aplicación de la 010 en otros computadores
 
 Una vez autorizada y publicada junto con el código, confirmar la versión del archivo, el destino y la 009 aplicada. Verificar el respaldo, registrar conteos y una huella de abonos históricos en solo lectura y comprobar que el backend esté detenido y no haya bloqueos incompatibles. Ejecutar la 010 una sola vez con `psql`, `ON_ERROR_STOP=1` y un plazo corto para adquirir bloqueos. El archivo incluye su propio `BEGIN` y `COMMIT`. Si falla, revisar el error y el estado de la base antes de reintentar.
 
