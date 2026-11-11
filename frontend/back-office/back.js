@@ -64,6 +64,28 @@ const suscripcion=MerakiSuscripcion.montar({contenedor:$('#gestionSuscripcion'),
 }});
 let agendaReservas=null;
 let versionAgenda=0;
+let presentacionAgenda=MerakiPresentacionReservas.crearPresentador();
+let contextoPresentacionAgenda=null, ultimoAnuncioAgenda=null;
+function reiniciarPresentacionAgenda(){
+    presentacionAgenda=MerakiPresentacionReservas.crearPresentador();
+    contextoPresentacionAgenda=null;ultimoAnuncioAgenda=null;
+    mostrarPresentacionAgenda();
+}
+function mostrarPresentacionAgenda(anunciar=true){
+    const vista=presentacionAgenda.obtenerEstado();
+    $('#estadoAgenda').dataset.estado=vista.estado;
+    $('#agendaContenido').setAttribute('aria-busy',String(vista.accesibilidad.ariaBusy));
+    $('#ultimaActualizacionAgenda').textContent=vista.ultimaActualizacion.texto;
+    $('#advertenciaActualizacionAgenda').textContent=vista.ultimaActualizacion.advertencia;
+    $('#cargar').disabled=vista.accesibilidad.ariaBusy;
+    $('#reintentarAgenda').hidden=!vista.acciones.some(a=>a.id==='reintentar'&&a.habilitada);
+    if(anunciar&&ultimoAnuncioAgenda!==vista.accesibilidad.anuncioId){
+        const detalle=vista.datos.tratamiento==='mostrar'
+            ? ' Por cerrar: '+$('#reservasPorCerrar').textContent+'. '+$('#proximaAtencionEstado').textContent : '';
+        $('#estadoAgenda').textContent=vista.mensaje+detalle;
+        ultimoAnuncioAgenda=vista.accesibilidad.anuncioId;
+    }
+}
 function mostrarProximaAtencion(mensaje,fecha='',detalle=''){
     $('#proximaAtencionFecha').textContent=fecha;
     $('#proximaAtencionDetalle').textContent=detalle;
@@ -106,10 +128,20 @@ function limpiarAgenda(mensaje, mensajeProxima='Próxima atención no disponible
     $('#reservasPorCerrar').textContent=mensaje;
     $('#resumenReservas').textContent=mensaje==='Cargando…'?'Cargando reservas…':'Reservas no disponibles.';
     mostrarProximaAtencion(mensajeProxima);
+    // La gestión de sesión sigue en api(). Solo limpiar su presentación derivada.
+    if(contextoPresentacionAgenda&&contextoPresentacionAgenda.sesion!==versionSesion){
+        presentacionAgenda.registrarError(presentacionAgenda.iniciarCarga(),{sesionVencida:true});
+        contextoPresentacionAgenda=null;
+        mostrarPresentacionAgenda();
+        const sesion=versionSesion;
+        Promise.resolve().then(()=>{
+            if(sesion===versionSesion&&$('#panel').hidden)claveIngreso.focus();
+        });
+    }
 }
 const dinero=valor=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(Number(valor));
 function textoArticulo(articulo,valor){const p=document.createElement('p');p.textContent=valor;articulo.append(p);}
-function renderAgenda(){
+function renderAgenda(anunciar=true){
     if(!agendaReservas)return;
     const visibles=MerakiAgenda.filtrar(agendaReservas,$('#filtroFecha').value,$('#filtroEstado').value);
     const hoy=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -119,7 +151,9 @@ function renderAgenda(){
     $('#reservasPendientes').textContent=agendaReservas.filter(r=>r.estado==='pendiente_abono').length;
     const lista=$('#reservas');lista.replaceChildren();
     $('#resumenReservas').textContent=visibles.length+' de '+agendaReservas.length+' reservas';
-    if(!visibles.length){const vacio=document.createElement('div');vacio.className='sin-reservas';vacio.textContent='No hay reservas para los filtros seleccionados.';lista.append(vacio);return;}
+    presentacionAgenda.aplicarFiltro(visibles.map(r=>r.id_reserva));
+    mostrarPresentacionAgenda(anunciar!==false);
+    if(!visibles.length){const vacio=document.createElement('div');vacio.className='sin-reservas';vacio.textContent=presentacionAgenda.obtenerEstado().mensaje;lista.append(vacio);return;}
     for(const r of visibles){
         const a=document.createElement('article');a.className='reserva-card';
         const cabecera=document.createElement('div');cabecera.className='reserva-cabecera';
@@ -127,7 +161,8 @@ function renderAgenda(){
         const etiqueta=document.createElement('span');etiqueta.className='reserva-estado';etiqueta.dataset.estado=r.estado;etiqueta.textContent=MerakiAgenda.estado(r.estado);cabecera.append(titulo,etiqueta);a.append(cabecera);
         const parrafo=(texto,clase)=>{const p=document.createElement('p');p.textContent=texto;p.className=clase;a.append(p);};
         parrafo(r.clienta+' · '+r.servicio,'reserva-persona');
-        const fecha=new Intl.DateTimeFormat('es-CL',{day:'numeric',month:'short',year:'numeric'}).format(new Date(r.fecha_hora_inicio.slice(0,10)+'T12:00:00'));
+        const dia=new Date(r.fecha_hora_inicio.slice(0,10)+'T12:00:00');
+        const fecha=Number.isNaN(dia.getTime())?'Fecha no disponible':new Intl.DateTimeFormat('es-CL',{day:'numeric',month:'short',year:'numeric'}).format(dia);
         parrafo(fecha+' · '+r.fecha_hora_inicio.slice(11,16)+' a '+r.fecha_hora_fin.slice(11,16)+' h','reserva-fecha');
         parrafo('Profesional: '+r.trabajadora,'reserva-detalle');
         parrafo('Servicio: '+dinero(r.precio_servicio)+' · Abono: '+dinero(r.monto_abono),'reserva-detalle');
@@ -156,12 +191,22 @@ async function reservas(){
     const negocio=$('#negocio').value;
     const id=Number(negocio);
     if($('#panel').hidden || !Number.isSafeInteger(id) || id<1){
+        if(presentacionAgenda.obtenerEstado().estado!=='sesion_vencida')reiniciarPresentacionAgenda();
         limpiarAgenda('No disponible');
         return;
     }
+    if(!contextoPresentacionAgenda||contextoPresentacionAgenda.sesion!==sesion||contextoPresentacionAgenda.negocio!==negocio){
+        const propio=negociosPerfil.find(n=>n.id_emprendimiento===id);
+        if(!propio){reiniciarPresentacionAgenda();limpiarAgenda('No disponible');return;}
+        presentacionAgenda.cambiarContexto({sesion:String(sesion),idEmprendimiento:id,nombre:propio.nombre});
+        contextoPresentacionAgenda={sesion,negocio};
+        mostrarPresentacionAgenda();
+    }
+    const ticket=presentacionAgenda.iniciarCarga();
     const vigente=()=>version===versionAgenda && sesion===versionSesion &&
         negocio===$('#negocio').value && !$('#panel').hidden;
     limpiarAgenda('Cargando…','Buscando próxima atención…');
+    mostrarPresentacionAgenda();
     try{
         const datos=await api('/api/reservas?id_emprendimiento='+encodeURIComponent(negocio),'GET',undefined,vigente);
         if(!vigente())return;
@@ -173,18 +218,32 @@ async function reservas(){
         }};
         const indicador=MerakiResumen.calcularReservasPorCerrar(entrada);
         if(indicador.estado!=='disponible')throw Error('La respuesta de reservas no es válida.');
+        const idsVisibles=MerakiAgenda.filtrar(datos,$('#filtroFecha').value,$('#filtroEstado').value).map(r=>r.id_reserva);
+        if(!presentacionAgenda.aceptarRespuesta(ticket,{
+            reservas:datos,idsVisibles,recibidoEnEpochMs:Date.now(),consultaAutorizada:true,respuestaExitosa:true
+        }))throw Error('La respuesta de reservas no es válida.');
         agendaReservas=datos;
-        renderAgenda();
+        renderAgenda(false);
         $('#reservasPorCerrar').textContent=String(indicador.cantidad);
         actualizarProximaAtencion(entrada);
+        mostrarPresentacionAgenda();
     }catch(error){
         if(!vigente())return;
         limpiarAgenda('No disponible','No se pudo cargar la agenda');
-        throw error;
+        presentacionAgenda.registrarError(ticket);
+        mostrarPresentacionAgenda();
+        // El error ya está anunciado en la región de agenda; no repetirlo
+        // en los mensajes globales de los consumidores de reservas().
+        return false;
     }
 }
 $('#filtroFecha').onchange=$('#filtroEstado').onchange=renderAgenda;
 $('#limpiarFiltros').onclick=()=>{$('#filtroFecha').value='';$('#filtroEstado').value='';renderAgenda();};
+$('#reintentarAgenda').onclick=async()=>{
+    const sesion=versionSesion,negocio=$('#negocio').value;
+    try{await reservas();}catch{ /* El estado de agenda ya presenta el error. */ }
+    if(sesion===versionSesion&&negocio===$('#negocio').value&&!$('#panel').hidden&&$('#reintentarAgenda').hidden)$('#cargar').focus();
+};
 
 async function notificaciones(){const datos=await api('/api/notificaciones');mostrar($('#notificaciones'),datos);[...$('#notificaciones').children].forEach((a,i)=>{const n=datos[i];if(!n)return;const opciones=n.requiere_revision?[['entregado','Confirmar entrega'],['no_entregado','Confirmar que no se entregó']]:['fallido','pendiente'].includes(n.estado)&&n.intentos<3?[['reintentar','Reintentar envío']]:[];if(!opciones.length)return;const label=document.createElement('label'),e=document.createElement('textarea');label.textContent='Evidencia (sin enlaces privados ni datos personales)';e.minLength=10;e.maxLength=500;label.append(e);a.append(label);for(const [decision,titulo] of opciones){const b=document.createElement('button');b.textContent=titulo;b.onclick=async()=>{if(e.value.trim().length<10){estado.textContent='Registra al menos 10 caracteres de evidencia.';return;}if(!confirm(titulo+' para la reserva '+n.id_reserva+'?'))return;for(const x of a.querySelectorAll('button'))x.disabled=true;try{const d=await api('/api/notificaciones/'+n.id_notificacion+'/'+(decision==='reintentar'?'reintentar':'revisar'),'POST',{decision,evidencia:e.value});estado.textContent=d.requiereRevision?'Resultado incierto. Revisa el proveedor antes de reenviar.':d.enviado?'Proveedor aceptó el mensaje.':d.revisado?'Revisión registrada.':'No se envió. Consulta el estado actualizado.';await notificaciones();}catch(err){estado.textContent=err.message;for(const x of a.querySelectorAll('button'))x.disabled=false;}};a.append(b);}});}
 async function iniciar(){

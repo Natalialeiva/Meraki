@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Vista previa de Reservas | Meraki</title>
+  <link rel="stylesheet" href="vista-previa.css">
+  <script src="presentacion.js" defer></script>
+  <script src="vista-previa.js" defer></script>
+</head>
+<body>
+  <a class="saltar" href="#titulo">Saltar a la vista previa</a>
+  <main>
+    <header class="encabezado">
+      <div><p class="marca">MERAKI · PREPARACIÓN</p><h1>Resumen de Reservas</h1>
+        <p>Vista previa aislada · Solo datos ficticios · Sin conexión al sistema real</p></div>
+      <span class="sello">Simulación local</span>
+    </header>
+    <section class="controles" aria-labelledby="tituloControles">
+      <h2 id="tituloControles">Explora los estados</h2>
+      <label for="negocio">Emprendimiento ficticio</label>
+      <select id="negocio"><option value="1">Negocio ficticio A</option><option value="2">Negocio ficticio B</option></select>
+      <fieldset><legend>Estado que quieres visualizar</legend><div id="escenarios" class="escenarios"></div></fieldset>
+      <p class="ayuda">Los botones reproducen situaciones en memoria. Actualizar o reintentar no envía solicitudes.</p>
+    </section>
+    <section class="panel" aria-labelledby="titulo">
+      <div class="cabecera-panel"><div><p class="eyebrow">AGENDA DE PRUEBA</p><h2 id="titulo" tabindex="-1">Reservas</h2></div><span id="estadoTipo" class="estado-tipo"></span></div>
+      <p id="mensaje" class="mensaje" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="agenda" aria-busy="false">
+        <article class="metrica"><h3>Total de reservas de la agenda</h3><strong id="total">—</strong><p>Incluye todos los estados. Los filtros no cambian el total.</p></article>
+        <div class="encabezado-lista"><h3>Lista de prueba</h3><p id="visibles"></p></div>
+        <div id="lista" class="lista"></div>
+      </div>
+      <div class="actualizacion"><p id="ultima"></p><p id="advertencia"></p>
+        <small>La marca indica recepción de datos en esta simulación, no modificaciones de PostgreSQL. Hora de Santiago.</small></div>
+      <div id="acciones" class="acciones" aria-label="Acciones simuladas de la agenda"></div>
+      <div id="acceso" class="acceso" tabindex="-1" hidden><h3>Acceso simulado</h3><p>No se solicita usuario ni contraseña. Selecciona otro estado para continuar la revisión.</p></div>
+    </section>
+    <footer><p>No se calculan indicadores financieros ni se crean reservas. El instante ficticio de aceptación es el 18 de noviembre de 2026.</p></footer>
+    <noscript>Activa JavaScript para explorar los estados locales. Esta página no accede al backend.</noscript>
+  </main>
+</body>
+</html>

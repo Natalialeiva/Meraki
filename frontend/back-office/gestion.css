@@ -17,3 +17,10 @@
 .metrica-proxima #proximaAtencionDetalle { margin:.35rem 0 0 }
 .metrica-proxima #proximaAtencionEstado { margin:0 }
 .metrica-proxima #proximaAtencionDetalle:empty { display:none }
+.ayuda-agenda{font-size:.8rem;line-height:1.65;color:#65576b;overflow-wrap:anywhere}
+.estado-agenda{padding:14px 16px;border:1px solid #d9c8df;border-radius:10px;background:#faf7fc;color:#503957;overflow-wrap:anywhere}
+.estado-agenda[data-estado^="error"]{background:#fff4f3;color:#693c37;border-color:#e6c8c4}
+.actualizacion-agenda,.advertencia-agenda{font-size:.8rem;overflow-wrap:anywhere}
+.advertencia-agenda{font-weight:600;color:#693c37}
+.actualizacion-agenda:empty,.advertencia-agenda:empty{display:none}
+#reintentarAgenda{margin-bottom:18px;min-height:44px}

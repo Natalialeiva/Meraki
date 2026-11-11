@@ -161,19 +161,29 @@
 </label>
 <button id="limpiarFiltros" type="button">Limpiar filtros</button>
 </div>
+<p class="ayuda-agenda">Resumen del emprendimiento seleccionado. Los filtros cambian la lista, no estos indicadores. Valores de la última carga válida; las reservas no representan ingresos.</p>
+<p id="estadoAgenda" class="estado-agenda" role="status" aria-live="polite" aria-atomic="true">Selecciona un emprendimiento para consultar su agenda.</p>
+<p id="ultimaActualizacionAgenda" class="actualizacion-agenda"></p>
+<p id="advertenciaActualizacionAgenda" class="advertencia-agenda"></p>
+<p class="ayuda-agenda">La última carga indica recepción de datos en este navegador, no una modificación de PostgreSQL. Hora de Santiago.</p>
+<button id="reintentarAgenda" type="button" hidden>Reintentar carga de agenda</button>
+<div id="agendaContenido" aria-busy="false">
 <div class="agenda-metricas" aria-label="Resumen de la agenda">
 <article>
 <small>Reservas en agenda</small>
+<span class="sr-only">Todas las fechas y estados, incluidas las canceladas.</span>
 <strong id="totalReservas">0</strong>
 <span class="punto" aria-hidden="true"></span>
 </article>
 <article>
 <small>Para hoy</small>
+<span class="sr-only">Fecha de Santiago, en cualquier estado.</span>
 <strong id="reservasHoy">0</strong>
 <span class="punto" aria-hidden="true"></span>
 </article>
 <article>
 <small>Confirmadas</small>
+<span class="sr-only">Incluye fechas pasadas y futuras.</span>
 <strong id="reservasConfirmadas">0</strong>
 <span class="punto" aria-hidden="true"></span>
 </article>
@@ -184,19 +194,20 @@
 </article>
 <article>
 <small id="etiquetaReservasPorCerrar">Reservas por cerrar</small>
-<strong id="reservasPorCerrar" role="status" aria-labelledby="etiquetaReservasPorCerrar">No disponible</strong>
+<strong id="reservasPorCerrar" aria-labelledby="etiquetaReservasPorCerrar">No disponible</strong>
 <span class="punto" aria-hidden="true"></span>
 </article>
 <article class="metrica-proxima" aria-labelledby="etiquetaProximaAtencion">
 <small id="etiquetaProximaAtencion">Próxima atención</small>
 <strong id="proximaAtencionFecha"></strong>
 <small id="proximaAtencionDetalle"></small>
-<p id="proximaAtencionEstado" role="status" aria-atomic="true">Próxima atención no disponible</p>
+<p id="proximaAtencionEstado">Próxima atención no disponible</p>
 <span class="punto" aria-hidden="true"></span>
 </article>
 </div>
-<p id="resumenReservas" role="status"></p>
+<p id="resumenReservas"></p>
 <div id="reservas"></div>
+</div>
 </section>
 <section class="vista" data-vista="perfil" hidden aria-labelledby="tituloPerfil">
 <h2 id="tituloPerfil" tabindex="-1">Perfil del emprendimiento</h2>
@@ -370,6 +381,7 @@
 <script src="agenda.js"></script>
 <script src="resumen.js?v=a4-1a"></script>
 <script src="resumen-temporal.js?v=a4-1b"></script>
+<script src="presentacion-reservas.js?v=estados-agenda-1"></script>
 <script src="pagos.js?v=webpay-proceso-1"></script>
 <script src="perfil.js?v=1"></script>
 <script src="servicios.js?v=acceso-1"></script>
@@ -377,6 +389,6 @@
 <script src="horarios.js?v=acceso-1"></script>
 <script src="suscripcion.js?v=gestion-1"></script>
 <script src="navegacion.js?v=gestion-1"></script>
-<script src="back.js?v=a4-1b"></script>
+<script src="back.js?v=estados-agenda-1"></script>
 </body>
 </html>
