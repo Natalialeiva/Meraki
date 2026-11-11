@@ -1,7 +1,8 @@
 # Preparación: claridad y estados del resumen de Reservas
 
-Especificación desconectada del Back Office. No crea otra pantalla Dashboard,
-controladores, endpoints ni cálculos nuevos. No modifica los seis indicadores.
+Preparación y módulo de presentación desconectados del Back Office. No crean otra
+pantalla Dashboard, endpoints ni cálculos nuevos de indicadores. El módulo solo
+mantiene estados de presentación en memoria. No modifica los seis indicadores.
 Base inspeccionada: `main`, `16edc33ae800c008726329b03f31b8054b0ef06e`.
 
 ## Indicadores y etiquetas propuestas
@@ -94,7 +95,8 @@ visible. Evitar duplicar sus anuncios con los role=status actuales de las tarjet
 la estrategia final debe probarse con lector de pantalla, sin quitar información
 accesible de Próxima atención o Reservas por cerrar. No depender solo de color,
 iconos o tooltip al explicar el alcance. Permitir lectura de ayudas con teclado
-y en móvil; probar nombres largos y zoom. Nada de esto está implementado todavía.
+y en móvil; probar nombres largos y zoom. El módulo ya entrega metadatos de foco
+y accesibilidad, pero su aplicación al DOM y verificación práctica siguen pendientes.
 
 ## Dependencias y límites
 
@@ -113,9 +115,91 @@ se corrige reinterpretando sus permisos desde este diseño.
 ## Comprobaciones y pendientes
 
 Ejecutar: `node --test preparacion/dashboard-reservas/dashboard-reservas.test.cjs`.
-Las comprobaciones ejecutables leen documentación y recursos, sin HTTP, ejecución
-de backend, PostgreSQL ni proveedores. No constituyen pruebas de funcionamiento
-del futuro componente. Los TODO son criterios pendientes de implementación.
+Las comprobaciones de `dashboard-reservas.test.cjs` leen documentación y recursos,
+sin HTTP, ejecución de backend, PostgreSQL ni proveedores. No constituyen pruebas
+de funcionamiento del futuro componente conectado. Sus 12 TODO siguen pendientes
+de integración, aunque partes de su lógica se prueban ahora de forma aislada.
+
+## Módulo aislado implementado
+
+Implementado sobre `cada55630cdcc7ad0fd5937b1ef80e4059de7651`, sin integración.
+
+`presentacion.js` exporta por CommonJS `{crearPresentador, formatearSantiago}` y,
+como script clásico, `globalThis.MerakiPresentacionReservas`. No requiere DOM,
+backend, red, temporizadores, almacenamiento ni dependencias externas. La futura
+interfaz debe usar textContent para los textos, incluidos nombres de negocios.
+
+Contrato del presentador:
+
+- `crearPresentador()` devuelve una instancia privada en memoria. Antes del
+  contexto hay un estado de guarda `sin_contexto`, sin contadores ni marca.
+- `cambiarContexto({sesion, idEmprendimiento, nombre})`: sesión como identificador
+  lógico opaco del integrador (NO contraseña, cookie ni token real), ID entero
+  positivo y nombre de hasta 150 caracteres. Siempre invalida tickets y limpia
+  marca/datos, incluso si vuelve al mismo ID. El integrador debe llamarlo al
+  cambiar sesión o negocio. El estado público no expone el identificador de sesión.
+- `iniciarCarga()` devuelve un ticket opaco congelado. Llamarlo durante una carga
+  devuelve el mismo ticket, sin transición ni anuncio adicional; no inicia HTTP.
+  Guardar su referencia para entregar respuesta o error; no reconstruirlo.
+- `aceptarRespuesta(ticket, {reservas, idsVisibles?, recibidoEnEpochMs,
+  consultaAutorizada, respuestaExitosa})` devuelve true solo al aceptar una carga.
+  Ambas banderas deben ser exactamente true y proporcionarse tras autorización
+  real del servidor; NO autentican por sí mismas. El módulo no puede acreditar
+  pertenencia individual cuando la API no trae id_emprendimiento. Si lo trae y
+  contradice el contexto, rechaza la lista.
+- La validación mínima requiere array, IDs positivos sin duplicados, estados del
+  contrato actual y campos temporales string. No resuelve ni valida calendarios
+  civiles: deja sus exclusiones al módulo temporal existente. No cambia permisos
+  ni calcula los seis indicadores. Una fecha indeterminada puede coexistir con
+  carga válida y Próxima atención pendiente de revisión en el integrador.
+- `idsVisibles` es un subconjunto único de IDs de la respuesta; por defecto son
+  todos. `aplicarFiltro(idsVisibles)` actualiza solo visibles/estado, sin modificar
+  total o marca. Los filtros reales siguen siendo responsabilidad del integrador.
+  Un filtro inválido lanza TypeError sin cambiar el estado; sin datos válidos retorna
+  false. Si la cantidad visible no cambia, no genera otro anuncio del resumen.
+- `registrarError(ticket, {sesionVencida?})`: error normal oculta datos y conserva
+  marca del mismo contexto si existe; expiración vigente elimina contexto, datos y
+  marca. No recibe ni publica detalles internos de excepciones.
+- Tickets viejos, reconstruidos, ya consumidos o de otra instancia se ignoran
+  devolviendo false, sin modificar estado, marca, foco ni anuncio. No sustituye
+  el control de sesiones y respuestas antiguas del código que realizará HTTP.
+- `obtenerEstado()` devuelve una instantánea profundamente congelada con `estado`,
+  `emprendimiento`, `mensaje`, `acciones` declarativas, `datos`, `ultimaActualizacion`,
+  `foco` y `accesibilidad`. No devuelve reservas ni conserva sus objetos originales;
+  retiene solo IDs de la agenda aceptada, contexto y marca durante la visita.
+  Ocultar datos significa total/visibles null, no cero. `indicadores` indica
+  `usar_agenda_completa` o `no_disponibles`, sin reemplazar sus cálculos.
+- `anuncioId` identifica cada transición aceptada para que el integrador la anuncie
+  una sola vez. No garantiza por sí solo un anuncio real ni mueve foco. El estado
+  cambio_emprendimiento sugiere selector; sesión vencida sugiere acceso; el resto
+  conserva foco. `acciones` nunca se ejecutan desde este módulo.
+
+Ejemplo ficticio, sin solicitudes:
+
+```js
+const {crearPresentador} = require('./presentacion.js');
+const panel = crearPresentador();
+panel.cambiarContexto({sesion:'visita-ficticia', idEmprendimiento:1, nombre:'Negocio ficticio'});
+const ticket = panel.iniciarCarga();
+panel.aceptarRespuesta(ticket, {
+  reservas: [], consultaAutorizada:true, respuestaExitosa:true,
+  recibidoEnEpochMs: Date.UTC(2026, 10, 18, 18, 4, 12)
+});
+const vista = panel.obtenerEstado(); // agenda_vacia; carga válida, no error
+```
+
+Ejecutar pruebas del módulo: `node --test preparacion/dashboard-reservas/presentacion.test.cjs`.
+Usan exclusivamente reservas ficticias. Las pruebas incluyen instantes de verano,
+invierno, transiciones y cruce de año, procesos con UTC/Tokio/Santiago y script
+en contexto sin DOM ni servicios externos. No constituyen revisión en navegadores
+reales ni prueban un lector de pantalla. Intl utiliza las reglas horarias del
+entorno; el reloj de aceptación es explícito y debe proporcionarlo el integrador.
+No se usa Date.now ni se garantiza que el reloj del equipo esté sincronizado.
+
+Resultado de esta etapa: 33 pruebas del módulo y 7 comprobaciones documentales
+aprobadas (40), sin fallos; 12 criterios de integración TODO permanecen pendientes.
+Regresión existente de agenda/interfaz: 16 aprobadas, sin fallos ni omisiones.
+Total ejecutado aprobado: 56; los TODO no se incluyen en ese total.
 
 Antes de integrar, probar con transporte simulado los ocho estados, respuestas
 antiguas, sesión, filtros y marcas; después realizar revisión real de teclado,
