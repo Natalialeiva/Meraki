@@ -32,6 +32,19 @@ async function api(url, method = 'GET', data) {
     return datos;
 }
 
+// Son componentes civiles almacenados, no instantes UTC. No resolver DST aquí:
+// una hora repetida o inexistente necesita revisión al crear la reserva.
+function presentarHoraCivil(valor, zona) {
+    if (zona !== 'America/Santiago' || typeof valor !== 'string') return null;
+    const partes = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(valor);
+    if (!partes) return null;
+    const [a, m, d, h, min, seg] = partes.slice(1).map(Number);
+    const bisiesto = a % 4 === 0 && (a % 100 !== 0 || a % 400 === 0);
+    const dias = [31, bisiesto ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (a < 1 || m < 1 || m > 12 || d < 1 || d > dias[m - 1] || h > 23 || min > 59 || seg > 59) return null;
+    return `${partes[3]}/${partes[2]}/${partes[1]}, ${partes[4]}:${partes[5]}${seg ? ':' + partes[6] : ''} — hora de Santiago`;
+}
+
 const ruta = '/api/reservas/consulta/' + encodeURIComponent(token);
 async function cargar(aviso = '') {
     const actual = ++version;
@@ -53,7 +66,16 @@ async function cargar(aviso = '') {
             ? 'Reserva de prueba: solo consulta. Los pagos y las cancelaciones están deshabilitados.'
             : [aviso, datos.mensaje, mensajePago, datos.capacidades?.motivoCancelacion].filter(Boolean).join(' ');
         detalle.replaceChildren();
+        for (const [campo, etiqueta] of [['inicio', 'Inicio'], ['fin', 'Fin']]) {
+            const p = document.createElement('p');
+            const civil = presentarHoraCivil(datos.reserva[`fecha_hora_${campo}_civil`], datos.reserva.zona_horaria);
+            // El ISO anterior depende de la zona del servidor: no permite reconstruir
+            // con certeza el timestamp civil original.
+            p.textContent = etiqueta + ': ' + (civil || 'Horario no disponible. Consulta al emprendimiento.');
+            detalle.append(p);
+        }
         for (const [clave, valor] of Object.entries(datos.reserva)) {
+            if (['fecha_hora_inicio', 'fecha_hora_fin', 'fecha_hora_inicio_civil', 'fecha_hora_fin_civil', 'zona_horaria'].includes(clave)) continue;
             const p = document.createElement('p');
             p.textContent = clave.replaceAll('_', ' ') + ': ' + valor;
             detalle.append(p);

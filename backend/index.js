@@ -2778,6 +2778,9 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
                 r.estado,
                 r.fecha_hora_inicio,
                 r.fecha_hora_fin,
+                TO_CHAR(r.fecha_hora_inicio, 'YYYY-MM-DD"T"HH24:MI:SS') AS fecha_hora_inicio_civil,
+                TO_CHAR(r.fecha_hora_fin, 'YYYY-MM-DD"T"HH24:MI:SS') AS fecha_hora_fin_civil,
+                'America/Santiago'::text AS zona_horaria,
                 s.nombre AS servicio,
                 e.nombre AS emprendimiento
             FROM reserva r

@@ -4,7 +4,7 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 function pantalla(respuestas) {
-    const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar','actualizar'].map(id=>['#'+id,{hidden:true,disabled:false,replaceChildren(){},append(){}}]));
+    const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar','actualizar'].map(id=>['#'+id,{hidden:true,disabled:false,hijos:[],replaceChildren(){this.hijos=[];},append(p){this.hijos.push(p);}}]));
     const peticiones = [];
     const contexto = vm.createContext({
         location:{hash:'#11111111-1111-4111-8111-111111111111'},URL,confirm:()=>true,
@@ -92,4 +92,33 @@ test('Una respuesta atrasada no habilita el pago después de una consulta fallid
     resolver(datos(disponible));await esperar();
     assert.equal(p.elementos['#pagar'].hidden,true);
     assert.match(p.elementos['#estado'].textContent,/No se pudo completar/);
+});
+
+for (const civil of ['2026-11-18T15:00:00','2026-07-18T15:00:00','2026-12-31T23:59:59','2027-01-01T00:00:00','2026-04-04T23:30:00','2026-09-06T00:30:00']) {
+ test('Presenta componentes civiles sin desplazar: '+civil,async()=>{
+  const p=pantalla([{status:200,texto:JSON.stringify({reserva:{...reserva,fecha_hora_inicio:'1999-01-01T00:00:00Z',fecha_hora_inicio_civil:civil,fecha_hora_fin_civil:civil,zona_horaria:'America/Santiago'}})}]);
+  await esperar();
+  const texto=p.elementos['#detalle'].hijos.map(p=>p.textContent).join(' ');
+  assert(texto.includes(civil.slice(8,10)+'/'+civil.slice(5,7)+'/'+civil.slice(0,4)));
+  assert(texto.includes(civil.slice(11,16)));assert(texto.includes('hora de Santiago'));assert(!texto.includes('1999'));
+ });
+}
+for (const valor of [undefined,null,'2026-02-30T15:00:00','2026-11-18T24:00:00','2026-11-18T15:00:00Z','texto']) {
+ test('Horario no fiable no se inventa: '+valor,async()=>{
+  const p=pantalla([{status:200,texto:JSON.stringify({reserva:{...reserva,fecha_hora_inicio:'2026-11-18T18:00:00Z',fecha_hora_inicio_civil:valor,zona_horaria:'America/Santiago'}})}]);await esperar();
+  assert.match(p.elementos['#detalle'].hijos[0].textContent,/Horario no disponible/);
+ });
+}
+test('Presentación independiente de la zona del navegador: no construye Date',async()=>{
+ const codigo=fs.readFileSync(path.join(__dirname,'../../frontend/consulta/consulta.js'),'utf8');
+ const contexto=vm.createContext({location:{hash:''},document:{querySelector:()=>({replaceChildren(){}}),createElement:()=>({})},URL,Date:class {constructor(){throw Error('Conversión local prohibida');}}});
+ vm.runInContext(codigo,contexto);
+ assert.equal(vm.runInContext("presentarHoraCivil('2026-11-18T15:00:00','America/Santiago')",contexto),'18/11/2026, 15:00 — hora de Santiago');
+ const {spawnSync}=require('node:child_process');
+ for(const zona of ['UTC','Asia/Tokyo','America/Santiago']) {
+  const programa=`const vm=require('node:vm');const c=vm.createContext({location:{hash:''},document:{querySelector:()=>({replaceChildren(){}})},URL});vm.runInContext(${JSON.stringify(codigo)},c);process.stdout.write(vm.runInContext("presentarHoraCivil('2026-11-18T15:00:00','America/Santiago')",c));`;
+  const r=spawnSync(process.execPath,['-e',programa],{env:{...process.env,TZ:zona},encoding:'utf8'});
+  assert.equal(r.status,0,r.stderr);
+  assert.equal(r.stdout,'18/11/2026, 15:00 — hora de Santiago');
+ }
 });

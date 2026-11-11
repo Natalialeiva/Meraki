@@ -44,6 +44,35 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   const wrapped=n=>n==='./db'?pool:n==='./notificaciones'?{...req(n),crearNotificaciones:p=>crearNotificaciones(p,enviar)}:n==='transbank-sdk'?{WebpayPlus:{Transaction:class{async status(){consultasWebpay++;return status;} async create(order,session,amount,returnUrl){if(alCrearWebpay)await alCrearWebpay(order,session,amount,returnUrl);status={status:"AUTHORIZED",response_code:0,amount,buy_order:order,authorization_code:"TEST"};return {token:String(++transaccionesCreadas).padStart(64,"a"),url:"https://webpay3gint.transbank.cl/webpayserver/initTransaction"};} async commit(token){return alConfirmarWebpay?alConfirmarWebpay(token):status;}}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}}:req(n);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../index.js'),'utf8'),{require:wrapped,module,__dirname:path.join(__dirname,'..'),process,console,URL,Buffer,setTimeout,clearTimeout});app=module.exports;
   const agent=request.agent(app);
+  await t.test('Consulta privada: PostgreSQL conserva componentes civiles en distintas zonas',async()=>{
+   const original=(await pool.query(`SELECT TO_CHAR(fecha_hora_inicio,'YYYY-MM-DD"T"HH24:MI:SS') AS inicio, TO_CHAR(fecha_hora_fin,'YYYY-MM-DD"T"HH24:MI:SS') AS fin FROM reserva WHERE id_reserva=1`)).rows[0];
+   const zonaAnterior=process.env.TZ;
+   const sesion=request.agent(app);
+   await sesion.post('/api/auth/login').send({correo:'camila@meraki.test',password:'clave-prueba'}).expect(200);
+   try {
+    for(const zona of ['America/Santiago','UTC','Asia/Tokyo']) {
+     process.env.TZ=zona;
+     for(const civil of ['2026-11-18T15:00:00','2026-07-18T15:00:00','2026-12-31T23:30:00','2027-01-01T00:30:00','2026-04-04T23:30:00','2026-09-06T00:30:00']) {
+      await pool.query("UPDATE reserva SET fecha_hora_inicio=$1::timestamp,fecha_hora_fin=$1::timestamp+interval '1 hour' WHERE id_reserva=1",[civil]);
+      const fila=(await pool.query('SELECT fecha_hora_inicio,fecha_hora_fin FROM reserva WHERE id_reserva=1')).rows[0];
+      const respuesta=(await request(app).get('/api/reservas/consulta/11111111-1111-4111-8111-111111111111').expect(200)).body;
+      assert.equal(respuesta.reserva.fecha_hora_inicio_civil,civil);
+      assert.equal(respuesta.reserva.zona_horaria,'America/Santiago');
+      assert.equal(respuesta.reserva.fecha_hora_inicio,fila.fecha_hora_inicio.toISOString());
+      assert.equal(respuesta.reserva.fecha_hora_fin,fila.fecha_hora_fin.toISOString());
+      const fin=(await pool.query(`SELECT TO_CHAR(fecha_hora_fin,'YYYY-MM-DD"T"HH24:MI:SS') AS civil FROM reserva WHERE id_reserva=1`)).rows[0].civil;
+      assert.equal(respuesta.reserva.fecha_hora_fin_civil,fin);
+      assert(respuesta.pago);assert(respuesta.capacidades);
+      const agenda=(await sesion.get('/api/reservas?id_emprendimiento=1').expect(200)).body;
+      assert.equal(agenda.find(r=>r.id_reserva===1).fecha_hora_inicio,civil);
+     }
+    }
+   } finally {
+    if(zonaAnterior===undefined)delete process.env.TZ;else process.env.TZ=zonaAnterior;
+    await pool.query('UPDATE reserva SET fecha_hora_inicio=$1::timestamp,fecha_hora_fin=$2::timestamp WHERE id_reserva=1',[original.inicio,original.fin]);
+    await sesion.post('/api/auth/logout').expect(200);
+   }
+  });
   await t.test('Anónimo no lista ni reintenta',async()=>{await request(app).get('/api/notificaciones').expect(401);await request(app).post('/api/notificaciones/'+notificacionId+'/reintentar').expect(401);});
   await t.test('Login real crea sesión PostgreSQL',async()=>{await agent.post('/api/auth/login').send({correo:'camila@meraki.test',password:'clave-prueba'}).expect(200);});
   await t.test('Perfil: autenticación, campos protegidos y validaciones',async()=>{
