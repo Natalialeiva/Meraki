@@ -24,3 +24,20 @@
 .advertencia-agenda{font-weight:600;color:#693c37}
 .actualizacion-agenda:empty,.advertencia-agenda:empty{display:none}
 #reintentarAgenda{margin-bottom:18px;min-height:44px}
+.distribucion-reservas{border:1px solid var(--borde);border-radius:14px;padding:20px;margin:22px 0;background:#fcfafc;min-width:0}
+.distribucion-reservas h3{margin-bottom:12px}.distribucion-reservas h4{font-size:1rem;margin:0 0 10px}.distribucion-reservas h5{font-size:.9rem;margin:0 0 10px}
+.distribucion-reservas p,.distribucion-reservas li{font-size:.8rem;overflow-wrap:anywhere}.distribucion-reservas [id^=estado]{color:#58475d}
+.totales-distribucion{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+.totales-distribucion>div{border:1px solid var(--borde);border-radius:10px;padding:14px;background:#f5eff8;min-width:0}.totales-distribucion dt{font-size:.8rem;overflow-wrap:anywhere}.totales-distribucion dd{font-size:1.5rem;font-weight:600;margin:8px 0 0}
+.columnas-distribucion{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.columnas-distribucion>section{min-width:0}.columnas-distribucion article{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:16px;margin:12px 0;overflow-wrap:anywhere}.columnas-distribucion ul{padding-left:20px;margin:8px 0}
+@media(max-width:700px){.totales-distribucion,.columnas-distribucion{grid-template-columns:1fr}.distribucion-reservas{padding:15px}}
+.distribucion-cantidad{font-weight:650;color:#503957}
+.barra-distribucion{display:block;width:100%;height:14px;margin:12px 0 18px;accent-color:#775269;border:0}
+.barra-distribucion::-webkit-meter-bar{background:#eee6f2;border:1px solid #d5c6dc;border-radius:8px;box-shadow:none}
+.barra-distribucion::-webkit-meter-optimum-value{background:#775269;border-radius:8px}
+.barra-distribucion::-moz-meter-bar{background:#775269;border-radius:8px}
+.columnas-distribucion details{margin-top:10px;border-top:1px solid var(--borde);padding-top:4px}
+.columnas-distribucion summary{display:list-item;cursor:pointer;min-height:44px;padding:12px 4px;color:#503957;font-size:.85rem;font-weight:600;overflow-wrap:anywhere}
+.columnas-distribucion summary:focus-visible{outline:3px solid #775269;outline-offset:3px;border-radius:5px}
+.distribucion-reservas[data-estado="inconsistente"] #estadoDistribucion,.distribucion-reservas[data-estado="error"] #estadoDistribucion{color:#693c37;border-left:3px solid currentColor;padding-left:12px}
+@media(forced-colors:active){.barra-distribucion{outline:1px solid CanvasText}}

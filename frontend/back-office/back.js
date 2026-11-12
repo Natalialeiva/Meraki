@@ -73,6 +73,7 @@ function reiniciarPresentacionAgenda(){
 }
 function mostrarPresentacionAgenda(anunciar=true){
     const vista=presentacionAgenda.obtenerEstado();
+    if(vista.estado==='cambio_emprendimiento')limpiarDistribucionReservas('cambio_emprendimiento');
     $('#estadoAgenda').dataset.estado=vista.estado;
     $('#agendaContenido').setAttribute('aria-busy',String(vista.accesibilidad.ariaBusy));
     $('#ultimaActualizacionAgenda').textContent=vista.ultimaActualizacion.texto;
@@ -81,7 +82,8 @@ function mostrarPresentacionAgenda(anunciar=true){
     $('#reintentarAgenda').hidden=!vista.acciones.some(a=>a.id==='reintentar'&&a.habilitada);
     if(anunciar&&ultimoAnuncioAgenda!==vista.accesibilidad.anuncioId){
         const detalle=vista.datos.tratamiento==='mostrar'
-            ? ' Por cerrar: '+$('#reservasPorCerrar').textContent+'. '+$('#proximaAtencionEstado').textContent : '';
+            ? ' Por cerrar: '+$('#reservasPorCerrar').textContent+'. '+$('#proximaAtencionEstado').textContent+' '+$('#estadoDistribucion').textContent
+            : ['error_carga','error_actualizacion'].includes(vista.estado)?' '+$('#estadoDistribucion').textContent:'';
         $('#estadoAgenda').textContent=vista.mensaje+detalle;
         ultimoAnuncioAgenda=vista.accesibilidad.anuncioId;
     }
@@ -121,6 +123,7 @@ function actualizarProximaAtencion(entrada){
 }
 function limpiarAgenda(mensaje, mensajeProxima='Próxima atención no disponible'){
     agendaReservas=null;
+    limpiarDistribucionReservas(mensaje==='Cargando…'?'cargando':'error');
     $('#reservas').replaceChildren();
     for(const id of ['totalReservas','reservasHoy','reservasConfirmadas','reservasPendientes']){
         $('#'+id).textContent='—';
@@ -130,6 +133,7 @@ function limpiarAgenda(mensaje, mensajeProxima='Próxima atención no disponible
     mostrarProximaAtencion(mensajeProxima);
     // La gestión de sesión sigue en api(). Solo limpiar su presentación derivada.
     if(contextoPresentacionAgenda&&contextoPresentacionAgenda.sesion!==versionSesion){
+        limpiarDistribucionReservas('sesion_vencida');
         presentacionAgenda.registrarError(presentacionAgenda.iniciarCarga(),{sesionVencida:true});
         contextoPresentacionAgenda=null;
         mostrarPresentacionAgenda();
@@ -137,6 +141,92 @@ function limpiarAgenda(mensaje, mensajeProxima='Próxima atención no disponible
         Promise.resolve().then(()=>{
             if(sesion===versionSesion&&$('#panel').hidden)claveIngreso.focus();
         });
+    }
+}
+function limpiarDistribucionReservas(tipo){
+    const mensajes={cargando:'Cargando la distribución de reservas…',
+        cambio_emprendimiento:'Cargando la distribución del emprendimiento seleccionado. Los datos anteriores se han retirado.',
+        error:'No se pudo cargar la distribución. Actualiza la agenda para volver a intentarlo.',
+        sesion_vencida:'Inicia sesión para consultar la distribución de reservas.'};
+    $('#distribucionReservas').dataset.estado=tipo;
+    $('#estadoDistribucion').textContent=mensajes[tipo];
+    $('#datosDistribucion').hidden=true;
+    for(const id of ['totalDistribucion','serviciosDistribucion','profesionalesDistribucion'])$('#'+id).textContent='—';
+    for(const id of ['distribucionServicios','distribucionProfesionales'])$('#'+id).replaceChildren();
+    $('#lideresServicios').textContent='';$('#lideresProfesionales').textContent='';
+    $('#advertenciasDistribucion').textContent='';
+}
+function actualizarDistribucionReservas(reservas,soloInconsistencias=false){
+    try{
+        // Proyección explícita: nunca enviar clientas, montos, abonos o tokens.
+        const entrada=reservas.map(r=>({id_reserva:r.id_reserva,id_servicio:r.id_servicio,servicio:r.servicio,
+            id_trabajadora:r.id_trabajadora,trabajadora:r.trabajadora,estado:r.estado,
+            fecha_hora_inicio:r.fecha_hora_inicio,fecha_hora_fin:r.fecha_hora_fin}));
+        const resultado=MerakiEstadisticasReservas.calcularEstadisticasReservas(entrada);
+        // Una carga inválida solo puede aportar un diagnóstico, nunca cifras.
+        if(soloInconsistencias&&resultado.estado!=='inconsistente')return;
+        if(resultado.estado!=='disponible'){
+            limpiarDistribucionReservas('error');
+            $('#distribucionReservas').dataset.estado=resultado.estado==='inconsistente'?'inconsistente':'no_disponible';
+            const faltanIds=resultado.incidencias.some(i=>i.codigo==='identificador_invalido'&&['id_servicio','id_trabajadora'].includes(i.campo));
+            $('#estadoDistribucion').textContent=resultado.estado==='inconsistente'
+                ? 'Estadísticas no disponibles: hay reservas repetidas con datos contradictorios.'
+                : faltanIds
+                    ? 'Estadísticas no disponibles: la agenda todavía no entrega identificadores válidos de servicios y profesionales.'
+                    : 'Estadísticas no disponibles: los datos de la agenda no permiten una distribución fiable.';
+            return;
+        }
+        const s=resultado.estadisticas;
+        $('#distribucionReservas').dataset.estado=s.totalReservasUnicas?'disponible':'vacia';
+        $('#estadoDistribucion').textContent=s.totalReservasUnicas
+            ? 'Distribución de toda la agenda autorizada, independiente de los filtros de la lista.'
+            : 'Todavía no hay reservas para calcular una distribución.';
+        $('#totalDistribucion').textContent=String(s.totalReservasUnicas);
+        $('#serviciosDistribucion').textContent=String(s.porServicio.length);
+        $('#profesionalesDistribucion').textContent=String(s.porProfesional.length);
+        $('#datosDistribucion').hidden=false;
+        const porcentaje=new Intl.NumberFormat('es-CL',{maximumFractionDigits:2});
+        for(const [destino,grupos,campoId,campoNombre,tipo] of [
+            ['distribucionServicios',s.porServicio,'id_servicio','servicio','Servicio'],
+            ['distribucionProfesionales',s.porProfesional,'id_trabajadora','trabajadora','Profesional']
+        ]){
+            const lista=$('#'+destino);lista.replaceChildren();
+            for(const g of grupos){
+                const articulo=document.createElement('article'),titulo=document.createElement('h5'),cantidad=document.createElement('p'),desglose=document.createElement('ul');
+                const tituloId=destino+'-'+g[campoId];
+                titulo.setAttribute('id',tituloId);articulo.setAttribute('aria-labelledby',tituloId);
+                titulo.textContent=(g[campoNombre]||g.nombres.join(' / '))+' · '+tipo+' #'+g[campoId];
+                cantidad.className='distribucion-cantidad';
+                cantidad.textContent=g.reservas+' reserva(s) · '+porcentaje.format(g.porcentaje)+' %';
+                const barra=document.createElement('meter');barra.className='barra-distribucion';
+                barra.setAttribute('min','0');barra.setAttribute('max','100');barra.setAttribute('value',String(g.porcentaje));
+                // El dato ya está en el texto contiguo. La barra es redundante,
+                // no una segunda región anunciada ni un control interactivo.
+                barra.setAttribute('aria-hidden','true');
+                for(const [estado,cantidadEstado] of Object.entries(g.porEstado)){
+                    const li=document.createElement('li');li.textContent=MerakiAgenda.estado(estado)+': '+cantidadEstado;desglose.append(li);
+                }
+                const detalle=document.createElement('details'),sumario=document.createElement('summary');
+                detalle.setAttribute('open','');sumario.textContent='Desglose por estado';detalle.append(sumario,desglose);
+                articulo.append(titulo,cantidad,barra,detalle);lista.append(articulo);
+            }
+        }
+        const nombresLideres=(grupos,ids,campoId,campoNombre)=>{
+            const porId=new Map(grupos.map(g=>[g[campoId],g]));
+            return ids.map(id=>{const g=porId.get(id);return (g[campoNombre]||g.nombres.join(' / '))+' (#'+id+')';}).join('; ');
+        };
+        $('#lideresServicios').textContent=s.serviciosMasReservados.length
+            ? (s.serviciosMasReservados.length>1?'Empate en servicios más reservados: ':'Servicio más reservado: ')+nombresLideres(s.porServicio,s.serviciosMasReservados,'id_servicio','servicio')
+            : 'Sin servicios más reservados.';
+        $('#lideresProfesionales').textContent=s.profesionalesMasReservados.length
+            ? (s.profesionalesMasReservados.length>1?'Empate en profesionales con más reservas: ':'Profesional con más reservas: ')+nombresLideres(s.porProfesional,s.profesionalesMasReservados,'id_trabajadora','trabajadora')
+            : 'Sin profesionales con reservas.';
+        $('#advertenciasDistribucion').textContent=[
+            s.duplicadosOmitidos?s.duplicadosOmitidos+' registro(s) duplicado(s) idéntico(s) contados una sola vez.':'',
+            resultado.advertencias.length?'Hay identificadores con varias etiquetas; no se ha elegido un nombre vigente.':''
+        ].filter(Boolean).join(' ');
+    }catch{
+        limpiarDistribucionReservas('error');
     }
 }
 const dinero=valor=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(Number(valor));
@@ -207,9 +297,11 @@ async function reservas(){
         negocio===$('#negocio').value && !$('#panel').hidden;
     limpiarAgenda('Cargando…','Buscando próxima atención…');
     mostrarPresentacionAgenda();
+    let datosParaDiagnosticoDistribucion=null;
     try{
         const datos=await api('/api/reservas?id_emprendimiento='+encodeURIComponent(negocio),'GET',undefined,vigente);
         if(!vigente())return;
+        if(Array.isArray(datos))datosParaDiagnosticoDistribucion=datos;
         const entrada={reservas:datos,contexto:{
             idEmprendimientoConsultado:id,
             idEmprendimientoSeleccionado:Number($('#negocio').value),
@@ -226,10 +318,12 @@ async function reservas(){
         renderAgenda(false);
         $('#reservasPorCerrar').textContent=String(indicador.cantidad);
         actualizarProximaAtencion(entrada);
+        actualizarDistribucionReservas(datos);
         mostrarPresentacionAgenda();
     }catch(error){
         if(!vigente())return;
         limpiarAgenda('No disponible','No se pudo cargar la agenda');
+        if(datosParaDiagnosticoDistribucion)actualizarDistribucionReservas(datosParaDiagnosticoDistribucion,true);
         presentacionAgenda.registrarError(ticket);
         mostrarPresentacionAgenda();
         // El error ya está anunciado en la región de agenda; no repetirlo
