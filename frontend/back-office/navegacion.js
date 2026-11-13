@@ -1,6 +1,7 @@
 (function(raiz){
     const vistas={
         reservas:{hash:'tituloReservas',titulo:'Reservas',descripcion:'Tu agenda y tus próximas atenciones, en un solo lugar.'},
+        dashboard:{hash:'tituloDashboard',titulo:'Dashboard',descripcion:'Reservas, tendencias y valores históricos del emprendimiento seleccionado.'},
         servicios:{hash:'tituloServicios',titulo:'Servicios',descripcion:'Organiza lo que ofreces, sus precios y sus tiempos de atención.'},
         equipo:{hash:'tituloTrabajadoras',titulo:'Tu equipo',descripcion:'Administra a tus profesionales y los servicios que realiza cada una.'},
         horarios:{hash:'tituloHorarios',titulo:'Horarios y bloqueos',descripcion:'Define cuándo atiende tu equipo y organiza sus días disponibles.'},
@@ -10,7 +11,7 @@
         suscripcion:{hash:'tituloSuscripcion',titulo:'Tu suscripción',descripcion:'Consulta tu plan, la tarjeta inscrita y el historial de cobros.'}
     };
     function resolver(hash){return Object.keys(vistas).find(id=>vistas[id].hash===String(hash||'').replace(/^#/,''))||'reservas';}
-    function montar({contenedor,menu,titulo,descripcion,ventana=window}){
+    function montar({contenedor,menu,titulo,descripcion,ventana=window,alCambiar=()=>{}}){
         function dibujar(id,enfocar){
             if(!Object.hasOwn(vistas,id))id='reservas';
             for(const panel of contenedor.querySelectorAll('[data-vista]'))panel.hidden=panel.dataset.vista!==id;
@@ -18,6 +19,7 @@
                 if(link.dataset.destino===id)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
             }
             titulo.textContent=vistas[id].titulo;descripcion.textContent=vistas[id].descripcion;
+            alCambiar(id);
             if(enfocar){contenedor.querySelector('[data-vista="'+id+'"] h2')?.focus({preventScroll:true});ventana.scrollTo({top:0,behavior:'auto'});}
         }
         function mostrar(id){

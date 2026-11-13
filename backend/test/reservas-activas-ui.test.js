@@ -7,6 +7,7 @@ const MerakiPagos=require('../../frontend/back-office/pagos');
 const {calcularReservasPorCerrar}=require('../../frontend/back-office/resumen');
 const MerakiPresentacionReservas=require('../../frontend/back-office/presentacion-reservas');
 const MerakiEstadisticasReservas=require('../../frontend/back-office/estadisticas-reservas');
+const MerakiDashboardGraficos=require('../../frontend/back-office/dashboard-graficos');
 const codigo=fs.readFileSync(require.resolve('../../frontend/back-office/back'),'utf8');
 const pausa=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -49,7 +50,7 @@ async function montar(temporal={
             : {estado:'sin_proximas'}};
     }
 },estadisticas=MerakiEstadisticasReservas){
-    const nodos=new Map(), solicitudes=[], pendientes=[];
+    const nodos=new Map(), solicitudes=[], pendientes=[];let alCambiarVista;
     const $=id=>{
         if(!nodos.has(id))nodos.set(id,elemento());
         return nodos.get(id);
@@ -75,8 +76,8 @@ async function montar(temporal={
             if(url==='/api/abonos/9/recuperar'&&method==='POST')return respuesta({mensaje:'Resultado simulado'});
             throw Error('Solicitud inesperada: '+url);
         },
-        MerakiNavegacion:{montar:()=>({iniciar(){}})},
-        MerakiAgenda,MerakiPagos,MerakiPresentacionReservas,MerakiEstadisticasReservas:estadisticas,
+        MerakiNavegacion:{montar:opciones=>{alCambiarVista=opciones.alCambiar;return {iniciar(){}};}},
+        MerakiAgenda,MerakiPagos,MerakiPresentacionReservas,MerakiDashboardGraficos,MerakiEstadisticasReservas:estadisticas,
         MerakiResumen:{calcularReservasPorCerrar,calcularResumenOperativo(){throw Error('A4.1b no debe ejecutarse');}},
         MerakiResumenTemporal:temporal,
         MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,
@@ -92,6 +93,7 @@ async function montar(temporal={
         valor:()=>$('#reservasPorCerrar').textContent,
         cambiar(id){$('#negocio').value=String(id);$('#negocio').onchange();},
         cargar:()=>$('#cargar').onclick(),
+        vista:id=>alCambiarVista(id),
         async completar(i,datos,status){pendientes[i].completar(datos,status);await pausa();}
     };
 }
@@ -116,6 +118,124 @@ test('carga inicial, cero autorizado y filtros sin peticiones adicionales',async
     assert.equal(h.$('#resumenReservas').textContent,'0 de 3 reservas');
     assert.equal(h.$('#proximaAtencionDetalle').textContent,'Servicio 1 · Profesional');
     assert.equal(h.pendientes.length,2);
+});
+
+test('Dashboard reutiliza distribución y conteos de estados sin consultar otra agenda',async()=>{
+    const h=await montar();
+    await h.completar(0,['confirmada','pendiente_abono','cancelada','atendida','no_atendida'].map((estado,i)=>conIds(i+1,{estado})));
+    const antes=h.solicitudes.length;h.vista('dashboard');
+    assert.equal(h.$('#dashboardTotal').textContent,'5');
+    for(const id of ['dashboardConfirmadas','dashboardPendientes','dashboardCanceladas','dashboardAtendidas','dashboardNoAtendidas'])assert.equal(h.$('#'+id).textContent,'1');
+    assert(h.$('#dashboardDistribucion').children.includes(h.$('#distribucionReservas')));
+    assert.equal(h.solicitudes.length,antes);
+});
+
+test('Dona, serie y economía se actualizan con filtros sin nuevas consultas ni montos recibidos',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1,{precio_servicio:'20000',monto_abono:'5000'}),conIds(2,{estado:'cancelada',precio_servicio:'90000',monto_abono:'10000'})]);h.$('#economiaMes').value='2026-11';h.vista('dashboard');
+    const antes=h.solicitudes.length;
+    assert.match(h.$('#valorServicios').textContent,/20\.000/);assert.match(h.$('#abonosActivos').textContent,/5\.000/);
+    assert(h.$('#graficoEstados').children.some(n=>n.className==='dona-reservas'));
+    assert(h.$('#evolucionReservas').children.some(n=>n.tag==='svg'));
+    h.$('#dashboardEstado').value='cancelada';h.$('#dashboardEstado').onchange();
+    assert.match(h.$('#valorServicios').textContent,/\$.*0/);assert.match(h.$('#alcanceDistribucion').textContent,/Cancelada/);
+    assert(!h.$('#alcanceDistribucion').textContent.includes('Incluye todos los estados'));
+    assert.equal(h.solicitudes.length,antes);
+    const carga=h.cargar();assert.equal(h.$('#datosEconomicos').hidden,true);assert.equal(h.$('#graficoEstados').children.length,0);
+    await h.completar(1,{},500);await carga;assert.equal(h.$('#valorServicios').textContent,'—');
+});
+
+test('Filtros del Dashboard no alteran Reservas y volver restaura la distribución completa',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1),conIds(2,{estado:'cancelada'})]);h.vista('dashboard');
+    const antes=h.solicitudes.length;
+    h.$('#dashboardEstado').value='cancelada';h.$('#dashboardEstado').onchange();
+    assert.equal(h.$('#dashboardTotal').textContent,'1');assert.equal(h.$('#dashboardCanceladas').textContent,'1');
+    assert.equal(h.$('#totalReservas').textContent,2);assert.equal(h.$('#filtroEstado').value,'');
+    h.vista('reservas');assert.equal(h.$('#totalDistribucion').textContent,'2');
+    assert(h.$('#distribucionEnAgenda').children.includes(h.$('#distribucionReservas')));
+    assert.equal(h.solicitudes.length,antes);
+});
+
+test('Dashboard distingue filtro vacío, carga fallida y agenda realmente vacía',async()=>{
+    const h=await montar();h.vista('dashboard');await h.completar(0,[conIds(1)]);
+    h.$('#dashboardFecha').value='2099-01-01';h.$('#dashboardFecha').onchange();
+    assert.equal(h.$('#dashboardTotal').textContent,'0');assert.match(h.$('#estadoDistribucion').textContent,/coincidan/);
+    h.$('#limpiarDashboard').onclick();assert.equal(h.$('#dashboardTotal').textContent,'1');
+    const carga=h.cargar();assert.equal(h.$('#dashboardTotal').textContent,'—');
+    await h.completar(1,{},500);await carga;assert.equal(h.$('#dashboardTotal').textContent,'—');
+    assert.equal(h.$('#datosDistribucion').hidden,true);
+    const vacia=h.cargar();await h.completar(2,[]);await vacia;
+    assert.equal(h.$('#dashboardTotal').textContent,'0');assert.match(h.$('#estadoDistribucion').textContent,/Todavía no hay reservas/);
+});
+
+test('Dashboard cambia contexto sin datos antiguos ni filtros heredados; rechaza respuesta vieja',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1)]);h.vista('dashboard');
+    h.$('#dashboardEstado').value='cancelada';h.$('#dashboardEstado').onchange();
+    h.cargar();h.cambiar(2);
+    assert.equal(h.$('#dashboardTotal').textContent,'—');assert.equal(h.$('#dashboardEstado').value,'');
+    await h.completar(2,[conIds(7,{estado:'atendida'})]);
+    await h.completar(1,[conIds(8),conIds(9)]);
+    assert.equal(h.$('#dashboardTotal').textContent,'1');assert.equal(h.$('#dashboardAtendidas').textContent,'1');
+});
+
+test('Dashboard se limpia al vencer sesión y actualiza los estados tras recargar agenda',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1)]);h.vista('dashboard');
+    const carga=h.cargar();await h.completar(1,[conIds(1,{estado:'atendida'})]);await carga;
+    assert.equal(h.$('#dashboardAtendidas').textContent,'1');assert.equal(h.$('#dashboardConfirmadas').textContent,'0');
+    const expira=h.cargar();await h.completar(2,{mensaje:'Sesión vencida'},401);await expira;
+    assert.equal(h.$('#dashboardTotal').textContent,'—');assert.equal(h.$('#panel').hidden,true);
+});
+
+test('Un filtro del Dashboard no oculta IDs inválidos ni presenta ceros como éxito',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1),{...conIds(2,{estado:'cancelada'}),id_servicio:undefined}]);
+    h.vista('dashboard');h.$('#dashboardEstado').value='confirmada';h.$('#dashboardEstado').onchange();
+    assert.equal(h.$('#dashboardTotal').textContent,'—');
+    assert.match(h.$('#estadoDashboard').textContent,/identificadores válidos/);
+});
+test('Economía mensual usa mes propio, ignora fecha diaria y mantiene el filtro de estado',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1,{precio_servicio:'20000',monto_abono:'5000'}),conIds(2,{estado:'pendiente_abono',precio_servicio:'10000',monto_abono:'2000',fecha_hora_inicio:'2026-10-09T11:00:00',fecha_hora_fin:'2026-10-09T12:00:00'})]);
+    h.$('#economiaMes').value='2026-11';h.vista('dashboard');const llamadas=h.solicitudes.length;
+    assert.match(h.$('#valorReservasActivas').textContent,/20\.000/);
+    h.$('#dashboardFecha').value='2099-01-01';h.$('#dashboardFecha').onchange();
+    assert.equal(h.$('#dashboardTotal').textContent,'0');assert.match(h.$('#valorReservasActivas').textContent,/20\.000/);
+    h.$('#economiaMes').value='2026-10';h.$('#economiaMes').onchange();
+    assert.match(h.$('#valorReservasActivas').textContent,/10\.000/);
+    h.$('#dashboardEstado').value='confirmada';h.$('#dashboardEstado').onchange();
+    assert.match(h.$('#valorReservasActivas').textContent,/\$.*0/);
+    const tabla=h.$('#evolucionEconomica').children.find(n=>n.tag==='table');assert.equal(tabla.children.filter(n=>n.tag==='tr').length,7);
+    assert.equal(h.solicitudes.length,llamadas);
+});
+test('Evolución de seis meses y tabla coinciden con Todos, Confirmada y ventana vacía',async()=>{
+    const h=await montar();await h.completar(0,[conIds(1),conIds(2,{estado:'pendiente_abono'}),conIds(3,{fecha_hora_inicio:'2026-10-09T11:00:00',fecha_hora_fin:'2026-10-09T12:00:00'})]);
+    h.$('#economiaMes').value='2026-11';h.vista('dashboard');const consultas=h.solicitudes.length;
+    const valores=()=>h.$('#evolucionReservas').children.find(n=>n.tag==='table').children.filter(n=>n.tag==='tr').slice(1).map(r=>Number(r.children[1].textContent));
+    assert.deepEqual(valores(),[0,0,0,0,1,2]);
+    const svg=h.$('#evolucionReservas').children.find(n=>n.tag==='svg');
+    const puntos=svg.children.find(n=>n.tag==='polyline').attributes.points.split(' ').map(p=>Number(p.split(',')[1]));
+    assert.deepEqual(puntos,[150,150,150,150,90,30]);
+    assert.equal(h.$('#dashboardTotal').textContent,'3');
+    h.$('#dashboardEstado').value='confirmada';h.$('#dashboardEstado').onchange();
+    assert.deepEqual(valores(),[0,0,0,0,1,1]);assert.equal(h.$('#dashboardTotal').textContent,'2');
+    h.$('#economiaMes').value='2027-11';h.$('#economiaMes').onchange();
+    assert.deepEqual(valores(),[0,0,0,0,0,0]);
+    assert(!h.$('#evolucionReservas').children.some(n=>n.tag==='svg'));
+    assert.equal(h.solicitudes.length,consultas);
+});
+
+test('Navegación real reconoce el hash Dashboard, foco y retorno a Reservas',()=>{
+    const {montar,resolver}=require('../../frontend/back-office/navegacion');
+    const paneles=['reservas','dashboard'].map(vista=>({dataset:{vista},hidden:false}));
+    const links=paneles.map(p=>({dataset:{destino:p.dataset.vista},attributes:{},
+        addEventListener(nombre,fn){this[nombre]=fn;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}}));
+    const foco={focus(){this.enfocado=true;}},cambios=[];
+    const ventana={location:{hash:'#tituloDashboard'},addEventListener(n,fn){this[n]=fn;},scrollTo(){}};
+    const nav=montar({contenedor:{querySelectorAll:()=>paneles,querySelector:()=>foco},menu:{querySelectorAll:()=>links},
+        titulo:{},descripcion:{},ventana,alCambiar:id=>cambios.push(id)});
+    nav.iniciar();assert.equal(resolver('#tituloDashboard'),'dashboard');
+    assert.equal(paneles[1].hidden,false);assert.equal(paneles[0].hidden,true);
+    assert.equal(links[1].attributes['aria-current'],'page');
+    links[0].click({preventDefault(){}});assert.equal(ventana.location.hash,'#tituloReservas');
+    assert.equal(paneles[0].hidden,false);assert.equal(foco.enfocado,true);
+    assert.deepEqual(cambios,['dashboard','reservas']);
 });
 
 for(const fallo of ['red',401,403,'cuerpo inválido']){

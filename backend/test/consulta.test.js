@@ -8,7 +8,7 @@ function pantalla(respuestas) {
     const peticiones = [];
     const contexto = vm.createContext({
         location:{hash:'#11111111-1111-4111-8111-111111111111'},URL,confirm:()=>true,
-        document:{querySelector:s=>elementos[s],createElement:()=>({})},
+        document:{querySelector:s=>elementos[s],createElement:()=>({hijos:[],append(...nodos){this.hijos.push(...nodos);},get textContent(){return this.hijos.length?this.hijos.map(n=>n.textContent).join(' '):this.texto||'';},set textContent(v){this.texto=v;}})},
         fetch:async(url,opciones)=>{peticiones.push({url,method:opciones.method});const r=await respuestas.shift();return {ok:r.status===200,status:r.status,text:async()=>r.texto};}
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../../frontend/consulta/consulta.js'),'utf8'),contexto);
@@ -164,7 +164,7 @@ for (const valor of [undefined,null,'2026-02-30T15:00:00','2026-11-18T24:00:00',
 }
 test('Presentación independiente de la zona del navegador: no construye Date',async()=>{
  const codigo=fs.readFileSync(path.join(__dirname,'../../frontend/consulta/consulta.js'),'utf8');
- const contexto=vm.createContext({location:{hash:''},document:{querySelector:()=>({replaceChildren(){}}),createElement:()=>({})},URL,Date:class {constructor(){throw Error('Conversión local prohibida');}}});
+ const contexto=vm.createContext({location:{hash:''},document:{querySelector:()=>({replaceChildren(){}}),createElement:()=>({hijos:[],append(...nodos){this.hijos.push(...nodos);},get textContent(){return this.hijos.length?this.hijos.map(n=>n.textContent).join(' '):this.texto||'';},set textContent(v){this.texto=v;}})},URL,Date:class {constructor(){throw Error('Conversión local prohibida');}}});
  vm.runInContext(codigo,contexto);
  assert.equal(vm.runInContext("presentarHoraCivil('2026-11-18T15:00:00','America/Santiago')",contexto),'18/11/2026, 15:00 — hora de Santiago');
  const {spawnSync}=require('node:child_process');
@@ -174,4 +174,22 @@ test('Presentación independiente de la zona del navegador: no construye Date',a
   assert.equal(r.status,0,r.stderr);
   assert.equal(r.stdout,'18/11/2026, 15:00 — hora de Santiago');
  }
+});
+
+for (const [estadoReserva, etiqueta] of Object.entries({pendiente_abono:'Pendiente de abono',confirmada:'Confirmada',cancelada:'Cancelada',atendida:'Atendida',no_atendida:'No atendida'})) {
+    test('Presentación clara de '+estadoReserva+' sin identificadores privados',async()=>{
+        const p=pantalla([{status:200,texto:JSON.stringify({reserva:{...reserva,estado:estadoReserva,servicio:'Servicio ficticio',emprendimiento:'Negocio ficticio',token_consulta:'SECRETO_NO_VISIBLE',id_clienta:987}})}]);await esperar();
+        const texto=p.elementos['#detalle'].hijos.map(n=>n.textContent).join(' ');
+        assert.match(texto,new RegExp(etiqueta));assert.match(texto,/Servicio ficticio/);assert.match(texto,/Negocio ficticio/);
+        assert(!texto.includes('SECRETO_NO_VISIBLE'));assert(!texto.includes('987'));assert(!texto.includes('id reserva'));
+    });
+}
+for(const status of [400,404])test('Error de consulta '+status+' visible y sin acciones',async()=>{
+    const p=pantalla([{status,texto:JSON.stringify({mensaje:status===400?'El enlace de consulta no es válido':'No se encontró la reserva'})}]);await esperar();
+    assert.match(p.elementos['#estado'].textContent,/no es válido|No se encontró/);
+    assert.equal(p.elementos['#pagar'].hidden,true);assert.equal(p.elementos['#cancelar'].hidden,true);
+});
+test('Error de conexión no habilita acciones',async()=>{
+    const p=pantalla([Promise.reject(Error('Sin conexión'))]);await esperar();
+    assert.match(p.elementos['#estado'].textContent,/Sin conexión/);assert.equal(p.elementos['#pagar'].hidden,true);assert.equal(p.elementos['#cancelar'].hidden,true);
 });

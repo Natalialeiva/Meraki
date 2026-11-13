@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);const estado=$('#estado');
-const navegacion=MerakiNavegacion.montar({contenedor:$('#panel'),menu:$('#menuGestion'),titulo:$('#tituloVista'),descripcion:$('#descripcionVista')});
+const navegacion=MerakiNavegacion.montar({contenedor:$('#panel'),menu:$('#menuGestion'),titulo:$('#tituloVista'),descripcion:$('#descripcionVista'),alCambiar:cambiarVistaResumen});
 const claveIngreso=$('#claveIngreso'),mostrarClave=$('#mostrarClave');
 function ocultarClave(){
     claveIngreso.type='password';
@@ -63,6 +63,42 @@ const suscripcion=MerakiSuscripcion.montar({contenedor:$('#gestionSuscripcion'),
     servicios.actualizarPermisos();trabajadoras.actualizarPermisos();horarios.actualizarPermisos();
 }});
 let agendaReservas=null;
+let dashboardActivo=false;
+const camposDashboard={dashboardConfirmadas:'confirmada',dashboardPendientes:'pendiente_abono',dashboardCanceladas:'cancelada',dashboardAtendidas:'atendida',dashboardNoAtendidas:'no_atendida'};
+function limpiarMetricasDashboard(){
+    for(const id of ['dashboardTotal',...Object.keys(camposDashboard)])$('#'+id).textContent='—';
+}
+function cambiarVistaResumen(vista){
+    dashboardActivo=vista==='dashboard';
+    $(dashboardActivo?'#dashboardDistribucion':'#distribucionEnAgenda').append($('#distribucionReservas'));
+    $('#alcanceDistribucion').textContent=dashboardActivo
+        ? describirFiltrosDashboard()
+        : 'Todas las fechas y estados de la agenda del emprendimiento seleccionado, incluidas canceladas y pendientes de abono. Los filtros de la lista no cambian esta distribución. No representa ingresos ni productividad.';
+    if(agendaReservas)actualizarDistribucionReservas(agendaReservas);
+    sincronizarDashboard(presentacionAgenda.obtenerEstado());
+}
+function describirFiltrosDashboard(){
+    return 'Fecha de atención: '+($('#dashboardFecha').value||'todas')+'. Estado: '+($('#dashboardEstado').value?MerakiAgenda.estado($('#dashboardEstado').value):'todos')+'. Solo el emprendimiento seleccionado.';
+}
+function sincronizarDashboard(vista){
+    const cargando=vista.accesibilidad.ariaBusy;
+    $('#contenidoDashboard').setAttribute('aria-busy',String(cargando));
+    $('#actualizarDashboard').disabled=cargando||$('#panel').hidden||!$('#negocio').value;
+    for(const id of ['dashboardFecha','dashboardEstado','limpiarDashboard','economiaMes'])$('#'+id).disabled=cargando||vista.datos.tratamiento!=='mostrar';
+    $('#actualizacionDashboard').textContent=vista.ultimaActualizacion.texto;
+    $('#advertenciaDashboard').textContent=vista.ultimaActualizacion.advertencia;
+    $('#estadoDashboard').dataset.estado=vista.estado;
+    $('#estadoDashboard').textContent=vista.datos.tratamiento==='mostrar'
+        ? $('#dashboardTotal').textContent==='—'?$('#estadoDistribucion').textContent:'Reservas mostradas: '+$('#dashboardTotal').textContent+'.':vista.mensaje;
+}
+function filtrarDashboard(){
+    if(dashboardActivo&&agendaReservas){actualizarDistribucionReservas(agendaReservas);sincronizarDashboard(presentacionAgenda.obtenerEstado());}
+}
+$('#dashboardFecha').onchange=$('#dashboardEstado').onchange=filtrarDashboard;
+$('#economiaMes').value=MerakiDashboardGraficos.mesActualSantiago();
+$('#economiaMes').onchange=filtrarDashboard;
+$('#limpiarDashboard').onclick=()=>{$('#dashboardFecha').value='';$('#dashboardEstado').value='';filtrarDashboard();};
+$('#actualizarDashboard').onclick=()=>reservas();
 let versionAgenda=0;
 let presentacionAgenda=MerakiPresentacionReservas.crearPresentador();
 let contextoPresentacionAgenda=null, ultimoAnuncioAgenda=null;
@@ -80,6 +116,7 @@ function mostrarPresentacionAgenda(anunciar=true){
     $('#advertenciaActualizacionAgenda').textContent=vista.ultimaActualizacion.advertencia;
     $('#cargar').disabled=vista.accesibilidad.ariaBusy;
     $('#reintentarAgenda').hidden=!vista.acciones.some(a=>a.id==='reintentar'&&a.habilitada);
+    sincronizarDashboard(vista);
     if(anunciar&&ultimoAnuncioAgenda!==vista.accesibilidad.anuncioId){
         const detalle=vista.datos.tratamiento==='mostrar'
             ? ' Por cerrar: '+$('#reservasPorCerrar').textContent+'. '+$('#proximaAtencionEstado').textContent+' '+$('#estadoDistribucion').textContent
@@ -144,6 +181,8 @@ function limpiarAgenda(mensaje, mensajeProxima='Próxima atención no disponible
     }
 }
 function limpiarDistribucionReservas(tipo){
+    limpiarMetricasDashboard();
+    if(typeof MerakiDashboardGraficos!=='undefined')MerakiDashboardGraficos.limpiar({seleccionar:$});
     const mensajes={cargando:'Cargando la distribución de reservas…',
         cambio_emprendimiento:'Cargando la distribución del emprendimiento seleccionado. Los datos anteriores se han retirado.',
         error:'No se pudo cargar la distribución. Actualiza la agenda para volver a intentarlo.',
@@ -162,7 +201,12 @@ function actualizarDistribucionReservas(reservas,soloInconsistencias=false){
         const entrada=reservas.map(r=>({id_reserva:r.id_reserva,id_servicio:r.id_servicio,servicio:r.servicio,
             id_trabajadora:r.id_trabajadora,trabajadora:r.trabajadora,estado:r.estado,
             fecha_hora_inicio:r.fecha_hora_inicio,fecha_hora_fin:r.fecha_hora_fin}));
-        const resultado=MerakiEstadisticasReservas.calcularEstadisticasReservas(entrada);
+        let resultado=MerakiEstadisticasReservas.calcularEstadisticasReservas(entrada),seleccion=reservas;
+        // Validar primero toda la respuesta: un filtro no debe ocultar datos inválidos.
+        if(resultado.estado==='disponible'&&dashboardActivo&&($('#dashboardFecha').value||$('#dashboardEstado').value)){
+            seleccion=MerakiAgenda.filtrar(reservas,$('#dashboardFecha').value,$('#dashboardEstado').value);
+            resultado=MerakiEstadisticasReservas.calcularEstadisticasReservas(MerakiAgenda.filtrar(entrada,$('#dashboardFecha').value,$('#dashboardEstado').value));
+        }
         // Una carga inválida solo puede aportar un diagnóstico, nunca cifras.
         if(soloInconsistencias&&resultado.estado!=='inconsistente')return;
         if(resultado.estado!=='disponible'){
@@ -177,10 +221,23 @@ function actualizarDistribucionReservas(reservas,soloInconsistencias=false){
             return;
         }
         const s=resultado.estadisticas;
+        if(dashboardActivo){
+            $('#alcanceDistribucion').textContent=describirFiltrosDashboard();
+            // Solo importes históricos y campos mínimos de reservas ya autorizadas.
+            const datos=seleccion.map(r=>({id_reserva:r.id_reserva,estado:r.estado,fecha_hora_inicio:r.fecha_hora_inicio,precio_servicio:r.precio_servicio,monto_abono:r.monto_abono}));
+            const datosMensuales=reservas.filter(r=>!$('#dashboardEstado').value||r.estado===$('#dashboardEstado').value)
+                .map(r=>({id_reserva:r.id_reserva,estado:r.estado,fecha_hora_inicio:r.fecha_hora_inicio,precio_servicio:r.precio_servicio,monto_abono:r.monto_abono}));
+            MerakiDashboardGraficos.dibujar({reservas:datos,estadisticas:s,reservasEconomicas:datosMensuales,periodo:$('#economiaMes').value,seleccionar:$,documento:document});
+        }
+        $('#dashboardTotal').textContent=String(s.totalReservasUnicas);
+        for(const [id,estado] of Object.entries(camposDashboard)){
+            // Reutilizar los desgloses del cálculo existente; no contar de nuevo la agenda.
+            $('#'+id).textContent=String(s.porServicio.reduce((total,g)=>total+g.porEstado[estado],0));
+        }
         $('#distribucionReservas').dataset.estado=s.totalReservasUnicas?'disponible':'vacia';
         $('#estadoDistribucion').textContent=s.totalReservasUnicas
-            ? 'Distribución de toda la agenda autorizada, independiente de los filtros de la lista.'
-            : 'Todavía no hay reservas para calcular una distribución.';
+            ? dashboardActivo?'Distribución según los filtros del Dashboard. Datos del emprendimiento seleccionado.':'Distribución de toda la agenda autorizada, independiente de los filtros de la lista.'
+            : dashboardActivo&&reservas.length?'No hay reservas que coincidan con los filtros del Dashboard.':'Todavía no hay reservas para calcular una distribución.';
         $('#totalDistribucion').textContent=String(s.totalReservasUnicas);
         $('#serviciosDistribucion').textContent=String(s.porServicio.length);
         $('#profesionalesDistribucion').textContent=String(s.porProfesional.length);
@@ -286,6 +343,7 @@ async function reservas(){
         return;
     }
     if(!contextoPresentacionAgenda||contextoPresentacionAgenda.sesion!==sesion||contextoPresentacionAgenda.negocio!==negocio){
+        $('#dashboardFecha').value='';$('#dashboardEstado').value='';
         const propio=negociosPerfil.find(n=>n.id_emprendimiento===id);
         if(!propio){reiniciarPresentacionAgenda();limpiarAgenda('No disponible');return;}
         presentacionAgenda.cambiarContexto({sesion:String(sesion),idEmprendimiento:id,nombre:propio.nombre});

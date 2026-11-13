@@ -1,1 +1,30 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Tu reserva | Meraki</title><style>body{font:18px system-ui;max-width:700px;margin:4rem auto;padding:1rem;background:#faf6f3;color:#382a34}button,a{padding:.7rem}pre{white-space:pre-wrap}</style><main><h1>Tu reserva en Meraki</h1><p id="estado" role="status">Consultando reserva…</p><div id="detalle"></div><button id="actualizar" type="button">Volver a consultar</button><button id="pagar" type="button" hidden>Pagar abono con Webpay</button><button id="cancelar" hidden>Cancelar reserva</button><p>Este enlace es privado. Guárdalo y no lo compartas.</p></main><script src="consulta.js?v=resultado-webpay-1"></script></html>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Tu reserva | Meraki</title>
+<link rel="stylesheet" href="consulta.css?v=meraki-1">
+</head>
+<body>
+<header class="cabecera"><a href="/front-office/" aria-label="Meraki, ir al inicio"><img src="../front-office/assets/logo-meraki-transparente.png" alt="MERAKI" width="220" height="73"></a><span>Consulta privada</span></header>
+<main>
+<p class="eyebrow">UN MOMENTO PARA TI</p>
+<h1>Tu reserva en Meraki</h1>
+<p class="introduccion">Revisa los detalles y el estado de tu atención.</p>
+<section class="reserva" aria-label="Detalles de tu reserva">
+<p id="estado" role="status" aria-live="polite" aria-atomic="true">Consultando reserva…</p>
+<div id="detalle" class="datos"></div>
+<div class="acciones" aria-label="Acciones de la reserva">
+<button id="actualizar" type="button">Actualizar consulta</button>
+<button id="pagar" type="button" hidden>Continuar al abono</button>
+<button id="cancelar" type="button" hidden>Cancelar reserva</button>
+</div>
+</section>
+<aside class="privacidad"><strong>Tu enlace es privado.</strong> Guárdalo en un lugar seguro y no lo compartas: permite consultar y gestionar tu reserva.</aside>
+</main>
+<footer>MERAKI · Cuidado cerca de ti</footer>
+<script src="consulta.js?v=presentacion-meraki-1"></script>
+</body>
+</html>

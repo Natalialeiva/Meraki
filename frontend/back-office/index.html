@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f7f5f8">
 <title>Mi negocio | Meraki</title>
-<link rel="stylesheet" href="gestion.css?v=distribucion-barras-2">
+<link rel="stylesheet" href="gestion.css?v=evolucion-seis-meses-1">
 </head>
 <body>
 <a class="saltar" href="#tituloVista">Saltar al contenido</a>
@@ -94,14 +94,13 @@
 </svg>
 <span>Suscripción</span>
 </a>
-</nav>
-<div class="futuro">
+<a href="#tituloDashboard" data-destino="dashboard">
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z"/>
 </svg>
 <span>Dashboard</span>
-<span>Próximamente</span>
-</div>
+</a>
+</nav>
 <div class="pie-menu">
 <a href="/front-office/" target="_blank" rel="noopener" aria-label="Ver catálogo público en otra pestaña">
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -205,6 +204,7 @@
 <span class="punto" aria-hidden="true"></span>
 </article>
 </div>
+<div id="distribucionEnAgenda">
 <section id="distribucionReservas" class="distribucion-reservas" aria-labelledby="tituloDistribucion" aria-describedby="alcanceDistribucion estadoDistribucion">
 <h3 id="tituloDistribucion">Distribución de reservas</h3>
 <p id="alcanceDistribucion">Todas las fechas y estados de la agenda del emprendimiento seleccionado, incluidas canceladas y pendientes de abono. Los filtros de la lista no cambian esta distribución. No representa ingresos ni productividad.</p>
@@ -223,8 +223,54 @@
 <p id="advertenciasDistribucion" class="advertencia-agenda"></p>
 </div>
 </section>
+</div>
 <p id="resumenReservas"></p>
 <div id="reservas"></div>
+</div>
+</section>
+<section class="vista" data-vista="dashboard" hidden aria-labelledby="tituloDashboard">
+<div class="encabezado-seccion"><div><h2 id="tituloDashboard" tabindex="-1">Resumen de reservas</h2><p>Solo el emprendimiento seleccionado. Cantidades de reservas, no ingresos ni pagos.</p></div><button id="actualizarDashboard" type="button">Actualizar datos</button></div>
+<div class="filtros">
+<label>Fecha de atención (Santiago)<input id="dashboardFecha" type="date"></label>
+<label>Estado<select id="dashboardEstado"><option value="">Todos</option><option value="confirmada">Confirmada</option><option value="pendiente_abono">Pendiente de abono</option><option value="cancelada">Cancelada</option><option value="atendida">Atendida</option><option value="no_atendida">No atendida</option></select></label>
+<button id="limpiarDashboard" type="button">Limpiar filtros</button>
+</div>
+<p class="ayuda-agenda">Estos filtros cambian los indicadores y gráficos del Dashboard. Los filtros de Reservas son independientes.</p>
+<p id="estadoDashboard" class="estado-agenda" role="status" aria-live="polite" aria-atomic="true">Carga la agenda para consultar el Dashboard.</p>
+<p id="actualizacionDashboard" class="actualizacion-agenda"></p>
+<p id="advertenciaDashboard" class="advertencia-agenda"></p>
+<div id="contenidoDashboard" aria-busy="false">
+<dl class="metricas-dashboard" aria-label="Reservas por estado">
+<div><dt>Total de reservas</dt><dd id="dashboardTotal">—</dd></div>
+<div><dt>Confirmadas</dt><dd id="dashboardConfirmadas">—</dd></div>
+<div><dt>Pendientes de abono</dt><dd id="dashboardPendientes">—</dd></div>
+<div><dt>Canceladas</dt><dd id="dashboardCanceladas">—</dd></div>
+<div><dt>Atendidas</dt><dd id="dashboardAtendidas">—</dd></div>
+<div><dt>No atendidas</dt><dd id="dashboardNoAtendidas">—</dd></div>
+</dl>
+<div class="graficos-dashboard">
+<section aria-labelledby="tituloGraficoEstados"><h3 id="tituloGraficoEstados">Reservas por estado</h3><div id="graficoEstados"></div></section>
+<section aria-labelledby="tituloEvolucion"><h3 id="tituloEvolucion">Evolución mensual por fecha de atención</h3><p class="ayuda-agenda">Mes seleccionado en el Resumen económico y cinco anteriores, con el filtro de estado y solo este emprendimiento. Meses sin reservas: cero. La fecha diaria no reduce esta evolución mensual. Unidad: cantidad de reservas, no CLP.</p><div id="evolucionReservas"></div></section>
+</div>
+<div id="dashboardDistribucion"></div>
+<section class="resumen-economico" aria-labelledby="tituloEconomico">
+<h3 id="tituloEconomico">Resumen económico</h3>
+<label class="selector-mes-economico">Mes y año de atención<input id="economiaMes" type="month" required aria-describedby="alcanceEconomico"></label>
+<p id="alcanceEconomico" class="ayuda-agenda">Importes históricos del mes seleccionado, en CLP, con el filtro de estado del Dashboard. La fecha diaria no cambia este resumen mensual. Son montos proyectados, no ingresos recibidos, pagos aprobados ni saldos por cobrar.</p>
+<p id="estadoEconomico"></p>
+<div id="datosEconomicos" hidden>
+<dl class="metricas-dashboard">
+<div><dt>Valor de servicios del mes sin canceladas</dt><dd id="valorServicios">—</dd><p>Incluye confirmadas, pendientes de abono, atendidas y no atendidas. Puede coincidir con el valor activo cuando no hay citas cerradas en la selección.</p></div>
+<div><dt>Valor proyectado de reservas activas del mes</dt><dd id="valorReservasActivas">—</dd><p>Solo confirmadas y pendientes de abono. No incluye atendidas, no atendidas ni canceladas.</p></div>
+<div><dt>Abonos esperados contractualmente del mes</dt><dd id="abonosActivos">—</dd><p>Requeridos por reservas activas. No son abonos pagados ni necesariamente pendientes: esta fuente no permite comprobarlo.</p></div>
+</dl>
+<h4>Comparación de valores contractuales activos</h4><p class="ayuda-agenda">Los abonos forman parte del valor de los servicios: no deben sumarse como valores adicionales. No representa movimientos de dinero.</p>
+<div id="comparacionEconomica"></div>
+<div id="detalleEconomico" class="tabla-economica"></div>
+<h4>Evolución económica de seis meses</h4><p class="ayuda-agenda">Mes seleccionado y cinco anteriores, por fecha de atención y filtro de estado. Meses sin reservas: cero. Solo proyecciones contractuales, no pagos recibidos.</p>
+<div id="evolucionEconomica"></div>
+</div>
+</section>
 </div>
 </section>
 <section class="vista" data-vista="perfil" hidden aria-labelledby="tituloPerfil">
@@ -407,7 +453,8 @@
 <script src="trabajadoras.js?v=acceso-1"></script>
 <script src="horarios.js?v=acceso-1"></script>
 <script src="suscripcion.js?v=gestion-1"></script>
-<script src="navegacion.js?v=gestion-1"></script>
-<script src="back.js?v=distribucion-barras-2"></script>
+<script src="navegacion.js?v=dashboard-1"></script>
+<script src="dashboard-graficos.js?v=evolucion-seis-meses-1"></script>
+<script src="back.js?v=economia-mensual-1"></script>
 </body>
 </html>

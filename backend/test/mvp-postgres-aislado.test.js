@@ -237,6 +237,7 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
                 MerakiResumen:real('../frontend/back-office/resumen'),MerakiResumenTemporal:real('../frontend/back-office/resumen-temporal'),
                 MerakiPresentacionReservas:real('../frontend/back-office/presentacion-reservas'),
                 MerakiEstadisticasReservas:real('../frontend/back-office/estadisticas-reservas'),
+                MerakiDashboardGraficos:real('../frontend/back-office/dashboard-graficos'),
                 setInterval(){},confirm:()=>false
             });
             const fuente=fs.readFileSync(path.join(raiz,'frontend/back-office/back.js'),'utf8');
@@ -261,6 +262,16 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
             assert.equal(llamadas.length,peticiones,'Filtrar no consulta nuevamente');
             assert.equal(llamadas.filter(url=>url.startsWith('/api/reservas?')).length,1);
             assert(!llamadas.some(url=>/abonos|oneclick/.test(url)));
+            $('#economiaMes').value=fecha.slice(0,7);
+            vm.runInContext("cambiarVistaResumen('dashboard')",ctx);
+            const importes=(await pool.query("SELECT COALESCE(sum(precio_servicio) FILTER(WHERE estado<>'cancelada'),0) sin_canceladas,COALESCE(sum(monto_abono) FILTER(WHERE estado IN('confirmada','pendiente_abono')),0) abonos_activos FROM reserva WHERE id_emprendimiento=1")).rows[0];
+            const graficos=real('../frontend/back-office/dashboard-graficos');
+            assert.equal($('#valorServicios').textContent,graficos.clp(Number(importes.sin_canceladas)*100));
+            assert.equal($('#abonosActivos').textContent,graficos.clp(Number(importes.abonos_activos)*100));
+            assert($('#evolucionReservas').children.some(n=>n.tag==='svg'));
+            $('#dashboardEstado').value='confirmada';$('#dashboardEstado').onchange();
+            assert.equal($('#dashboardTotal').textContent,'1');assert.equal($('#datosEconomicos').hidden,false);
+            assert.equal(llamadas.filter(url=>url.startsWith('/api/reservas?')).length,1);
         });
         await t.test('Cancelar actualiza la distribución; los totales no se confunden con ingresos',async()=>{
             const antes=await agenda();

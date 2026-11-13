@@ -51,6 +51,7 @@ async function cargar(aviso = '') {
     const actual = ++version;
     pagar.hidden = true;
     cancelar.hidden = true;
+    estado.textContent = 'Consultando reserva…';
     try {
         if (!token) throw Error('Abre el enlace privado recibido por correo.');
         const datos = await api(ruta);
@@ -67,21 +68,27 @@ async function cargar(aviso = '') {
             ? 'Reserva de prueba: solo consulta. Los pagos y las cancelaciones están deshabilitados.'
             : [aviso, datos.mensaje, mensajePago, datos.capacidades?.motivoCancelacion].filter(Boolean).join(' ');
         detalle.replaceChildren();
+        // Solo presentación: campos públicos explícitos; nunca volcar IDs o tokens.
+        const fila = (etiqueta, valor, esEstado = false) => {
+            const p = document.createElement('p');
+            p.className = 'dato';
+            const titulo = document.createElement('strong');
+            titulo.textContent = etiqueta;
+            const contenido = document.createElement('span');
+            contenido.textContent = valor;
+            if (esEstado) contenido.className = 'estado-reserva';
+            p.append(titulo, contenido);
+            detalle.append(p);
+        };
         for (const [campo, etiqueta] of [['inicio', 'Inicio'], ['fin', 'Fin']]) {
-            const p = document.createElement('p');
             const civil = presentarHoraCivil(datos.reserva[`fecha_hora_${campo}_civil`], datos.reserva.zona_horaria);
-            // El ISO anterior depende de la zona del servidor: no permite reconstruir
-            // con certeza el timestamp civil original.
-            p.textContent = etiqueta + ': ' + (civil || 'Horario no disponible. Consulta al emprendimiento.');
-            detalle.append(p);
+            fila(etiqueta, civil || 'Horario no disponible. Consulta al emprendimiento.');
         }
-        for (const [clave, valor] of Object.entries(datos.reserva)) {
-            if (['fecha_hora_inicio', 'fecha_hora_fin', 'fecha_hora_inicio_civil', 'fecha_hora_fin_civil', 'zona_horaria'].includes(clave)) continue;
-            const p = document.createElement('p');
-            p.textContent = clave.replaceAll('_', ' ') + ': ' + valor;
-            detalle.append(p);
-        }
-        pagar.textContent = permitido && pago.estado === 'rechazado' ? 'Intentar de nuevo' : 'Pagar abono con Webpay';
+        fila('Emprendimiento', datos.reserva.emprendimiento || 'No disponible');
+        fila('Servicio', datos.reserva.servicio || 'No disponible');
+        const etiquetasEstado = {pendiente_abono:'Pendiente de abono', confirmada:'Confirmada', cancelada:'Cancelada', atendida:'Atendida', no_atendida:'No atendida'};
+        fila('Estado de la reserva', etiquetasEstado[datos.reserva.estado] || 'Estado no disponible', true);
+        pagar.textContent = permitido && pago.estado === 'rechazado' ? 'Intentar de nuevo' : 'Continuar al abono';
         pagar.hidden = !permitido || iniciandoPago;
         cancelar.hidden = soloConsulta || datos.capacidades?.cancelar === false || !['pendiente_abono', 'confirmada'].includes(datos.reserva.estado);
     } catch (error) {
