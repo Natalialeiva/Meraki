@@ -3040,6 +3040,8 @@ if (propiedad.rows.length === 0) {
         const resultado = await pool.query(`
             SELECT
                 r.id_reserva,
+                r.id_servicio,
+                r.id_trabajadora,
                 COALESCE(r.nombre_clienta,c.nombre) AS clienta,
                 t.nombre AS trabajadora,
                 s.nombre AS servicio,

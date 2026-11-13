@@ -7,6 +7,7 @@ const cancelar = document.querySelector('#cancelar');
 const actualizar = document.querySelector('#actualizar');
 let version = 0;
 let iniciandoPago = false;
+let cancelando = false;
 
 async function api(url, method = 'GET', data) {
     const respuesta = await fetch(url, {
@@ -130,14 +131,22 @@ pagar.onclick = async () => {
         actualizar.disabled = false;
     }
 };
-actualizar.onclick = () => cargar();
+actualizar.onclick = () => { if (!cancelando) return cargar(); };
 cancelar.onclick = async () => {
+    if (cancelando || cancelar.disabled || cancelar.hidden) return;
     if (!confirm('¿Cancelar esta reserva?')) return;
+    cancelando = true;
+    ++version;
     cancelar.disabled = true;
+    actualizar.disabled = true;
+    estado.textContent = 'Cancelando reserva…';
     try {
         await api(ruta + '/cancelar', 'PATCH');
-        await cargar();
-    } catch (error) { estado.textContent = error.message; }
-    finally { cancelar.disabled = false; }
+        await cargar('Reserva cancelada correctamente.');
+    } catch (error) {
+        cancelar.hidden = true;
+        estado.textContent = 'No se pudo confirmar el resultado de la cancelación. Pulsa Actualizar para consultar su estado. ' + error.message;
+    }
+    finally { cancelando = false; cancelar.disabled = false; actualizar.disabled = false; }
 };
 cargar();

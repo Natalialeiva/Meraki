@@ -49,6 +49,59 @@ test('Cancelación permitida actualiza estado y oculta las acciones',async()=>{
     assert.equal(p.elementos['#cancelar'].hidden,true);assert.equal(p.elementos['#pagar'].hidden,true);
     assert.equal(p.peticiones[1].method,'PATCH');assert.equal(p.peticiones.length,3);
 });
+
+test('Cancelación pendiente bloquea envíos duplicados y actualización manual',async()=>{
+    let resolver;
+    const cancelacion=new Promise(r=>resolver=r);
+    const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{cancelar:true}})},cancelacion,
+        {status:200,texto:JSON.stringify({reserva:{...reserva,estado:'cancelada'},capacidades:{cancelar:false}})}]);
+    await new Promise(setImmediate);
+    const intento=p.elementos['#cancelar'].onclick();
+    await p.elementos['#cancelar'].onclick();
+    await p.elementos['#actualizar'].onclick();
+    assert.equal(p.elementos['#actualizar'].disabled,true);
+    assert.deepEqual(p.peticiones.map(p=>p.method),['GET','PATCH']);
+    resolver({status:200,texto:JSON.stringify({mensaje:'Reserva cancelada correctamente'})});
+    await intento;
+    assert.equal(p.elementos['#cancelar'].hidden,true);
+    assert.equal(p.elementos['#actualizar'].disabled,false);
+});
+
+test('Una cancelación oculta por capacidades no envía ninguna escritura',async()=>{
+    const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{cancelar:false}})}]);
+    await new Promise(setImmediate);
+    await p.elementos['#cancelar'].onclick();
+    assert.equal(p.elementos['#cancelar'].hidden,true);
+    assert.deepEqual(p.peticiones.map(p=>p.method),['GET']);
+});
+
+test('Cancelación confirmada conserva el aviso si falla la lectura posterior',async()=>{
+    const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{cancelar:true}})},
+        {status:200,texto:JSON.stringify({mensaje:'Reserva cancelada correctamente'})},
+        {status:500,texto:'{}'}]);
+    await new Promise(setImmediate);
+    await p.elementos['#cancelar'].onclick();
+    assert.match(p.elementos['#estado'].textContent,/Reserva cancelada correctamente/);
+    assert.match(p.elementos['#estado'].textContent,/No se pudo completar/);
+    assert.equal(p.elementos['#cancelar'].hidden,true);
+});
+
+test('Error al cancelar exige consultar el estado antes de permitir otro intento',async()=>{
+    const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{cancelar:true}})},
+        {status:503,texto:'{}'},
+        {status:200,texto:JSON.stringify({reserva:{...reserva,estado:'cancelada'},capacidades:{cancelar:false}})}]);
+    await new Promise(setImmediate);
+    await p.elementos['#cancelar'].onclick();
+    assert.match(p.elementos['#estado'].textContent,/No se pudo confirmar el resultado/);
+    assert.match(p.elementos['#estado'].textContent,/Pulsa Actualizar/);
+    assert.equal(p.elementos['#cancelar'].hidden,true);
+    assert.equal(p.elementos['#actualizar'].disabled,false);
+    await p.elementos['#cancelar'].onclick();
+    assert.equal(p.peticiones.length,2);
+    await p.elementos['#actualizar'].onclick();
+    assert.deepEqual(p.peticiones.map(p=>p.method),['GET','PATCH','GET']);
+    assert.equal(p.elementos['#cancelar'].hidden,true);
+});
 const pendiente={id_reserva:1,estado:'pendiente_abono'};
 const disponible={estado:'disponible',puede_iniciar:true,motivo:null};
 const revision={estado:'en_revision',puede_iniciar:false,motivo:'intento_bloqueante'};

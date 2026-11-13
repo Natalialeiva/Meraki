@@ -370,7 +370,15 @@ async function iniciar(){
     await suscripcion.cargar();
     await notificaciones();
 }
-$('#login').onsubmit=async e=>{e.preventDefault();ocultarClave();const b=e.submitter;b.disabled=true;try{await api('/api/auth/login','POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await iniciar();estado.textContent='Sesión iniciada.';}catch(e){estado.textContent=e.message;}finally{b.disabled=false;}};
+let ingresando=false;
+$('#login').onsubmit=async e=>{
+    e.preventDefault();if(ingresando)return;ingresando=true;ocultarClave();
+    const b=e.submitter||e.target.querySelector('button[type="submit"],button:not([type]),input[type="submit"]');
+    if(b)b.disabled=true;
+    try{await api('/api/auth/login','POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await iniciar();estado.textContent='Sesión iniciada.';}
+    catch(error){estado.textContent=error.message;}
+    finally{ingresando=false;if(b)b.disabled=false;}
+};
 $('#salir').onclick=async()=>{try{await api('/api/auth/logout','POST');location.reload();}catch(e){estado.textContent=e.message;}};
 $('#cargar').onclick=()=>reservas().catch(e=>estado.textContent=e.message);
 $('#negocio').onchange=()=>{
