@@ -17,7 +17,7 @@ function crearNotificaciones(pool, enviar = enviarConfirmacionReserva) {
    const datos = await pool.query(`SELECT COALESCE(r.nombre_clienta,c.nombre) AS nombre_clienta,COALESCE(r.correo_confirmacion,c.correo) AS correo,e.nombre AS emprendimiento,
     s.nombre AS servicio,TO_CHAR(r.fecha_hora_inicio,'DD/MM/YYYY') AS fecha,
     TO_CHAR(r.fecha_hora_inicio,'HH24:MI') AS hora,r.token_consulta FROM reserva r
-    JOIN clienta c ON c.id_clienta=r.id_clienta JOIN emprendimiento e ON e.id_emprendimiento=r.id_emprendimiento
+    LEFT JOIN clienta c ON c.id_clienta=r.id_clienta JOIN emprendimiento e ON e.id_emprendimiento=r.id_emprendimiento
     JOIN servicio s ON s.id_servicio=r.id_servicio WHERE r.id_reserva=$1 AND r.estado='confirmada'`,[id]);
    const d = datos.rows[0];
    if (!d?.correo || !d.token_consulta) { const e = new Error('Datos incompletos'); e.code='ECONFIG'; throw e; }

@@ -70,7 +70,7 @@ async function enviarConfirmacionReserva(datos, { env = process.env, mailer = no
     try {
         const resultado = await transporte.sendMail({
             from, to: datos.correo, subject: 'Meraki - Tu reserva está confirmada',
-            text: `Hola ${datos.nombreClienta}:\n\nTu reserva ha sido confirmada.\nEmprendimiento: ${datos.emprendimiento}\nServicio: ${datos.servicio}\nFecha: ${datos.fecha}\nHora: ${datos.hora}\n\nConsulta tu reserva en este enlace privado:\n${enlace}\n\nGuárdalo y no lo compartas.`
+            text: `Hola ${datos.nombreClienta}:\n\nTu reserva ha sido confirmada.\nEmprendimiento: ${datos.emprendimiento}\nServicio: ${datos.servicio}\nFecha: ${datos.fecha}\nHora: ${datos.hora}\n\nDesde este enlace privado puedes consultar tu reserva, confirmar que asistirás o solicitar su cancelación. Una solicitud no cancela automáticamente ni devuelve el abono:\n${enlace}\n\nGuárdalo y no lo compartas.`
         });
         if (!resultado.accepted?.length || resultado.rejected?.length) {
             const error = new Error('Destinatario no aceptado');

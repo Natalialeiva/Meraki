@@ -1,0 +1,47 @@
+✔ Quitar un filtro conserva los demás valores de la búsqueda aplicada y devuelve el foco (27.2881ms)
+✔ El reintento usa los filtros fallidos y anuncia carga y vacío (2.1072ms)
+✔ Categorías se cargan una vez y se combinan con nombre y comuna (6.4708ms)
+✔ Fallo de categorías conserva la búsqueda manual y distingue vacío de fallo de búsqueda (2.377ms)
+✔ Ver todos invalida la búsqueda por categoría pendiente y conserva el orden local (1.9596ms)
+✔ Front Office usa mensajes neutrales para todos los servicios no reservables (1.7817ms)
+✔ Tarjetas muestran datos reales y distinguen servicios reservables (2.1744ms)
+✔ Profesional y hora requieren selección explícita, sin elegir la primera automáticamente (3.4757ms)
+✔ Lista vacía de profesionales no inventa una causa interna (2.8025ms)
+✔ Ver todos borra ambos filtros (1.4507ms)
+✔ Disponibilidad exige profesional y fecha y rechaza fechas pasadas (2.5987ms)
+✔ Cambiar fecha o profesional invalida horas y actualiza el resumen (4.8931ms)
+✔ Respuesta antigua de profesionales no reemplaza la nueva selección (3.2241ms)
+✔ Cambiar servicio limpia profesional, hora y resumen anteriores (4.2051ms)
+✔ Respuesta antigua de disponibilidad no sustituye horas de la fecha actual (3.0245ms)
+✔ Errores antiguos de disponibilidad no reemplazan el estado actual (3.8918ms)
+✔ Sin horas se explica cómo continuar y no se inventan opciones (4.0046ms)
+✔ Resumen incluye todos los datos y se actualiza al editar correo y hora (3.7118ms)
+✔ Validación bloquea nombre vacío, correo inválido y teléfono demasiado largo (5.3923ms)
+✔ Datos completos habilitan reserva sin casilla y evitan doble envío (5.417ms)
+✔ Fallo al reservar conserva datos, libera controles y permite reintentar (6.1844ms)
+✔ Comenzar otra reserva limpia datos y vuelve a exigir profesional y hora (6.2716ms)
+✔ Elegir una tarjeta actualiza el servicio y conserva el foco de teclado (2.8541ms)
+✔ Una búsqueda antigua no reemplaza resultados nuevos ni sus errores (1.339ms)
+✔ Un error actual de profesionales se muestra y bloquea la disponibilidad (1.8832ms)
+✔ Identidad visual conserva los archivos oficiales byte por byte (3.7029ms)
+✔ Banner y logo usan rutas relativas, texto accesible y no duplican las frases visibles (0.2596ms)
+✔ Navegación y etiquetas de campos conservan destinos y ayudas accesibles (0.2656ms)
+✔ La fecha del resumen se presenta en español sin modificar la fecha de la API (6.5929ms)
+✔ Los mensajes de reserva permanecen dentro de la reserva y los de búsqueda en el catálogo (11.8445ms)
+✔ Al cambiar de negocio, carga y error son visibles y el botón permite reintentar (4.069ms)
+✔ A → B → A ignora errores y respuestas de servicios obsoletos (2.0387ms)
+✔ Errores aparecen solo en campos interactuados o al intentar continuar (2.3365ms)
+✔ Cercanía calcula, ordena con empates estables y conserva ausencias e inválidos (4.9392ms)
+✔ Cercanía conserva filtros, descarta respuestas antiguas y usa ubicación actual (1.5652ms)
+✔ Reordenar catálogo no cambia servicio, profesional, horas ni reserva preparada (3.6168ms)
+✔ Una API tardía tras retirar ubicación no restaura distancias ni envía coordenadas (1.5833ms)
+✔ Proveedor del mapa recibe filtros recientes y su selección conserva flujo sin reservas (2.1767ms)
+✔ Indicaciones conserva catálogo y reserva aunque coordenadas de API no estén confirmadas (5.8107ms)
+ℹ tests 39
+ℹ suites 0
+ℹ pass 39
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 241.9413

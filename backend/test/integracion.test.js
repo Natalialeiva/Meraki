@@ -3,6 +3,7 @@ const request=require('supertest');const {Pool}=require('pg');const bcrypt=requi
 const {crearNotificaciones}=require('../notificaciones');
 require('dotenv').config({path:path.join(__dirname,'../.env')});
 test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:process.env.MERAKI_DB_TEST!=='1'},async t=>{
+ assert.match(process.env.DB_NAME||'',/^meraki_mvp_ejecucion_\d+_[a-f0-9]{8}$/,'Usar scripts/probar-mvp-aislado.cjs');
  const schema='meraki_test_'+Date.now();assert.match(schema,/^meraki_test_\d+$/);
  const config={host:process.env.DB_HOST,port:Number(process.env.DB_PORT),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD};
  const admin=new Pool(config);let pool;let app;let enviados=0;let modo='ok';let notificacionId=1;let transaccionesCreadas=0;let consultasWebpay=0;let alCrearWebpay;let alConfirmarWebpay;let status={status:'AUTHORIZED',response_code:0,amount:5000,buy_order:'orden-test',authorization_code:'TEST'};
@@ -38,6 +39,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   const historico=(await pool.query('SELECT to_jsonb(a) AS fila FROM abono a WHERE id_abono=1')).rows[0].fila;
   assert.deepEqual(historico,{...previo010,operacion_webpay:null,tipo_operacion_webpay:null,
    estado_proceso_webpay:null,fecha_operacion_webpay:null,commit_webpay_reclamado_en:null});
+  for(const f of ['011_reserva_invitada.sql','012_gestiones_reserva.sql'])await pool.query(fs.readFileSync(path.join(__dirname,'../../database',f),'utf8'));
   const financiero=async id=>(await pool.query('SELECT id_abono,id_reserva,estado,monto,buy_order,token_transaccion,codigo_autorizacion,fecha_pago FROM abono WHERE id_abono=$1',[id])).rows;
   const enviar=async()=>{enviados++;if(modo!=='ok'){const e=new Error('fallo simulado');e.code=modo;throw e;}return{idMensaje:'mensaje-test'};};
   const req=createRequire(path.join(__dirname,'../index.js'));const module={exports:{}};
@@ -250,7 +252,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.deepEqual((await horasPrueba()).map(h=>h.hora_inicio.slice(0,5)),['10:00','11:00','12:00']);
   });
   await t.test('Bloqueos: protege reservas activas, modifica disponibilidad y permite retirar',async()=>{
-   await request(app).post('/api/reservas').send({id_clienta:1,id_trabajadora:profesionalHorario,id_servicio:1,fecha:fechaHorario,hora:'10:00'}).expect(201);
+   await agent.post('/api/reservas').send({id_clienta:1,id_trabajadora:profesionalHorario,id_servicio:1,fecha:fechaHorario,hora:'10:00'}).expect(201);
    const antes=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
    await agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T10:00',fecha_fin:fechaHorario+'T11:00'}).expect(409);
    bloqueoPrueba=(await agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T11:00',fecha_fin:fechaHorario+'T12:00',motivo:' Ausencia '}).expect(201)).body.bloqueo.id_bloqueo;
@@ -263,7 +265,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   });
   await t.test('Bloqueos: carrera con nueva reserva nunca ocupa dos veces el período',async()=>{
    const respuestas=await Promise.all([
-    request(app).post('/api/reservas').send({id_clienta:1,id_trabajadora:profesionalHorario,id_servicio:1,fecha:fechaHorario,hora:'11:00'}),
+    agent.post('/api/reservas').send({id_clienta:1,id_trabajadora:profesionalHorario,id_servicio:1,fecha:fechaHorario,hora:'11:00'}),
     agent.post('/api/bloqueos').send({id_trabajadora:profesionalHorario,fecha_inicio:fechaHorario+'T11:00',fecha_fin:fechaHorario+'T12:00'})
    ]);assert.deepEqual(respuestas.map(r=>r.status).sort(),[201,409]);
   });
@@ -299,7 +301,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
     ['patch','/api/horarios/1/desactivar',{}],['post','/api/bloqueos',{id_trabajadora:1,fecha_inicio:'2030-11-04T10:00',fecha_fin:'2030-11-04T11:00'}],['delete','/api/bloqueos/1',{}]
    ])await agent[metodo](ruta).send(datos).expect(402);
    for(const ruta of ['/api/reservas?id_emprendimiento=1','/api/mis-servicios','/api/mis-trabajadoras','/api/mis-horarios','/api/mis-bloqueos','/api/notificaciones','/api/abonos/1/estado'])await agent.get(ruta).expect(200);
-   await request(app).post('/api/reservas').send({id_clienta:1,id_servicio:1,id_trabajadora:1,fecha:'2030-11-04',hora:'10:00'}).expect(409);
+   await agent.post('/api/reservas').send({id_clienta:1,id_servicio:1,id_trabajadora:1,fecha:'2030-11-04',hora:'10:00'}).expect(409);
    await request(app).get('/api/disponibilidad').query({id_servicio:1,id_trabajadora:1,fecha:'2030-11-04'}).expect(200,[]);
    const catalogo=(await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body;assert(catalogo.every(s=>s.reservable===false));
    await request(app).get('/api/reservas/consulta/11111111-1111-4111-8111-111111111111').expect(200);
@@ -391,7 +393,7 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    catalogo=(await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body;assert.equal(catalogo.find(s=>s.id_servicio===1).reservable,false);
    await pool.query('UPDATE trabajadora SET activa=true WHERE id_trabajadora=1');
    const antes=(await pool.query(`SELECT * FROM clienta WHERE correo='valentina@meraki.test'`)).rows[0];
-   const reutilizada=(await request(app).post('/api/clientas').send({nombre:'No sobrescribir',correo:' VALENTINA@MERAKI.TEST ',telefono:'123'}).expect(200)).body;
+   const reutilizada=(await agent.post('/api/clientas').send({nombre:'No sobrescribir',correo:' VALENTINA@MERAKI.TEST ',telefono:'123'}).expect(200)).body;
    assert.equal(reutilizada.id_clienta,antes.id_clienta);assert.deepEqual((await pool.query('SELECT * FROM clienta WHERE id_clienta=$1',[antes.id_clienta])).rows[0],antes);
   });
   await t.test('Front Office: catálogo, disponibilidad, reserva y pago; fallo SMTP no revierte pago',async()=>{
@@ -399,8 +401,8 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    const servicios=(await request(app).get('/api/emprendimientos/1/servicios').expect(200)).body;assert(servicios[0].servicio);
    const personal=(await request(app).get('/api/servicios/1/trabajadoras').expect(200)).body;assert(personal.length);
    const fecha='2030-11-04';const horas=(await request(app).get('/api/disponibilidad').query({id_servicio:1,id_trabajadora:1,fecha}).expect(200)).body;assert(horas.length);
-   const c=(await request(app).post('/api/clientas').send({nombre:'Prueba integral',correo:'integral@example.com'}).expect(201)).body;
-   const r=(await request(app).post('/api/reservas').send({id_clienta:c.id_clienta,nombre_clienta:'Renata prueba',id_servicio:1,id_trabajadora:1,fecha,hora:horas[0].hora_inicio.slice(0,5)}).expect(201)).body.reserva;
+   const c=(await agent.post('/api/clientas').send({nombre:'Prueba integral',correo:'integral@example.com'}).expect(201)).body;
+   const r=(await agent.post('/api/reservas').send({id_clienta:c.id_clienta,nombre_clienta:'Renata prueba',id_servicio:1,id_trabajadora:1,fecha,hora:horas[0].hora_inicio.slice(0,5)}).expect(201)).body.reserva;
    assert.equal((await agent.get('/api/reservas').query({id_emprendimiento:1}).expect(200)).body.find(x=>x.id_reserva===r.id_reserva).clienta,'Renata prueba');
    assert.equal((await pool.query('SELECT nombre FROM clienta WHERE id_clienta=$1',[c.id_clienta])).rows[0].nombre,'Prueba integral');
    const pago=(await request(app).post('/api/abonos/cliente/iniciar').send({token_consulta:r.token_consulta}).expect(201)).body;assert(pago.token);

@@ -35,6 +35,7 @@ test('Inscripción Oneclick rechaza número completo, datos incompletos y tipo d
 });
 
 test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:process.env.MERAKI_DB_TEST!=='1'},async t=>{
+ assert.match(process.env.DB_NAME||'',/^meraki_mvp_ejecucion_\d+_[a-f0-9]{8}$/,'Usar scripts/probar-mvp-aislado.cjs');
  const esquema='meraki_sub_test_'+Date.now();assert.match(esquema,/^meraki_sub_test_\d+$/);
  const configuracion={host:process.env.DB_HOST,port:Number(process.env.DB_PORT),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD};
  const admin=new Pool(configuracion);let pool;

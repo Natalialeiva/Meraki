@@ -48,6 +48,8 @@ async function entorno(){
         'connect-pg-simple':()=>session.MemoryStore,
         'transbank-sdk':{WebpayPlus:{Transaction:class{}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}},
         './db':pool,
+        './gestiones-reserva':real('./gestiones-reserva'),
+        './reservas-invitadas':real('./reservas-invitadas'),
         './notificaciones':{crearNotificaciones:()=>({registrar:prohibido,notificar:prohibido}),montarRutas:noop},
         './suscripciones':{crearSuscripciones:()=>({}),montarRutasSuscripcion:noop,iniciarPlanificador:prohibido},
         './acceso-suscripcion':{montarRestricciones:noop},

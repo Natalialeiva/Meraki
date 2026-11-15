@@ -28,6 +28,7 @@ async function api(url,method='GET',data,vigente=()=>true){
         versionAgenda++;
         limpiarAgenda('No disponible');
         $('#panel').hidden=true;
+        $('#solicitudesCancelacion')?.replaceChildren();
         $('#login').hidden=false;
         $('#acceso').hidden=false;
         estado.textContent='Debes iniciar sesión para acceder al Back Office';
@@ -308,6 +309,8 @@ function renderAgenda(anunciar=true){
         const etiqueta=document.createElement('span');etiqueta.className='reserva-estado';etiqueta.dataset.estado=r.estado;etiqueta.textContent=MerakiAgenda.estado(r.estado);cabecera.append(titulo,etiqueta);a.append(cabecera);
         const parrafo=(texto,clase)=>{const p=document.createElement('p');p.textContent=texto;p.className=clase;a.append(p);};
         parrafo(r.clienta+' · '+r.servicio,'reserva-persona');
+        parrafo(r.asistencia_confirmada_en?'Asistencia confirmada por la clienta':'Asistencia sin confirmar','reserva-detalle');
+        if(r.estado_solicitud_cancelacion)parrafo('Solicitud de cancelación: '+r.estado_solicitud_cancelacion,'reserva-nota');
         const dia=new Date(r.fecha_hora_inicio.slice(0,10)+'T12:00:00');
         const fecha=Number.isNaN(dia.getTime())?'Fecha no disponible':new Intl.DateTimeFormat('es-CL',{day:'numeric',month:'short',year:'numeric'}).format(dia);
         parrafo(fecha+' · '+r.fecha_hora_inicio.slice(11,16)+' a '+r.fecha_hora_fin.slice(11,16)+' h','reserva-fecha');
@@ -374,6 +377,7 @@ async function reservas(){
         }))throw Error('La respuesta de reservas no es válida.');
         agendaReservas=datos;
         renderAgenda(false);
+        void cargarSolicitudes();
         $('#reservasPorCerrar').textContent=String(indicador.cantidad);
         actualizarProximaAtencion(entrada);
         actualizarDistribucionReservas(datos);
@@ -492,3 +496,14 @@ iniciar().catch(e=>estado.textContent=e.message);
 setInterval(()=>{
     if(document.visibilityState==='visible'&&!$('#panel').hidden)void suscripcion.cargar();
 },60000);
+
+async function cargarSolicitudes(){
+ const lista=$('#solicitudesCancelacion');if(!lista)return;const version=versionSesion,negocio=$('#negocio').value;lista.replaceChildren();
+ try{const datos=await api('/api/solicitudes-cancelacion');if(version!==versionSesion||negocio!==$('#negocio').value||$('#panel').hidden)return;lista.replaceChildren();
+ for(const sc of datos.filter(x=>String(x.id_emprendimiento)===negocio)){
+ const a=document.createElement('article'),p=document.createElement('p');p.textContent='Reserva #'+sc.id_reserva+' · '+sc.estado+(sc.motivo?' · '+sc.motivo:'');a.append(p);
+ if(sc.estado==='pendiente'){const label=document.createElement('label'),texto=document.createElement('textarea'),b=document.createElement('button');texto.maxLength=500;label.textContent='Respuesta de la gestión (no incluir datos financieros privados)';label.append(texto);b.type='button';b.textContent='Registrar respuesta y cerrar solicitud';b.onclick=async()=>{if(!texto.value.trim()||!confirm('Cerrar la solicitud sin modificar reserva ni abono?'))return;b.disabled=true;try{const d=await api('/api/solicitudes-cancelacion/'+sc.id_solicitud+'/cerrar','PATCH',{respuesta:texto.value.trim()});estado.textContent=d.mensaje;await cargarSolicitudes();await reservas();}catch(e){estado.textContent=e.message;b.disabled=false;}};a.append(label,b);}else{const r=document.createElement('p');r.textContent=sc.respuesta||'';a.append(r);}lista.append(a);}
+ if(!lista.children.length)lista.textContent='No hay solicitudes para este emprendimiento.';
+ }catch(e){if(version===versionSesion&&negocio===$('#negocio').value&&!$('#panel').hidden){lista.replaceChildren();lista.textContent=e.message;}}
+}
+if($('#actualizarSolicitudes'))$('#actualizarSolicitudes').onclick=cargarSolicitudes;

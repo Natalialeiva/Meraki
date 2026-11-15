@@ -38,7 +38,7 @@ function iniciar(config = {}) {
     elementos['#buscar'].campos = [filtroNombre,comuna,categoria];
     elementos['#buscar'].elements = {namedItem: clave => elementos['#buscar'].campos.find(c => c.name === clave)};
     const peticiones = []; let reservasCreadas = 0;
-    const contexto = vm.createContext({Intl,Date,URLSearchParams,console,
+    const contexto = vm.createContext({Intl,Date,URLSearchParams,console,crypto:require("node:crypto"),
         document:{querySelector:s => { assert(elementos[s], 'Selector existente: ' + s); return elementos[s]; }, createElement:tag => new Elemento(tag)},
         FormData:class { constructor(form) { this.form = form; } *[Symbol.iterator]() { for (const c of this.form.campos || []) if (c.name && !c.disabled) yield [c.name,c.value]; } },
         fetch:async (url, opciones) => {
@@ -50,8 +50,8 @@ function iniciar(config = {}) {
                 ? await config.servicios(url) : config.servicios || [servicio(1,false),servicio(2)];
             else if (url.startsWith('/api/servicios/')) datos = config.profesionales ? await config.profesionales(url) : [{id_trabajadora:3,nombre:'Camila'},{id_trabajadora:8,nombre:'Profesional dos'}];
             else if (url.startsWith('/api/disponibilidad?')) datos = config.disponibilidad ? await config.disponibilidad(url) : [{hora_inicio:'11:00:00'},{hora_inicio:'12:00:00'}];
-            else if (url === '/api/clientas') datos = {id_clienta:11};
-            else if (url === '/api/reservas') {
+            else if (url === '/api/reservas/invitada/contexto') datos = {disponible:true};
+            else if (url === '/api/reservas/invitada') {
                 if (config.reservar) await config.reservar();
                 reservasCreadas++; datos = {reserva:{id_reserva:21,token_consulta:'11111111-1111-4111-8111-111111111111'}};
             } else throw Error('Ruta inesperada: ' + url);
@@ -263,7 +263,7 @@ test('Validación bloquea nombre vacío, correo inválido y teléfono demasiado 
 test('Datos completos habilitan reserva sin casilla y evitan doble envío', async () => {
     const p=iniciar(); await p.preparar(); assert(!html.includes('confirmarDatos')); assert.equal(p.elementos['#crearReserva'].disabled,false);
     await Promise.all([p.elementos['#formReserva'].requestSubmit(),p.elementos['#formReserva'].requestSubmit()]); assert.equal(p.creadas(),1);
-    const envio=p.peticiones.find(r=>r.url==='/api/reservas'); assert.deepEqual(envio.body,{id_servicio:2,id_trabajadora:3,fecha:'2030-11-04',hora:'11:00',id_clienta:11,nombre_clienta:'Clienta prueba'});
+    const envio=p.peticiones.find(r=>r.url==='/api/reservas/invitada'); assert.deepEqual(envio.body,{id_servicio:2,id_trabajadora:3,fecha:'2030-11-04',hora:'11:00',contacto:{nombre:'Clienta prueba',correo:'prueba@example.com',telefono:''}});
     assert.equal(p.elementos['#camposReserva'].disabled,true); assert.equal(p.elementos['#consulta'].hidden,false); assert.match(p.elementos['#consulta'].href,/^\/consulta\/#/); assert.match(p.elementos['#estado'].textContent,/pendiente de abono/); assert.equal(p.elementos['#estado'].dataset.tipo,'exito');
     await p.elementos['#formReserva'].requestSubmit(); assert.equal(p.creadas(),1); assert(!p.peticiones.some(r=>/abonos|suscripcion/.test(r.url)));
 });
@@ -326,7 +326,7 @@ test('La fecha del resumen se presenta en español sin modificar la fecha de la 
     assert.match(textos(p.elementos['#resumen']),/lunes, 4 de noviembre de 2030/);
     assert.equal(p.elementos['#fecha'].value,'2030-11-04');
     await p.elementos['#formReserva'].requestSubmit();
-    assert.equal(p.peticiones.find(r=>r.url==='/api/reservas').body.fecha,'2030-11-04');
+    assert.equal(p.peticiones.find(r=>r.url==='/api/reservas/invitada').body.fecha,'2030-11-04');
 });
 test('Los mensajes de reserva permanecen dentro de la reserva y los de búsqueda en el catálogo',async()=>{
     const p=iniciar();await pausa();assert.equal(p.elementos['#estado'].parentElement,p.elementos['#estadoCatalogo']);

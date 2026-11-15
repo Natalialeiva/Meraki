@@ -121,6 +121,9 @@ const {crearSuscripciones,montarRutasSuscripcion,iniciarPlanificador}=require('.
 const suscripciones=crearSuscripciones({pool});
 montarRutasSuscripcion(app,suscripciones,verificarSesion);
 require('./acceso-suscripcion').montarRestricciones(app,pool,verificarSesion);
+const gestionesReserva=require('./gestiones-reserva');
+gestionesReserva.montar(app,pool,verificarSesion);
+require('./reservas-invitadas').montar(app,pool,process.env.SESSION_SECRET);
 const path=require('path');
 app.use('/front-office',express.static(path.join(__dirname,'../frontend/front-office')));
 app.use('/back-office',express.static(path.join(__dirname,'../frontend/back-office')));
@@ -2357,7 +2360,7 @@ const resultado = await pool.query(`
 
 
 // Registrar nuevas clientas desde el Front Office.
-app.post("/api/clientas", async (req, res) => {
+app.post("/api/clientas", verificarSesion, async (req, res) => {
     try {
         const { nombre, correo, telefono } = req.body || {};
 
@@ -2441,7 +2444,7 @@ app.post("/api/clientas", async (req, res) => {
 
 
 // Ruta para registrar nuevas reservas en Meraki.
-app.post("/api/reservas", async (req, res) => {
+app.post("/api/reservas", verificarSesion, async (req, res) => {
 
     const nombreReserva = req.body?.nombre_clienta;
     if (nombreReserva !== undefined && (typeof nombreReserva !== 'string' || !nombreReserva.trim() || nombreReserva.trim().length > 200)) {
@@ -2530,6 +2533,8 @@ app.post("/api/reservas", async (req, res) => {
             [idTrabajadora]
         );
 
+        const propietaria=await clienteDB.query('SELECT 1 FROM servicio s JOIN emprendimiento e USING(id_emprendimiento) WHERE s.id_servicio=$1 AND e.id_emprendedora=$2',[idServicio,req.session.idEmprendedora]);
+        if(!propietaria.rowCount){await clienteDB.query('ROLLBACK');return res.status(404).json({mensaje:'Servicio no disponible'});}
         // Comprobamos que la clienta exista.
         const clienta = await clienteDB.query(
             "SELECT id_clienta FROM clienta WHERE id_clienta = $1",
@@ -2811,6 +2816,8 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
 
         // No devolvemos datos personales ni el token privado.
         const {tiene_abonos, aprobado, pendiente, rechazos_concluyentes, monto_abono, ...reservaPublica} = resultado.rows[0];
+        const detalleGestion=await gestionesReserva.leer(pool,reservaPublica.id_reserva);
+        reservaPublica.asistencia_confirmada_en=detalleGestion.asistencia_confirmada_en;
         const monto = Number(monto_abono);
         let pago;
         if (aprobado || reservaPublica.estado === 'confirmada') {
@@ -2828,7 +2835,10 @@ app.get("/api/reservas/consulta/:token", async (req, res) => {
             mensaje: "Reserva encontrada",
             reserva: reservaPublica,
             pago,
+            solicitud_cancelacion:detalleGestion.solicitud,
             capacidades: {
+                confirmar_asistencia: detalleGestion.futura && reservaPublica.estado==='confirmada' && aprobado && !detalleGestion.asistencia_confirmada_en && detalleGestion.solicitud?.estado!=='pendiente',
+                solicitar_cancelacion: detalleGestion.futura && ['confirmada','pendiente_abono'].includes(reservaPublica.estado) && tiene_abonos && !detalleGestion.solicitud,
                 cancelar: !tiene_abonos && ["pendiente_abono", "confirmada"].includes(reservaPublica.estado),
                 motivoCancelacion: tiene_abonos
                     ? "Esta reserva tiene un pago asociado. Contacta al emprendimiento para gestionar la cancelación."
@@ -3050,12 +3060,14 @@ if (propiedad.rows.length === 0) {
                 r.estado,
                 r.precio_servicio,
                 r.monto_abono,
+                r.asistencia_confirmada_en,
+                (SELECT estado FROM solicitud_cancelacion sc WHERE sc.id_reserva=r.id_reserva) AS estado_solicitud_cancelacion,
                 ultimo.id_abono,
                 ultimo.estado AS estado_abono,
                 (ultimo.id_abono IS NULL AND r.estado IN ('pendiente_abono','confirmada')) AS puede_cancelar,
                 (r.estado='confirmada' AND r.fecha_hora_fin<=CURRENT_TIMESTAMP) AS puede_cerrar
             FROM reserva r
-            INNER JOIN clienta c
+            LEFT JOIN clienta c
                 ON r.id_clienta = c.id_clienta
             INNER JOIN trabajadora t
                 ON r.id_trabajadora = t.id_trabajadora

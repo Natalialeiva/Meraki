@@ -46,8 +46,8 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
         t.diagnostic('Destino exclusivo confirmado: '+nombre);
         const archivos=['schema.sql','migracion_abonos_reintentos.sql','002_agregar_token_consulta.sql',
             '003_notificaciones_correo.sql','004_fecha_inicio_envio.sql','005_revision_notificaciones.sql',
-            '006_correccion_correo_reserva.sql','007_clienta_correo_unico.sql','007_nombre_reserva.sql',
-            '008_suscripcion_oneclick.sql','009_intentos_webpay.sql','010_procesamiento_webpay.sql'];
+            '006_correccion_correo_reserva.sql','007_nombre_reserva.sql',
+            '008_suscripcion_oneclick.sql','009_intentos_webpay.sql','010_procesamiento_webpay.sql','011_reserva_invitada.sql','012_gestiones_reserva.sql'];
         for(const f of archivos)await pool.query(fs.readFileSync(path.join(raiz,'database',f),'utf8'));
         const hash=await bcrypt.hash('clave-exclusiva-fixture',4);
         for(const [n,comuna] of [[1,'Santiago'],[2,'Providencia']]){
@@ -95,7 +95,7 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
         let contacto,reserva,confirmada;
         const datos=(hora,extra={})=>({id_clienta:contacto,id_servicio:1,id_trabajadora:1,fecha,hora,nombre_clienta:'Invitada ficticia',...extra});
         const agenda=async()=> (await a.get('/api/reservas?id_emprendimiento=1').expect(200)).body;
-        const crearContacto=correo=>web.post('/api/clientas').send({nombre:'Contacto ficticio',correo,telefono:null});
+        const crearContacto=correo=>a.post('/api/clientas').send({nombre:'Contacto ficticio',correo,telefono:null});
 
         await t.test('Páginas y recursos del proyecto original responden sin proveedores',async()=>{
             for(const ruta of ['/front-office/','/back-office/','/consulta/']){
@@ -129,25 +129,25 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
         await t.test('Disponibilidad y validaciones rechazan fecha, hora y profesional incorrectos',async()=>{
             const r=await web.get('/api/disponibilidad').query({id_servicio:1,id_trabajadora:1,fecha}).expect(200);
             assert(r.body.some(h=>h.hora_inicio==='11:00:00'));
-            await web.post('/api/reservas').send({}).expect(400);
+            await a.post('/api/reservas').send({}).expect(400);
             const c=await crearContacto('invitada@example.test').expect(201);contacto=c.body.id_clienta;
-            await web.post('/api/reservas').send(datos('11:00',{fecha:'2030-02-30'})).expect(400);
-            await web.post('/api/reservas').send(datos('25:00')).expect(400);
-            await web.post('/api/reservas').send(datos('11:00',{id_trabajadora:3})).expect(409);
+            await a.post('/api/reservas').send(datos('11:00',{fecha:'2030-02-30'})).expect(400);
+            await a.post('/api/reservas').send(datos('25:00')).expect(400);
+            await a.post('/api/reservas').send(datos('11:00',{id_trabajadora:3})).expect(409);
         });
         await t.test('Reserva válida queda pendiente, con token y sin abonos ni notificaciones',async()=>{
-            reserva=(await web.post('/api/reservas').set('Idempotency-Key','fixture-intento-original').send(datos('11:00')).expect(201)).body.reserva;
+            reserva=(await a.post('/api/reservas').set('Idempotency-Key','fixture-intento-original').send(datos('11:00')).expect(201)).body.reserva;
             assert.equal(reserva.estado,'pendiente_abono');assert.equal(reserva.id_clienta,contacto);
             assert.match(reserva.token_consulta,/^[a-f0-9-]{36}$/i);
             const q=await pool.query('SELECT (SELECT count(*) FROM abono)::int abonos,(SELECT count(*) FROM notificacion_correo)::int correos');
             assert.deepEqual(q.rows[0],{abonos:0,correos:0});
         });
         await t.test('Horario ocupado y reenvío de la misma solicitud no crean otra reserva',async()=>{
-            await web.post('/api/reservas').set('Idempotency-Key','fixture-intento-original').send(datos('11:00')).expect(409);
+            await a.post('/api/reservas').set('Idempotency-Key','fixture-intento-original').send(datos('11:00')).expect(409);
             assert.equal((await pool.query('SELECT count(*)::int n FROM reserva')).rows[0].n,1);
         });
         await t.test('Dos solicitudes simultáneas por el mismo horario producen una sola reserva',async()=>{
-            const r=await Promise.all([web.post('/api/reservas').send(datos('12:00')),web.post('/api/reservas').send(datos('12:00'))]);
+            const r=await Promise.all([a.post('/api/reservas').send(datos('12:00')),a.post('/api/reservas').send(datos('12:00'))]);
             assert.deepEqual(r.map(x=>x.status).sort(),[201,409]);
             assert.equal((await pool.query("SELECT count(*)::int n FROM reserva WHERE fecha_hora_inicio=$1::timestamp",[fecha+'T12:00:00'])).rows[0].n,1);
         });
@@ -167,27 +167,27 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
             assert(r.body.some(h=>h.hora_inicio==='11:00:00'));
             await web.patch('/api/reservas/consulta/'+reserva.token_consulta+'/cancelar').expect(409);
         });
-        await t.test('DIAGNÓSTICO: correo existente devuelve el mismo ID y distingue HTTP 200/201',async()=>{
+        await t.test('Operación interna autenticada conserva el contacto existente',async()=>{
             const r=await crearContacto(' INVITADA@example.test ').expect(200);
             assert.equal(r.body.id_clienta,contacto);
         });
-        await t.test('DIAGNÓSTICO: un ID conocido de clienta se acepta sin probar propiedad',async()=>{
-            const r=await web.post('/api/reservas').send(datos('14:00',{nombre_clienta:'Otra identidad ficticia'})).expect(201);
+        await t.test('Operación interna de la propietaria permite crear una reserva',async()=>{
+            const r=await a.post('/api/reservas').send(datos('14:00',{nombre_clienta:'Otra identidad ficticia'})).expect(201);
             assert.equal(r.body.reserva.id_clienta,contacto);
         });
-        await t.test('DIAGNÓSTICO: fallo posterior al registro conserva un contacto sin reserva',async()=>{
+        await t.test('Flujo interno anterior conserva su contacto aunque no reserve',async()=>{
             const c=(await crearContacto('sin-reserva@example.test').expect(201)).body.id_clienta;
-            await web.post('/api/reservas').send(datos('12:00',{id_clienta:c})).expect(409);
+            await a.post('/api/reservas').send(datos('12:00',{id_clienta:c})).expect(409);
             assert.equal((await pool.query('SELECT count(*)::int n FROM reserva WHERE id_clienta=$1',[c])).rows[0].n,0);
             assert.equal((await pool.query('SELECT count(*)::int n FROM clienta WHERE id_clienta=$1',[c])).rows[0].n,1);
         });
-        await t.test('DIAGNÓSTICO: misma clave tras cancelar crea otra reserva; no hay replay durable',async()=>{
-            const r=await web.post('/api/reservas').set('Idempotency-Key','fixture-intento-original').send(datos('11:00')).expect(201);
+        await t.test('Flujo interno anterior no promete idempotencia: la ruta invitada la implementa',async()=>{
+            const r=await a.post('/api/reservas').set('Idempotency-Key','fixture-intento-original').send(datos('11:00')).expect(201);
             assert.notEqual(r.body.reserva.id_reserva,reserva.id_reserva);
         });
         await t.test('Agenda entrega IDs que corresponden a relaciones reales y todos los campos previos',async()=>{
             // Fixture de estado confirmado: no representa pago ni retorno financiero.
-            confirmada=(await web.post('/api/reservas').send(datos('15:00',{id_servicio:2,id_trabajadora:2})).expect(201)).body.reserva;
+            confirmada=(await a.post('/api/reservas').send(datos('15:00',{id_servicio:2,id_trabajadora:2})).expect(201)).body.reserva;
             await pool.query("UPDATE reserva SET estado='confirmada' WHERE id_reserva=$1",[confirmada.id_reserva]);
             const filas=await agenda();
             const reales=(await pool.query('SELECT id_reserva,id_servicio,id_trabajadora FROM reserva WHERE id_emprendimiento=1 ORDER BY fecha_hora_inicio')).rows;

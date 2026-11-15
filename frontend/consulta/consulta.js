@@ -5,13 +5,16 @@ const detalle = document.querySelector('#detalle');
 const pagar = document.querySelector('#pagar');
 const cancelar = document.querySelector('#cancelar');
 const actualizar = document.querySelector('#actualizar');
+const confirmarAsistencia=document.querySelector('#confirmarAsistencia');
+const solicitarCancelacion=document.querySelector('#solicitarCancelacion');
+let gestionando=false;
 let version = 0;
 let iniciandoPago = false;
 let cancelando = false;
 
 async function api(url, method = 'GET', data) {
     const respuesta = await fetch(url, {
-        method, headers: {'Content-Type': 'application/json'},
+        method, headers: {'Content-Type': 'application/json',...(method==='GET'?{}:{'X-Meraki-Action':'1'})},
         body: data ? JSON.stringify(data) : undefined, cache: 'no-store'
     });
     const texto = await respuesta.text();
@@ -51,6 +54,8 @@ async function cargar(aviso = '') {
     const actual = ++version;
     pagar.hidden = true;
     cancelar.hidden = true;
+    if(confirmarAsistencia)confirmarAsistencia.hidden=true;
+    if(solicitarCancelacion)solicitarCancelacion.hidden=true;
     estado.textContent = 'Consultando reserva…';
     try {
         if (!token) throw Error('Abre el enlace privado recibido por correo.');
@@ -88,6 +93,10 @@ async function cargar(aviso = '') {
         fila('Servicio', datos.reserva.servicio || 'No disponible');
         const etiquetasEstado = {pendiente_abono:'Pendiente de abono', confirmada:'Confirmada', cancelada:'Cancelada', atendida:'Atendida', no_atendida:'No atendida'};
         fila('Estado de la reserva', etiquetasEstado[datos.reserva.estado] || 'Estado no disponible', true);
+        fila('Asistencia',datos.reserva.asistencia_confirmada_en?'Confirmada por la clienta':'Sin confirmar');
+        if(datos.solicitud_cancelacion){fila('Solicitud de cancelación',datos.solicitud_cancelacion.estado==='pendiente'?'Pendiente de revisión. Tu reserva sigue vigente.':'Cerrada. La reserva conserva su estado.');if(datos.solicitud_cancelacion.respuesta)fila('Respuesta del emprendimiento',datos.solicitud_cancelacion.respuesta);}
+        if(confirmarAsistencia)confirmarAsistencia.hidden=soloConsulta||gestionando||datos.capacidades?.confirmar_asistencia!==true;
+        if(solicitarCancelacion)solicitarCancelacion.hidden=soloConsulta||gestionando||datos.capacidades?.solicitar_cancelacion!==true;
         pagar.textContent = permitido && pago.estado === 'rechazado' ? 'Intentar de nuevo' : 'Continuar al abono';
         pagar.hidden = !permitido || iniciandoPago;
         cancelar.hidden = soloConsulta || datos.capacidades?.cancelar === false || !['pendiente_abono', 'confirmada'].includes(datos.reserva.estado);
@@ -157,3 +166,11 @@ cancelar.onclick = async () => {
     finally { cancelando = false; cancelar.disabled = false; actualizar.disabled = false; }
 };
 cargar();
+
+async function gestionar(accion,pregunta){
+ if(gestionando||cancelando||iniciandoPago||!confirm(pregunta))return;
+ gestionando=true;for(const b of [confirmarAsistencia,solicitarCancelacion,actualizar,cancelar,pagar])if(b)b.disabled=true;
+ try{const d=await api(ruta+'/'+accion,'POST',{});gestionando=false;await cargar(d.mensaje);}catch(e){gestionando=false;await cargar(e.message);}finally{gestionando=false;for(const b of [confirmarAsistencia,solicitarCancelacion,actualizar,cancelar,pagar])if(b)b.disabled=false;}
+}
+if(confirmarAsistencia)confirmarAsistencia.onclick=()=>!confirmarAsistencia.hidden&&gestionar('confirmar-asistencia','¿Confirmas que asistirás a esta cita?');
+if(solicitarCancelacion)solicitarCancelacion.onclick=()=>!solicitarCancelacion.hidden&&gestionar('solicitud-cancelacion','¿Solicitar cancelar? Tu reserva seguirá vigente hasta que el emprendimiento gestione la solicitud. Esto no devuelve el abono.');

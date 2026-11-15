@@ -41,3 +41,10 @@ En la tabla, **Por verificar** significa que no se ha confirmado en el computado
 Una vez autorizada y publicada junto con el código, confirmar la versión del archivo, el destino y la 009 aplicada. Verificar el respaldo, registrar conteos y una huella de abonos históricos en solo lectura y comprobar que el backend esté detenido y no haya bloqueos incompatibles. Ejecutar la 010 una sola vez con `psql`, `ON_ERROR_STOP=1` y un plazo corto para adquirir bloqueos. El archivo incluye su propio `BEGIN` y `COMMIT`. Si falla, revisar el error y el estado de la base antes de reintentar.
 
 Después, comprobar las cinco columnas, la restricción de proceso y la unicidad de la operación. Comparar conteos, huella histórica y estados pendientes. El arranque controlado corresponde a una etapa posterior y debe mantener desactivadas las renovaciones.
+
+## Incrementos preparados el 15/11/2026
+
+- `011_reserva_invitada.sql`: contacto por cita e idempotencia de invitada; permite reserva sin perfil global.
+- `012_gestiones_reserva.sql`: asistencia independiente y solicitudes de cancelación.
+
+Probados únicamente en bases efímeras. No aplicados a las bases conservadas ni al sandbox pagado. Ver `MVP-INTEGRADO-2026-11-15.md` y `PRUEBAS-MVP-2026-11-15.txt`. Verificar 009/010 en cada equipo antes de considerar estos incrementos.

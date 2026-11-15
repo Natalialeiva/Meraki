@@ -4,6 +4,7 @@ const noDisponible = 'Este servicio no está disponible para reservar por el mom
 const nombre = $('#formReserva input[name="nombre"]');
 const correo = $('#formReserva input[name="correo"]');
 const telefono = $('#formReserva input[name="telefono"]');
+let intentoInvitada=null;
 let negocio = null, servicios = [], creada = false, enviando = false, horas = [], contextoHoras = '';
 let versionBusqueda = 0, versionSeleccion = 0, versionProfesional = 0, versionHoras = 0;
 const dinero = valor => new Intl.NumberFormat('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0}).format(Number(valor));
@@ -17,8 +18,8 @@ function fechaLegible(valor) {
     if (Number.isNaN(fecha.getTime())) return 'Sin seleccionar';
     return new Intl.DateTimeFormat('es-CL', {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC'}).format(fecha);
 }
-async function api(url, method = 'GET', datos) {
-    const respuesta = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:datos ? JSON.stringify(datos) : undefined});
+async function api(url, method = 'GET', datos, cabeceras = {}) {
+    const respuesta = await fetch(url, {method, headers:{'Content-Type':'application/json',...cabeceras}, body:datos ? JSON.stringify(datos) : undefined});
     let d; try { d = JSON.parse(await respuesta.text()); } catch { throw Error('No se pudo leer la respuesta del servidor. Intenta nuevamente.'); }
     if (!respuesta.ok) throw Error(d.mensaje || 'No se pudo completar la operación');
     return d;
@@ -334,14 +335,16 @@ $('#formReserva').onsubmit = async evento => {
     const reserva = {id_servicio:Number($('#servicio').value), id_trabajadora:Number($('#profesional').value), fecha:$('#fecha').value, hora:$('#hora').value.slice(0, 5)};
     enviando = true; $('#camposReserva').disabled = true; tarjetasServicios(); resumen(); informar('Creando tu reserva…', 'carga');
     try {
-        const cliente = await api('/api/clientas', 'POST', datos);
-        const d = await api('/api/reservas', 'POST', {...reserva, id_clienta:cliente.id_clienta, nombre_clienta:datos.nombre});
+        const body={...reserva,contacto:datos},huella=JSON.stringify(body);
+        if(!intentoInvitada||intentoInvitada.huella!==huella)intentoInvitada={huella,clave:crypto.randomUUID()};
+        await api('/api/reservas/invitada/contexto');
+        const d = await api('/api/reservas/invitada', 'POST', body, {'X-Meraki-Action':'1','Idempotency-Key':intentoInvitada.clave});
         creada = true; $('#consulta').href = '/consulta/#' + encodeURIComponent(d.reserva.token_consulta); $('#consulta').hidden = false; $('#nuevaReserva').hidden = false;
         informar('Reserva ' + d.reserva.id_reserva + ' creada y pendiente de abono. Guarda el enlace privado y continúa con Webpay. Todavía no se ha realizado un cobro.', 'exito');
     } catch (error) { informar(error.message, 'error'); $('#camposReserva').disabled = false; }
     finally { enviando = false; tarjetasServicios(); resumen(); }
 };
-$('#nuevaReserva').onclick = () => { if (enviando) return; $('#formReserva').reset(); camposInteractuados.clear(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
+$('#nuevaReserva').onclick = () => { intentoInvitada=null; if (enviando) return; $('#formReserva').reset(); camposInteractuados.clear(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
 $('#fecha').min = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Santiago', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
 opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional'); limpiarHoras(); $('#buscar').requestSubmit();
 void cargarCategorias();

@@ -4,7 +4,7 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 function pantalla(respuestas) {
-    const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar','actualizar'].map(id=>['#'+id,{hidden:true,disabled:false,hijos:[],replaceChildren(){this.hijos=[];},append(p){this.hijos.push(p);}}]));
+    const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar','actualizar','confirmarAsistencia','solicitarCancelacion'].map(id=>['#'+id,{hidden:true,disabled:false,hijos:[],replaceChildren(){this.hijos=[];},append(p){this.hijos.push(p);}}]));
     const peticiones = [];
     const contexto = vm.createContext({
         location:{hash:'#11111111-1111-4111-8111-111111111111'},URL,confirm:()=>true,
@@ -192,4 +192,26 @@ for(const status of [400,404])test('Error de consulta '+status+' visible y sin a
 test('Error de conexión no habilita acciones',async()=>{
     const p=pantalla([Promise.reject(Error('Sin conexión'))]);await esperar();
     assert.match(p.elementos['#estado'].textContent,/Sin conexión/);assert.equal(p.elementos['#pagar'].hidden,true);assert.equal(p.elementos['#cancelar'].hidden,true);
+});
+
+
+test('Asistencia requiere clic explícito y actualiza la consulta, sin cambiar estado de reserva',async()=>{
+ const inicial={reserva,capacidades:{confirmar_asistencia:true,cancelar:false}};
+ const p=pantalla([{status:200,texto:JSON.stringify(inicial)},{status:200,texto:JSON.stringify({mensaje:'Asistencia confirmada'})},{status:200,texto:JSON.stringify({reserva:{...reserva,asistencia_confirmada_en:'2030-01-01T00:00:00Z'},capacidades:{confirmar_asistencia:false,cancelar:false}})}]);
+ await new Promise(setImmediate);assert.equal(p.elementos['#confirmarAsistencia'].hidden,false);await p.elementos['#confirmarAsistencia'].onclick();assert.equal(p.elementos['#confirmarAsistencia'].hidden,true);assert.equal(p.peticiones.filter(x=>x.method==='POST').length,1);assert.match(p.peticiones[1].url,/confirmar-asistencia$/);
+});
+test('Consulta de demostración bloquea también asistencia y solicitud',async()=>{
+ const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{soloConsulta:true,confirmar_asistencia:true,solicitar_cancelacion:true}})}]);await new Promise(setImmediate);for(const id of ['#confirmarAsistencia','#solicitarCancelacion']){assert.equal(p.elementos[id].hidden,true);await p.elementos[id].onclick();}assert.equal(p.peticiones.length,1);
+});
+test('Solicitud se presenta pendiente sin cambiar reserva confirmada ni ofrecer cancelar',async()=>{
+ const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{solicitar_cancelacion:true,cancelar:false}})},{status:200,texto:JSON.stringify({mensaje:'Solicitud registrada'})},{status:200,texto:JSON.stringify({reserva,solicitud_cancelacion:{estado:'pendiente'},capacidades:{solicitar_cancelacion:false,cancelar:false}})}]);await new Promise(setImmediate);await p.elementos['#solicitarCancelacion'].onclick();assert.match(p.peticiones[1].url,/solicitud-cancelacion$/);assert.equal(p.elementos['#solicitarCancelacion'].hidden,true);assert.equal(p.elementos['#cancelar'].hidden,true);
+});
+
+
+test('Actualización fallida retira capacidades previas de asistencia y solicitud',async()=>{
+ const p=pantalla([{status:200,texto:JSON.stringify({reserva,capacidades:{confirmar_asistencia:true,solicitar_cancelacion:true,cancelar:false}})},{status:503,texto:JSON.stringify({mensaje:'Consulta no disponible'})}]);
+ await new Promise(setImmediate);assert.equal(p.elementos['#confirmarAsistencia'].hidden,false);assert.equal(p.elementos['#solicitarCancelacion'].hidden,false);
+ await p.elementos['#actualizar'].onclick();
+ for(const id of ['#confirmarAsistencia','#solicitarCancelacion']){assert.equal(p.elementos[id].hidden,true);await p.elementos[id].onclick();}
+ assert.equal(p.peticiones.filter(x=>x.method==='POST').length,0);
 });
