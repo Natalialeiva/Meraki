@@ -5,14 +5,14 @@ const vm = require('vm');
 const path = require('path');
 function pantalla(respuestas) {
     const elementos = Object.fromEntries(['estado','detalle','pagar','cancelar','actualizar','confirmarAsistencia','solicitarCancelacion'].map(id=>['#'+id,{hidden:true,disabled:false,hijos:[],replaceChildren(){this.hijos=[];},append(p){this.hijos.push(p);}}]));
-    const peticiones = [];
+    const peticiones = [];const formularios=[];
     const contexto = vm.createContext({
-        location:{hash:'#11111111-1111-4111-8111-111111111111'},URL,confirm:()=>true,
-        document:{querySelector:s=>elementos[s],createElement:()=>({hijos:[],append(...nodos){this.hijos.push(...nodos);},get textContent(){return this.hijos.length?this.hijos.map(n=>n.textContent).join(' '):this.texto||'';},set textContent(v){this.texto=v;}})},
-        fetch:async(url,opciones)=>{peticiones.push({url,method:opciones.method});const r=await respuestas.shift();return {ok:r.status===200,status:r.status,text:async()=>r.texto};}
+        location:{hash:'#11111111-1111-4111-8111-111111111111',origin:'http://127.0.0.1:3002'},URL,confirm:()=>true,
+        document:{body:{append(){}},querySelector:s=>elementos[s],createElement:()=>({submit(){formularios.push(this.action);},hijos:[],append(...nodos){this.hijos.push(...nodos);},get textContent(){return this.hijos.length?this.hijos.map(n=>n.textContent).join(' '):this.texto||'';},set textContent(v){this.texto=v;}})},
+        fetch:async(url,opciones)=>{peticiones.push({url,method:opciones.method});const r=await respuestas.shift();return {ok:r.status===200,status:r.status,text:async()=>r.texto,headers:{get:n=>n==='X-Meraki-Demo'&&r.demo?'1':null}};}
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../../frontend/consulta/consulta.js'),'utf8'),contexto);
-    return {elementos,peticiones};
+    return {elementos,peticiones,formularios};
 }
 const reserva={id_reserva:1,estado:'confirmada'};
 test('Consulta de prueba oculta acciones antes de utilizarlas',async()=>{
@@ -214,4 +214,14 @@ test('Actualización fallida retira capacidades previas de asistencia y solicitu
  await p.elementos['#actualizar'].onclick();
  for(const id of ['#confirmarAsistencia','#solicitarCancelacion']){assert.equal(p.elementos[id].hidden,true);await p.elementos[id].onclick();}
  assert.equal(p.peticiones.filter(x=>x.method==='POST').length,0);
+});
+
+
+test('Solo cabecera demo en loopback permite el destino local simulado',async()=>{
+ const r={reserva:{...reserva,estado:'pendiente_abono'},pago:{estado:'disponible',puede_iniciar:true,motivo:null}};
+ const p=pantalla([{status:200,texto:JSON.stringify(r)},{status:200,demo:true,texto:JSON.stringify({url:'http://127.0.0.1:3002/__demo/pago',token:'a'.repeat(64)})}]);await new Promise(setImmediate);await p.elementos['#pagar'].onclick();assert.deepEqual(p.formularios,['http://127.0.0.1:3002/__demo/pago']);
+});
+for(const [nombre,url,demo]of [['sin cabecera','http://127.0.0.1:3002/__demo/pago',false],['otra ruta','http://127.0.0.1:3002/api/abonos/retorno',true],['otro origen','http://127.0.0.1:3003/__demo/pago',true]])test('Pago local rechazado: '+nombre,async()=>{
+ const r={reserva:{...reserva,estado:'pendiente_abono'},pago:{estado:'disponible',puede_iniciar:true,motivo:null}};
+ const p=pantalla([{status:200,texto:JSON.stringify(r)},{status:200,demo,texto:JSON.stringify({url,token:'a'.repeat(64),demoLocal:true})},{status:200,texto:JSON.stringify(r)}]);await new Promise(setImmediate);await p.elementos['#pagar'].onclick();assert.equal(p.formularios.length,0);assert.match(p.elementos['#estado'].textContent,/Destino de pago inválido/);
 });

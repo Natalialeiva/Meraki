@@ -29,6 +29,23 @@ test('La referencia es autenticada, opaca, de propósito específico y vence',()
     assert.equal(r.abrir(ref),null);
 });
 
+test('El retorno local mantiene el origen de la pestaña sin reflejar destinos externos',()=>{
+    const configurada='http://localhost:3000/api/abonos/retorno';
+    const visual='/api/abonos/retorno/navegador';
+    for(const host of ['localhost','127.0.0.1','[::1]']){
+        const origen='http://'+host+':3000';
+        assert.equal(new URL(urlRetornoVisual(configurada,origen)).origin,origen);
+        assert.equal(urlRetornoVisual(configurada,origen),origen+visual);
+    }
+    assert.equal(urlRetornoVisual('http://127.0.0.1:3000/api/abonos/retorno','http://localhost:3000'),'http://localhost:3000'+visual);
+    for(const origen of ['http://malicioso.example:3000','http://localhost.malicioso.example:3000',
+        'http://127.0.0.1:3001','https://127.0.0.1:3000','http://u:p@127.0.0.1:3000',
+        'http://127.0.0.1:3000/otra','http://127.0.0.1:3000/?x=1','http://127.0.0.1:3000/#x','invalido']){
+        assert.equal(urlRetornoVisual(configurada,origen),'http://localhost:3000'+visual);
+    }
+    assert.equal(urlRetornoVisual('https://meraki.example/api/abonos/retorno','https://127.0.0.1'),'https://meraki.example'+visual);
+});
+
 async function pantalla({datos,contextos=[],fallo=false,referencia='X'.repeat(80)}){
     const elementos=Object.fromEntries(['volver','ayuda','titulo','mensaje'].map(id=>['#'+id,{
         hidden:true,removeAttribute(nombre){delete this[nombre];}

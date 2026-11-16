@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "alcance": "Resumen académico anonimizado de evidencia histórica; sin revalidación externa en esta sesión",
+  "webpay": "simulado",
+  "correoProveedor": "real según registro histórico",
+  "pago": "aprobado",
+  "reserva": "confirmada",
+  "notificacion": "enviado",
+  "idMensajeRegistrado": true,
+  "intentos": 1,
+  "datosOmitidos": [
+    "identificador de mensaje",
+    "direcciones y dominios de correo",
+    "enlaces y configuración local",
+    "marcas temporales exactas"
+  ],
+  "advertencia": "No usar este resumen como entrada de scripts operativos ni para localizar esquemas. El original y el historial no se modificaron."
+}

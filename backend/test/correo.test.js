@@ -1,6 +1,11 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const {enviarConfirmacionReserva,enlacePrivado,verificarConexionGmail}=require('../correo');
 const datos={correo:'destino@example.com',nombreClienta:'Prueba',enlaceConsulta:'https://meraki.example/consulta/#TOKEN-PRIVADO'};
+test('Diagnóstico bloquea Gmail y Ethereal antes de crear transporte o enviar',async()=>{
+ const mailer={createTransport(){throw Error('No debe crear transporte');},createTestAccount(){throw Error('No debe contactar Ethereal');}};
+ for(const MAIL_PROVIDER of ['gmail','ethereal'])await assert.rejects(enviarConfirmacionReserva(datos,{env:{MAIL_PROVIDER,MERAKI_PROVEEDORES_EXTERNOS:'0'},mailer}),{code:'EPROVEEDOR_DESACTIVADO'});
+ await assert.rejects(verificarConexionGmail({env:{MERAKI_PROVEEDORES_EXTERNOS:'0'},mailer}),{code:'EPROVEEDOR_DESACTIVADO'});
+});
 function fake(){const salida={};salida.mailer={createTestAccount:async()=>({smtp:{host:'ethereal',port:587,secure:false},user:'u',pass:'p'}),createTransport:c=>{salida.config=c;return{close:()=>{},verify:async()=>true,sendMail:async m=>{salida.mensaje=m;return{messageId:'test-id',accepted:[m.to],rejected:[]};}}},getTestMessageUrl:()=> 'https://ethereal.email/test'};return salida;}
 test('Ethereal nunca recibe el enlace auténtico',async()=>{const f=fake();const r=await enviarConfirmacionReserva(datos,{env:{MAIL_PROVIDER:'ethereal'},mailer:f.mailer});assert(!f.mensaje.text.includes('TOKEN-PRIVADO'));assert.match(f.mensaje.text,/ENLACE-DE-PRUEBA/);assert(r.vistaPrevia);});
 test('Gmail utiliza el enlace real y no genera vista previa',async()=>{const f=fake();const r=await enviarConfirmacionReserva(datos,{env:{MAIL_PROVIDER:'gmail',GMAIL_USER:'pruebas@gmail.com',GOOGLE_CLIENT_ID:'cliente',GOOGLE_CLIENT_SECRET:'secreto',GOOGLE_REFRESH_TOKEN:'refresh',PUBLIC_BASE_URL:'https://meraki.example'},mailer:f.mailer});assert.match(f.mensaje.text,/TOKEN-PRIVADO/);assert.equal(f.config.service,'gmail');assert.equal(r.vistaPrevia,null);});

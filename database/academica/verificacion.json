@@ -1,0 +1,11 @@
+{
+  "archivo": "meraki_db.sql",
+  "sha256": "1d2f620969aa51d6f9fb7fb8434541c6a79bd15d664226c1a8c0023ef42d41de",
+  "restauracionVerificada": true,
+  "baseDestino": "meraki_db",
+  "migracionesHasta": "012",
+  "servicios": 2,
+  "trabajadoras": 2,
+  "horarios": 12,
+  "datos": "Inventados; sin pagos, sesiones, tokens privados ni credenciales activas"
+}

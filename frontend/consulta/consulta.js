@@ -32,6 +32,7 @@ async function api(url, method = 'GET', data) {
         throw Error(datos?.mensaje || 'No se pudo completar la operación. Intenta nuevamente más tarde.');
     }
     if (!datos || typeof datos !== 'object') throw Error('El servidor devolvió una respuesta inesperada. Intenta nuevamente más tarde.');
+    datos.demoLocal=respuesta.headers?.get('X-Meraki-Demo')==='1';
     if (respuesta.headers?.get('X-Meraki-Solo-Consulta') === '1') datos.capacidades = {...datos.capacidades, soloConsulta:true};
     return datos;
 }
@@ -117,7 +118,8 @@ pagar.onclick = async () => {
     try {
         const datos = await api('/api/abonos/cliente/iniciar', 'POST', {token_consulta: token});
         const url = new URL(datos.url);
-        if (url.protocol !== 'https:' || !['webpay3gint.transbank.cl', 'webpay3g.transbank.cl'].includes(url.hostname)) throw Error('Destino de pago inválido');
+        const demoLocal=datos.demoLocal===true && url.protocol==='http:' && url.hostname==='127.0.0.1' && url.origin===location.origin && url.pathname==='/__demo/pago' && !url.search && !url.hash && !url.username && !url.password;
+        if (!demoLocal && (url.protocol !== 'https:' || !['webpay3gint.transbank.cl', 'webpay3g.transbank.cl'].includes(url.hostname))) throw Error('Destino de pago inválido');
         try {
             if (/^[A-Za-z0-9_-]{43}$/.test(datos.correlacion) && /^[a-f0-9-]{36}$/i.test(token)) {
                 const prefijo = 'meraki:webpay:';

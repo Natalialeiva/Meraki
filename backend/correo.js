@@ -10,6 +10,7 @@ function enlacePrivado(token, env = process.env) {
 }
 
 function crearTransporteGmail({ env = process.env, mailer = nodemailer } = {}) {
+    if(env.MERAKI_PROVEEDORES_EXTERNOS==='0')throw Object.assign(new Error('Proveedores externos desactivados'),{code:'EPROVEEDOR_DESACTIVADO'});
     const requeridas = ['GMAIL_USER', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN'];
     const faltantes = requeridas.filter(nombre => !env[nombre]?.trim());
     if (faltantes.length) {
@@ -43,6 +44,7 @@ async function verificarConexionGmail(opciones = {}) {
 }
 
 async function enviarConfirmacionReserva(datos, { env = process.env, mailer = nodemailer } = {}) {
+    if(env.MERAKI_PROVEEDORES_EXTERNOS==='0')throw Object.assign(new Error('Proveedores externos desactivados'),{code:'EPROVEEDOR_DESACTIVADO'});
     const proveedor = env.MAIL_PROVIDER || 'ethereal';
     let transporte;
     let from = '"Meraki - Reservas" <reservas@meraki.test>';

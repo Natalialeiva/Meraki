@@ -1,0 +1,10 @@
+Base efímera confirmada: meraki_muestra_1794798063597_61ee877b. No se utilizarán meraki_db ni meraki_demo.
+◇ injected env (0) from .env
+MERAKI: configuración de sesiones cargada
+Iniciando Backend de Meraki
+Meraki ORIGINAL: http://127.0.0.1:3002/front-office/ y http://127.0.0.1:3002/back-office/
+SOLO DATOS FICTICIOS. Credencial de ensayo omitida del registro académico.
+Pagos SOLO SIMULADOS locales. Oneclick, correos reales y renovaciones bloqueados. Ctrl+C detiene y elimina esta base efímera.
+MERAKI: solicitud de login recibida
+Arranque original verificado: 31 comprobaciones aprobadas.
+Base efímera eliminada y ausencia verificada: meraki_muestra_1794798063597_61ee877b

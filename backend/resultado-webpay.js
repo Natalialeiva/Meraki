@@ -40,12 +40,25 @@ function crearReferenciasWebpay(secreto, ahora = Date.now) {
 const RETORNO_JSON='/api/abonos/retorno';
 const RETORNO_VISUAL=RETORNO_JSON+'/navegador';
 
-function urlRetornoVisual(configurada) {
+function urlRetornoVisual(configurada, origenNavegador) {
     try{
         const url=new URL(configurada);
         const local=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
         if((url.protocol!=='https:'&&!(local&&url.protocol==='http:'))||url.username||url.password||
             url.hash||![RETORNO_JSON,RETORNO_JSON+'/'].includes(url.pathname))return null;
+        // localhost y 127.0.0.1 son orígenes distintos para sessionStorage.
+        // Solo conservar el alias loopback de la visita, con protocolo/puerto iguales.
+        // Nunca reflejar un Host externo ni cambiar el retorno de un despliegue público.
+        if(local && origenNavegador){
+            try{
+                const origen=new URL(origenNavegador);
+                if(['localhost','127.0.0.1','[::1]'].includes(origen.hostname) &&
+                   origen.protocol===url.protocol && origen.port===url.port &&
+                   !origen.username && !origen.password && origen.pathname==='/' && !origen.search && !origen.hash){
+                    url.hostname=origen.hostname;
+                }
+            }catch{ /* Conservar exclusivamente el destino validado de configuración. */ }
+        }
         url.pathname=RETORNO_VISUAL;
         return url.href.length<=256?url.href:null;
     }catch{return null;}

@@ -46,6 +46,17 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   const wrapped=n=>n==='./db'?pool:n==='./notificaciones'?{...req(n),crearNotificaciones:p=>crearNotificaciones(p,enviar)}:n==='transbank-sdk'?{WebpayPlus:{Transaction:class{async status(){consultasWebpay++;return status;} async create(order,session,amount,returnUrl){if(alCrearWebpay)await alCrearWebpay(order,session,amount,returnUrl);status={status:"AUTHORIZED",response_code:0,amount,buy_order:order,authorization_code:"TEST"};return {token:String(++transaccionesCreadas).padStart(64,"a"),url:"https://webpay3gint.transbank.cl/webpayserver/initTransaction"};} async commit(token){return alConfirmarWebpay?alConfirmarWebpay(token):status;}}},Options:class{},IntegrationCommerceCodes:{},IntegrationApiKeys:{},Environment:{}}:req(n);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../index.js'),'utf8'),{require:wrapped,module,__dirname:path.join(__dirname,'..'),process,console,URL,Buffer,setTimeout,clearTimeout});app=module.exports;
   const agent=request.agent(app);
+  await t.test('Diagnóstico bloquea rutas financieras incluso retornos antes de crear abonos',async()=>{
+   const anterior=process.env.MERAKI_PROVEEDORES_EXTERNOS;
+   const cantidad=(await pool.query('SELECT count(*)::int n FROM abono')).rows[0].n;
+   try{
+    process.env.MERAKI_PROVEEDORES_EXTERNOS='0';
+    for(const [metodo,ruta]of [['post','/api/abonos/cliente/iniciar'],['get','/api/abonos/retorno'],['post','/api/abonos/1/recuperar'],['get','/api/abonos/1/estado'],['get','/api/suscripcion/retorno'],['post','/api/suscripcion/inscribir'],['post','/api/suscripcion/reintentar']]){
+     const r=await request(app)[metodo](ruta);assert.equal(r.status,503);assert.equal(r.body.codigo,'PROVEEDORES_DESACTIVADOS');
+    }
+    assert.equal((await pool.query('SELECT count(*)::int n FROM abono')).rows[0].n,cantidad);
+   }finally{if(anterior===undefined)delete process.env.MERAKI_PROVEEDORES_EXTERNOS;else process.env.MERAKI_PROVEEDORES_EXTERNOS=anterior;}
+  });
   await t.test('Consulta privada: PostgreSQL conserva componentes civiles en distintas zonas',async()=>{
    const original=(await pool.query(`SELECT TO_CHAR(fecha_hora_inicio,'YYYY-MM-DD"T"HH24:MI:SS') AS inicio, TO_CHAR(fecha_hora_fin,'YYYY-MM-DD"T"HH24:MI:SS') AS fin FROM reserva WHERE id_reserva=1`)).rows[0];
    const zonaAnterior=process.env.TZ;
@@ -633,6 +644,34 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    const retorno=a=>request(app).post('/api/abonos/retorno').send({token_ws:a.token});
    const recuperar=a=>agent.post('/api/abonos/'+a.id_abono+'/recuperar');
    const fila=async a=>(await pool.query('SELECT * FROM abono WHERE id_abono=$1',[a.id_abono])).rows[0];
+   await t.test('Retorno local conserva alias de navegador y procesa GET/POST sin cookie de sesión',async()=>{
+    const anterior=process.env.WEBPAY_RETURN_URL;
+    try{
+     process.env.WEBPAY_RETURN_URL='http://localhost:3000/api/abonos/retorno';
+     for(const metodo of ['get','post']){
+      const a=await nueva();await pool.query('DELETE FROM abono WHERE id_abono=$1',[a.id_abono]);
+      let enviada;alCrearWebpay=async(_o,_s,_m,url)=>{enviada=url;};
+      let inicio;
+      try{inicio=(await request(app).post('/api/abonos/cliente/iniciar').set('Host','127.0.0.1:3000').send({token_consulta:a.tokenConsulta}).expect(201)).body;}finally{alCrearWebpay=null;}
+      assert.equal(enviada,'http://127.0.0.1:3000/api/abonos/retorno/navegador');
+      const solicitud=request(app)[metodo]('/api/abonos/retorno/navegador').set('Host','127.0.0.1:3000');
+      const r=await (metodo==='get'?solicitud.query({token_ws:inicio.token}):solicitud.type('form').send({token_ws:inicio.token})).expect(303);
+      const lectura=await request(app).get('/api/abonos/resultado').set('X-Meraki-Resultado',r.headers.location.split('#')[1]).expect(200);
+      assert.equal(lectura.body.estado,'aprobado');assert.equal(lectura.body.correlacion,inicio.correlacion);
+      assert.equal((await pool.query('SELECT count(*)::int n FROM abono WHERE id_reserva=$1',[a.id_reserva])).rows[0].n,1);
+     }
+    }finally{if(anterior===undefined)delete process.env.WEBPAY_RETURN_URL;else process.env.WEBPAY_RETURN_URL=anterior;alCrearWebpay=null;}
+   });
+   await t.test('INITIALIZED con código -2 no habilita recuperación ni altera el abono al consultar',async()=>{
+    const a=await nueva(),anterior=status,antes=await fila(a),correos=enviados;
+    try{
+     status={...aprobado(a),status:'INITIALIZED',response_code:-2};
+     const r=await agent.get('/api/abonos/'+a.id_abono+'/estado').query({verificar:'1'}).expect(200);
+     assert.equal(r.body.estado_transbank,'INITIALIZED');assert.equal(r.body.puede_recuperar,false);
+     assert.deepEqual(await fila(a),antes);assert.equal(enviados,correos);
+     assert.equal((await request(app).post('/api/abonos/cliente/iniciar').send({token_consulta:a.tokenConsulta})).status,409);
+    }finally{status=anterior;}
+   });
    await t.test('La ruta visual redirige con GET o POST sin depender de las cabeceras',async()=>{
     const correos=enviados, consultas=consultasWebpay;
     const leer=ref=>request(app).get('/api/abonos/resultado').set('X-Meraki-Resultado',ref);

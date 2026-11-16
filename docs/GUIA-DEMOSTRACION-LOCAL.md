@@ -1,98 +1,74 @@
 # Demostración segura del Meraki original
 
-Se utiliza el código de este repositorio, sin copiar la aplicación ni crear otra
-interfaz. El comando crea PostgreSQL temporal para permitir login, reservas y
-gestión sin escribir en `meraki_db` o `meraki_demo`. No modifica `.env`.
+Guía actualizada durante la sesión del 15/16 de noviembre de 2026. Se ejecutan el backend y las interfaces del repositorio, no otra aplicación. PostgreSQL se crea desde cero en una base efímera; no se utiliza meraki_db, meraki_demo ni el sandbox del pago histórico. No se modifica .env.
 
-## Iniciar
+## Preparación
 
-Abrir PowerShell y ejecutar:
+Instalar dependencias con npm ci en backend y disponer de PostgreSQL local. El usuario configurado privadamente necesita crear una base e instalar btree_gist únicamente en ella. No ampliar permisos ni migrar bases históricas para solucionar el arranque. Si el puerto elegido está ocupado, el lanzador termina sin detener el proceso ajeno.
 
-```powershell
-cd C:\Users\adria\Documents\GitHub\Meraki
-node .\backend\scripts\demostracion-local-segura.cjs
-```
+Desde la raíz del repositorio:
 
-Mantener esa consola abierta. El proceso debe confirmar la base efímera y mostrar
-que escucha en el puerto 3000. Si ya está ocupado, se detiene sin reemplazar al
-servidor existente. No abrir directamente archivos HTML desde Windows.
+~~~powershell
+node backend/scripts/demostracion-local-segura.cjs
+~~~
 
-- Front Office: http://localhost:3000/front-office/
-- Back Office: http://localhost:3000/back-office/
-- Cuenta ficticia: `demo1@example.test`
-- Contraseña exclusivamente ficticia: `Meraki-Demo-Local!`
-- Segunda cuenta ficticia: `demo2@example.test`, misma contraseña; tiene otro negocio.
+Puerto predeterminado: 3002, enlazado solo a 127.0.0.1. Otro puerto puede elegirse con --puerto 3003.
 
-Solo admite PostgreSQL local y necesita permisos de creación de base e instalación
-de `btree_gist` en la base nueva. No instala dependencias. Si aparece un error,
-no aplicar migraciones ni cambiar permisos de las bases históricas para resolverlo.
+- Front Office: http://127.0.0.1:3002/front-office/
+- Back Office: http://127.0.0.1:3002/back-office/
+- La consola muestra las cuentas ficticias y la fecha de ejemplo. Utilizar exclusivamente esas credenciales y contactos bajo example.test. No guardar credenciales en navegador ni usarlas en otro entorno.
 
-## Recorrido recomendado
+El lanzador aplica schema y migraciones hasta012 a una base nueva meraki_muestra_…. Los estados iniciales de las cuatro citas son fixtures, no pagos; la nueva reserva del recorrido sí atraviesa el procesamiento original con proveedor simulado.
 
-1. Buscar «Demostración ficticia 1» y combinar comuna/categoría. Mostrar quitar
-   filtros y Ver todos. Elegir servicio y profesional.
-2. Seleccionar la fecha de ejemplo indicada en la consola, consultar disponibilidad
-   y elegir una hora libre. Los datos y horarios son ficticios, en hora de Santiago.
-3. Completar el contacto con un correo de ejemplo, como `invitada@example.test`.
-   Crear la reserva y abrir su enlace privado. No iniciar un pago. Puede cancelarse
-   si no tiene abonos, tal como exige el backend original.
-4. Iniciar sesión en Back Office con la cuenta ficticia. Abrir Reservas y pulsar
-   Actualizar agenda después de crear o cancelar desde otra pestaña.
-5. Mostrar los seis indicadores, la distribución por servicio/profesional y los
-   filtros existentes de fecha/estado. Los filtros cambian la lista, no los totales.
-   Las canceladas aparecen en el filtro y en los desgloses de distribución.
-6. Hay una reserva confirmada pasada que habilita «Marcar atendida/no atendida» y
-   una confirmada futura para Próxima atención. Los estados son fixtures, no pagos.
-   Si el navegador no dispone de Temporal, esa tarjeta avisa indisponibilidad.
-7. Revisar Perfil, Servicios, Equipo y Horarios/bloqueos. Los cambios que se hagan
-   aquí solo afectan la base temporal. Mantener las comprobaciones de vigencia.
-8. Cerrar sesión y, opcionalmente, entrar como demo2 para ver el otro emprendimiento
-   sin mezclar sus reservas. No confundir el espacio Reservas con un Dashboard nuevo.
+## Recorrido para el profesor
 
-No utilizar nombres, correos, tarjetas ni otros datos reales. La reserva invitada
-conserva su contrato anterior: esta demostración no corrige sus riesgos de identidad
-ni idempotencia. El laboratorio de diseño permanece desconectado.
+1. Abrir Front Office; buscar Demostración ficticia1 combinando nombre, comuna o categoría.
+2. Ver servicios y seleccionar Manicure, Profesional Uno y la fecha indicada en consola. Consultar horas; escoger10:00 si está libre.
+3. Completar contacto ficticio y crear una reserva como invitada. El intento conserva idempotencia del navegador. Guardar el enlace solamente durante el ensayo.
+4. Abrir Consultar reserva y pagar abono. Pulsar Continuar al abono.
+5. Debe abrirse la pantalla local **Pago simulado**, sin campos de tarjeta. Pulsar Aprobar pago simulado. La navegación no debe salir de 127.0.0.1.
+6. El retorno original muestra Abono aprobado y Volver a mi reserva. La cita queda confirmada y se registra una notificación con identificador DEMO-SIN-ENVIO; no se envía correo.
+7. Confirmar que asistiré y aceptar el diálogo. Mostrar asistencia independiente del estado confirmado y del pago.
+8. Solicitar cancelación y aceptar el diálogo. La cita sigue confirmada y su horario sigue ocupado.
+9. Abrir Back Office e ingresar con la cuenta ficticia del negocio1. En Reservas se muestran cita, asistencia, abono aprobado y solicitud pendiente.
+10. Registrar respuesta y cerrar la solicitud. Aceptar el diálogo: no cancela la cita ni devuelve dinero. Consultar de nuevo para ver la respuesta.
+11. En Notificaciones mostrar un envío simulado y un intento. No usar Reintentar envío real.
+12. En Dashboard mostrar los cinco estados, distribución y filtro Confirmada. Los importes son proyecciones contractuales; no presentarlos como ingresos cobrados.
 
-## Bloqueos y límites
+Si ya se creó la reserva, no comenzar de nuevo para repetir una operación: utilizar su consulta o iniciar otra ejecución del lanzador tras cerrar y verificar la limpieza. El ordenamiento por cercanía y el mapa simulado pueden demostrarse por separado; no conceder permisos de ubicación ni configurar Google durante este recorrido.
 
-- La misma aplicación Express se monta detrás de un bloqueo de rutas financieras
-  y de envío/reintento de notificaciones, exclusivo del proceso de demostración.
-- Las renovaciones están apagadas, Oneclick y envío de correo se sustituyen por
-  funciones de rechazo y las solicitudes HTTP externas se bloquean en el proceso.
-- No se modifican los archivos financieros originales. El arranque normal mediante
-  `npm.cmd start` no incluye estas protecciones adicionales.
-- No hay indicador de ingresos implementado. Los precios de reservas y abonos
-  pendientes NO son ingresos y no se presentan como tales.
-- Webpay externo no se demuestra como terminado; depende de la confirmación de Natalia.
-- Google Maps real y ubicaciones confirmadas siguen fuera de este recorrido.
-- Los filtros visuales de servicio/profesional aún no existen; sí existe distribución
-  por sus identificadores. No se añadieron funcionalidades secundarias.
-- Esta revisión no sustituye la comprobación visual final en el navegador elegido.
+## Barreras del proceso
+
+- SDK de reservas sustituido por un proveedor sin red; mantiene orden, monto y token solo en memoria. La autorización local permite al backend original procesar el resultado ficticio.
+- El proveedor devuelve un destino HTTPS compatible con la validación original. Solo el lanzador traduce la respuesta exitosa a /__demo/pago. El frontend admite ese destino únicamente con cabecera demo, mismo origen y loopback HTTP. No se debilitó el adaptador financiero de uso normal.
+- Oneclick, renovaciones, correo real, recuperación y consulta externa de pagos quedan bloqueados. Los transportes originales de correo se sustituyen antes de cargar la aplicación.
+- Solicitudes HTTP externas del proceso y recursos externos del navegador se bloquean. La simulación no implica una nueva transacción Transbank Integration ni recepción Gmail.
+- La ruta local /__demo/estado muestra únicamente contadores del ensayo, sin enlaces privados ni destinatarios.
+
+## Verificación automática del lanzador
+
+~~~powershell
+node backend/scripts/demostracion-local-segura.cjs --verificar
+~~~
+
+Comprueba recursos, login, agenda, bloqueos, reserva invitada, pago simulado, notificación, asistencia y cierre de solicitud. Termina y verifica la eliminación de la base. No deja servidor abierto. Evidencia de esta revisión:31comprobaciones aprobadas.
+
+Para regresión general:
+
+~~~powershell
+cd backend
+npm.cmd run test
+npm.cmd run test:aislado
+~~~
+
+El primer comando omite las suites SQL si no están habilitadas. El segundo crea bases nuevas, ejecuta todas las suites con proveedores simulados y elimina únicamente sus recursos. No habilitar MERAKI_DB_TEST apuntando a bases históricas. Si se heredan esas variables de otra consola, abrir una consola limpia o desactivarlas antes del primer comando.
 
 ## Detener
 
-En la misma consola, pulsar **Ctrl+C** una vez y esperar el mensaje:
-«Base efímera eliminada y ausencia verificada».
-El puerto 3000 queda libre. Todos los cambios ficticios desaparecen.
-No cerrar a la fuerza la consola ni finalizar Node desde el Administrador de tareas:
-eso puede impedir la limpieza. Si el equipo se apaga inesperadamente, informar el
-nombre `meraki_muestra_…`; no borrar bases por coincidencias parciales de nombre.
+Mantener abierta la consola del lanzador. Pulsar Ctrl+C una vez y esperar **Base efímera eliminada y ausencia verificada**. Se comprueba nombre y OID antes de eliminar; no se usa FORCE ni se terminan sesiones ajenas. Si la limpieza falla o el computador se apaga, registrar el nombre exacto e investigar; no borrar bases por coincidencia parcial ni eliminar volúmenes Docker.
 
-Para comprobar arranque y limpieza automáticamente, sin dejar servidor abierto:
+Las pestañas del ensayo dejarán de responder tras detenerlo. No son un despliegue permanente ni enlaces para enviar por correo. El ensayo visual de esta sesión necesitó que Natalia aceptara manualmente tres diálogos del navegador; ver ENSAYO-SEGURO-2026-11-15.md.
 
-```powershell
-node .\backend\scripts\demostracion-local-segura.cjs --verificar
-```
+## Diferencia con arranque habitual
 
-## Base habitual y restricciones
-
-El `.env` principal continúa apuntando a `meraki_db`. Un arranque normal desde
-`backend` con `npm.cmd start` usaría esa base: login/logout guardan/eliminan sesiones
-y connect-pg-simple puede limpiar sesiones vencidas. Crear o gestionar reservas
-también escribe. Por eso no se usó ese arranque contra las bases conservadas bajo
-la restricción actual de cero modificaciones.
-
-El comando seguro sobrescribe conexión y secreto solo en su propio proceso y
-carga directamente `backend/index.js`. No integra el prototipo invitado ni altera
-contratos de producción. Al terminar se cierra el servidor, la tienda de sesiones,
-los pools y la base creada, comprobando previamente su nombre y OID.
+npm start desde backend utiliza la conexión de .env y no inyecta estas barreras. Puede escribir sesiones, reservar y contactar proveedores configurados. Requiere una base compatible, permisos y autorización propios. El sandbox histórico conserva su reserva2 aprobada y sus herramientas V3; no se usa como fixture ni se actualiza para esta demostración.

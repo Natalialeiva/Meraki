@@ -1,5 +1,7 @@
 # Traspaso y preparación del computador de Adriana
 
+> Nota del 16/11: este documento conserva el traspaso histórico del laboratorio. Para ejecutar el MVP y preparar la entrega actual, seguir [instalación académica](INSTALACION-ACADEMICA.md) y [estado de la base principal](BASE-PRINCIPAL-2026-11-16.md). El laboratorio Docker y su paquete privado ya no son requisitos de la presentación. La `meraki_db` de Natalia recibió 009–012 con respaldo verificado y autorización; revisar por separado la base de Adriana.
+
 Fecha: 15 de noviembre de 2026. Objetivo: disponer del código y del laboratorio conservado de Natalia para continuar el desarrollo y preparar la presentación, sin perder el trabajo local de Adriana.
 
 ## Qué compartir

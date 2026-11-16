@@ -1,0 +1,26 @@
+{
+  "ambiente": "Webpay Plus Integration",
+  "id_reserva": 28,
+  "id_abono": 15,
+  "monto": 5000,
+  "consulta_autorizada": "status",
+  "consultas_ejecutadas": 2,
+  "estado_externo": "INITIALIZED",
+  "codigo_respuesta": -2,
+  "consultas": [
+    {"estado": "INITIALIZED", "codigo_respuesta": null},
+    {"estado": "INITIALIZED", "codigo_respuesta": -2}
+  ],
+  "orden_coincide": true,
+  "sesion_coincide": true,
+  "monto_coincide": true,
+  "estado_local_reserva": "pendiente_abono",
+  "estado_local_abono": "pendiente",
+  "notificacion_generada": false,
+  "commit_ejecutado_en_revision": false,
+  "recuperacion_ejecutada": false,
+  "escrituras_sql_en_revision": false,
+  "nuevo_pago_creado": false,
+  "causa_exacta_error": "No determinada; posible vencimiento del formulario, sin confirmación concluyente",
+  "criterio": "No presentar INITIALIZED como pago aprobado, rechazado ni autorización para reintentar"
+}

@@ -15,6 +15,7 @@ function crearOneclick(){
     };
 }
 async function limitar(accion){
+    if(process.env.MERAKI_PROVEEDORES_EXTERNOS==='0')throw Object.assign(new Error('Proveedores externos desactivados'),{code:'EPROVEEDOR_DESACTIVADO'});
     let temporizador;
     try{return await Promise.race([Promise.resolve().then(accion),new Promise((_,rechazar)=>{
         temporizador=setTimeout(()=>rechazar(Object.assign(new Error('Tiempo de respuesta agotado'),{code:'ETIMEDOUT'})),20000);

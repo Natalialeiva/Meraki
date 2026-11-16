@@ -37,6 +37,16 @@ const PgSession = connectPgSimple(session);
 // Creamos la aplicación que utilizará Express.
 const app = express();
 
+// Diagnóstico del sistema original: bloquear antes de crear operaciones locales.
+app.use((req,res,next)=>{
+    if(process.env.MERAKI_PROVEEDORES_EXTERNOS==='0' &&
+       (/^\/api\/abonos(?:\/|$)/.test(req.path) ||
+        (/^\/api\/suscripcion(?:\/|$)/.test(req.path) && (req.path==='/api/suscripcion/retorno'||!['GET','HEAD'].includes(req.method))))) {
+        return res.status(503).json({codigo:'PROVEEDORES_DESACTIVADOS',mensaje:'Operaciones externas desactivadas durante la revisión local.'});
+    }
+    next();
+});
+
 // Permitimos que el Backend reciba datos en formato JSON.
 // Esto será necesario para registrar reservas desde el Front Office.
 app.use(express.json());
@@ -3001,7 +3011,7 @@ app.post('/api/abonos/cliente/iniciar', async (req, res) => {
     }
     res.set('Cache-Control','no-store');
     res.set('Referrer-Policy','no-referrer');
-    const retorno = urlRetornoVisual(process.env.WEBPAY_RETURN_URL);
+    const retorno = urlRetornoVisual(process.env.WEBPAY_RETURN_URL,req.protocol+'://'+req.get('host'));
     if(!retorno)return res.status(502).json({mensaje:'El pago no está disponible por ahora.'});
     const resultado = await iniciarAbonoWebpay({token}, retorno);
     if(resultado.codigo===201)resultado.cuerpo.correlacion=referenciasWebpay.correlacion(resultado.cuerpo.token);
@@ -4224,7 +4234,7 @@ app.get("/api/servicios/:id/trabajadoras", async (req, res) => {
 
 
 // Iniciamos el servidor en el puerto 3000.
-if (require.main === module) app.listen(Number(process.env.PORT || 3000), () => {
+if (require.main === module) app.listen(Number(process.env.PORT || 3000),process.env.MERAKI_PROVEEDORES_EXTERNOS==='0'?'127.0.0.1':undefined, () => {
     console.log(`Servidor de Meraki funcionando en http://localhost:${Number(process.env.PORT || 3000)}`);
     // El servidor revisa vencimientos; no existe un endpoint público para disparar cargos.
     if(process.env.MERAKI_SUSCRIPCIONES_AUTOMATICAS!=='0')iniciarPlanificador(suscripciones);
