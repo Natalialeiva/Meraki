@@ -19,7 +19,10 @@ $('#login').addEventListener('reset',ocultarClave);
 let versionSesion=0;
 async function api(url,method='GET',data,vigente=()=>true){
     const sesion=versionSesion;
-    const r=await fetch(url,{method,headers:{'Content-Type':'application/json','X-Meraki-Action':'1'},body:data?JSON.stringify(data):undefined});
+    const archivo=typeof Blob!=='undefined'&&data instanceof Blob;
+    const headers={'Content-Type':archivo?data.type:'application/json','X-Meraki-Action':'1'};
+    if(archivo)headers['X-Meraki-Nombre']=encodeURIComponent(data.name||'fotografia');
+    const r=await fetch(url,{method,headers,body:archivo?data:data?JSON.stringify(data):undefined});
     if(!vigente())return;
     const texto=await r.text();
     if(!vigente())return;
@@ -410,6 +413,9 @@ async function iniciar(){
     if(sesion!==versionSesion)return;
     const negocios=await api('/api/mis-emprendimientos');
     if(sesion!==versionSesion)return;
+    $('#altaNegocio').hidden=negocios.length>0;
+    if(!negocios.length){$('#login').hidden=true;$('#acceso').hidden=true;$('#panel').hidden=true;estado.textContent='Completa los datos de tu emprendimiento.';return;}
+    if(sesion!==versionSesion)return;
     negociosPerfil=negocios;
     const selector=$('#negocio');
     selector.replaceChildren();
@@ -442,6 +448,8 @@ $('#login').onsubmit=async e=>{
     finally{ingresando=false;if(b)b.disabled=false;}
 };
 $('#salir').onclick=async()=>{try{await api('/api/auth/logout','POST');location.reload();}catch(e){estado.textContent=e.message;}};
+$('#salirAlta').onclick=$('#salir').onclick;
+MerakiIncorporacion.montar({registro:$('#registroCuenta'),negocio:$('#registroNegocio'),login:$('#login'),estado,api,alCrearNegocio:iniciar,estadoRegistro:$('#estadoRegistro'),estadoNegocio:$('#estadoAltaNegocio')});
 $('#cargar').onclick=()=>reservas().catch(e=>estado.textContent=e.message);
 $('#negocio').onchange=()=>{
     cargarPerfil();

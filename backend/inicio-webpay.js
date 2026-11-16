@@ -1,4 +1,5 @@
 const {randomUUID} = require('node:crypto');
+const {abonoCLPValido}=require('./montos-abono');
 
 const conflicto = mensaje => ({codigo: 409, cuerpo: {mensaje}});
 const revision = 'El intento de pago requiere revisión. No inicies otro pago.';
@@ -20,7 +21,7 @@ function crearInicioWebpay({pool, webpay, plazoMs = 20000}) {
             : 'r.token_consulta = $1';
         const parametros = porSesion ? [acceso.idReserva, acceso.propietaria] : [acceso.token];
         const resultado = await db.query(`
-            SELECT r.id_reserva, r.estado, r.monto_abono
+            SELECT r.id_reserva, r.estado, r.monto_abono, r.precio_servicio
             FROM reserva r JOIN emprendimiento e USING (id_emprendimiento)
             WHERE ${filtro} ${bloquear ? 'FOR UPDATE OF r' : ''}
         `, parametros);
@@ -38,7 +39,7 @@ function crearInicioWebpay({pool, webpay, plazoMs = 20000}) {
         if (!datos) return {codigo: 404, cuerpo: {mensaje: 'No se encontró la reserva'}};
         if (datos.estado !== 'pendiente_abono') return conflicto('La reserva no está pendiente de abono');
         const monto = Number(datos.monto_abono);
-        if (!Number.isSafeInteger(monto) || monto <= 0) {
+        if (!abonoCLPValido(monto,Number(datos.precio_servicio))) {
             return {codigo: 400, cuerpo: {mensaje: 'El monto del abono no es válido'}};
         }
     }

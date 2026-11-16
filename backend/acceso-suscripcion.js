@@ -6,7 +6,7 @@ async function tieneAcceso(pool,cuenta){
 }
 function montarRestricciones(app,pool,verificarSesion){
     app.use(async(req,res,next)=>{
-        const configuracion=['POST','PATCH','DELETE'].includes(req.method)&&/^\/api\/(servicios|trabajadoras|horarios|bloqueos)(\/|$)/.test(req.path);
+        const configuracion=['POST','PUT','PATCH','DELETE'].includes(req.method)&&/^\/api\/(servicios|trabajadoras|horarios|bloqueos)(\/|$)/.test(req.path);
         if(configuracion){
             return verificarSesion(req,res,async()=>{
                 try{

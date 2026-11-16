@@ -65,3 +65,35 @@
 @media(max-width:900px){.graficos-dashboard{grid-template-columns:1fr}.resumen-economico .metricas-dashboard{grid-template-columns:1fr}}
 @media(forced-colors:active){.dona-reservas{display:none}}
 .selector-mes-economico{max-width:280px;margin:16px 0}#evolucionEconomica{min-width:0;margin-top:18px}#evolucionEconomica p{font-size:.8rem;overflow-wrap:anywhere}
+/* Incorporación: estilos limitados al acceso y al alta, sin cambiar el panel. */
+.tarjeta-acceso details{margin-top:24px;border-top:1px solid var(--borde);padding-top:18px}
+.tarjeta-acceso summary{cursor:pointer;color:var(--ciruela);font-size:14px;font-weight:600;padding:10px 0;line-height:1.5}
+.tarjeta-acceso summary:focus-visible{outline:3px solid #b393b4;outline-offset:4px;border-radius:4px}
+.tarjeta-acceso:has(details[open]),#altaNegocio .tarjeta-acceso{max-width:680px}
+.tarjeta-acceso:has(details[open]) #login{display:none}
+#registroCuenta fieldset,#registroNegocio fieldset{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px;padding-top:16px}
+#registroCuenta legend,#registroNegocio legend{font-size:18px;font-weight:650;color:var(--tinta);padding:0 0 12px;line-height:1.4;width:100%}
+#registroCuenta label,#registroNegocio label{min-width:0;align-content:start;gap:7px}
+#registroCuenta p,#registroCuenta button,#registroNegocio p,#registroNegocio button,#registroNegocio label:has(textarea){grid-column:1/-1}
+#registroCuenta p,#registroNegocio p{margin:0;font-size:13px}
+#registroCuenta button,#registroNegocio button{min-height:44px;padding:12px 18px}
+#altaNegocio #salirAlta{margin-top:20px;width:100%;min-height:44px}
+.tarjeta-acceso .mensaje-incorporacion{grid-column:1/-1;color:var(--ciruela);font-weight:600;overflow-wrap:anywhere}
+.tarjeta-acceso .mensaje-incorporacion:empty{display:none}
+@media(max-width:600px){
+ #acceso.acceso,#altaNegocio.acceso{padding:20px 14px;align-items:start}
+ #acceso .tarjeta-acceso,#altaNegocio .tarjeta-acceso{padding:26px 22px;min-width:0;border-radius:18px}
+ #registroCuenta fieldset,#registroNegocio fieldset{grid-template-columns:minmax(0,1fr);gap:17px}
+ #acceso input,#altaNegocio input,#altaNegocio textarea{font-size:16px;min-height:44px}
+ #acceso .tarjeta-acceso h1,#altaNegocio .tarjeta-acceso h1{font-size:25px}
+}
+
+#registroCuenta label:has(input[name=telefono]){grid-column:1/-1}
+
+body:has(#acceso:not([hidden]),#altaNegocio:not([hidden]))>.estado-global{position:relative;right:auto;bottom:auto;margin:16px auto;max-width:min(680px,calc(100% - 28px));overflow-wrap:anywhere}
+
+#registroNegocio label:has(input[name=telefono]){grid-column:1/-1}
+
+@media(max-width:600px){#acceso .campo-clave #mostrarClave{width:44px;top:1px;bottom:1px;min-height:44px}#acceso .campo-clave #claveIngreso{padding-right:50px}}
+
+.gestion-foto-servicio{margin-top:24px;padding:20px;border:1px solid var(--borde);border-radius:12px;min-width:0}.gestion-foto-servicio img{display:block;max-width:100%;height:auto;max-height:320px;object-fit:contain;margin:16px 0}.gestion-foto-servicio button{margin:5px 6px 0 0}.gestion-foto-servicio input{max-width:100%}

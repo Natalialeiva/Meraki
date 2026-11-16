@@ -193,6 +193,29 @@ test('Tarjetas muestran datos reales y distinguen servicios reservables', async 
     for (const texto of ['Servicio 2','Belleza Camila','Santiago','Belleza','Descripción real','60 minutos','20.000','5.000','Disponible para reservar']) assert(textos(tarjetas[1]).includes(texto));
     assert.equal(p.elementos['#servicio'].value,'2'); assert.equal(p.elementos['#servicio'].children[1].disabled,true);
 });
+test('Catálogo muestra fotografías administradas y alternativa ante ausencia, URL externa o fallo', async () => {
+    const url='/media/servicios/11111111-1111-4111-8111-111111111111.webp';
+    const p=iniciar({servicios:[{...servicio(1),imagen_url:url},{...servicio(2),imagen_url:null},{...servicio(3),imagen_url:'https://externo.example/foto.png'}]});
+    await p.seleccionar();const tarjetas=p.elementos['#listaServicios'].children;
+    const foto=tarjetas[0].children.find(n=>n.className==='servicio-fotografia');
+    assert.equal(foto.children[0].src,url);assert.equal(foto.children[0].alt,'Servicio 1');assert.equal(foto.children[0].loading,'lazy');
+    foto.children[0].onerror();assert.equal(foto.children.length,0);assert.match(foto.textContent,/no disponible/);
+    for(const t of tarjetas.slice(1))assert.match(textos(t),/Fotografía no disponible/);
+});
+test('Actualizar servicios renueva foto y precio sin borrar datos de la clienta',async()=>{
+    let datos=[servicio(2)];const p=iniciar({servicios:async()=>datos});await p.preparar();
+    datos=[{...servicio(2),precio:25000,imagen_url:'/media/servicios/11111111-1111-4111-8111-111111111111.webp'}];
+    await p.elementos['#actualizarCatalogoServicios'].onclick();
+    assert.equal(p.nombre.value,' Clienta prueba ');assert.equal(p.elementos['#servicio'].value,'2');
+    assert.equal(p.elementos['#hora'].value,'');assert.equal(p.elementos['#crearReserva'].disabled,true);
+    assert.match(textos(p.elementos['#listaServicios']),/25.000/);
+    assert.equal(p.elementos['#listaServicios'].children[0].children.find(n=>n.className==='servicio-fotografia').children[0].tag,'img');
+});
+test('Actualizar catálogo retira servicios desactivados y conserva hora si nada cambió',async()=>{
+    let datos=[servicio(2)];const p=iniciar({servicios:async()=>datos});await p.preparar();
+    await p.elementos['#actualizarCatalogoServicios'].onclick();assert.equal(p.elementos['#hora'].value,'11:00:00');
+    datos=[];await p.elementos['#actualizarCatalogoServicios'].onclick();assert.equal(p.elementos['#servicio'].value,'');assert.equal(p.elementos['#crearReserva'].disabled,true);
+});
 test('Profesional y hora requieren selección explícita, sin elegir la primera automáticamente', async () => {
     const p = iniciar(); await p.seleccionar(); assert.equal(p.elementos['#profesional'].value,'');
     assert.equal(p.elementos['#disponibilidad'].disabled,true); assert.match(p.elementos['#seleccionProfesional'].textContent,/Selecciona/);

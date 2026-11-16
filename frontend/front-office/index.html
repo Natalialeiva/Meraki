@@ -7,7 +7,7 @@
 <meta name="description" content="Explora emprendimientos de cuidado personal, elige un servicio y consulta sus horarios disponibles en Meraki.">
 <title>Meraki | Belleza y bienestar</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="styles.css?v=ajustes-moviles-2">
+<link rel="stylesheet" href="styles.css?v=fotografias-1">
 </head>
 <body>
 <a class="saltar" href="#buscar">Saltar a la búsqueda</a>
@@ -78,7 +78,7 @@
     <section id="reserva" class="reserva" hidden aria-labelledby="tituloReserva">
         <div class="encabezadoSeccion"><div><p class="etiqueta">Prepara tu reserva</p><h2 id="tituloReserva">Reserva tu hora</h2></div><a class="volver" href="#catalogo">Volver al catálogo <span aria-hidden="true">↑</span></a></div>
         <div id="estadoReserva"></div>
-        <div class="paso servicioPaso"><h3><span class="numeroPaso" aria-hidden="true">01</span> Elige un servicio</h3><div id="listaServicios"></div></div>
+        <div class="paso servicioPaso"><h3><span class="numeroPaso" aria-hidden="true">01</span> Elige un servicio</h3><button id="actualizarCatalogoServicios" type="button">Actualizar servicios</button><div id="listaServicios"></div></div>
         <form id="formReserva"><fieldset id="camposReserva">
             <div class="seleccionServicio"><label>Servicio seleccionado <select id="servicio" required aria-describedby="avisoServicio"></select></label><p id="avisoServicio" class="ayuda" role="status"></p></div>
             <div class="reservaColumnas">
@@ -120,7 +120,7 @@
 </main>
 <footer class="pie"><p>Catálogo de servicios de cuidado personal</p><a href="#inicio">Volver al inicio <span aria-hidden="true">↑</span></a></footer>
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="front.js?v=recuperacion-invitada-1"></script>
+<script src="front.js?v=estado-publicacion-1"></script>
 <script type="module" src="ubicacion.mjs?v=a3-2"></script>
 <script type="module" src="mapa.mjs?v=a3-4-1"></script>
 </body>

@@ -5,6 +5,8 @@
         const titulo = form.querySelector('[data-titulo-servicio]');
         const campos = Object.fromEntries(['nombre','descripcion','id_categoria','precio','duracion_min','monto_abono'].map(k=>[k,form.elements.namedItem(k)]));
         let negocio = null, edicion = null, version = 0, ocupado = false, listo = false;
+        const contenedorFotos=documento.querySelector?.('#gestionFotoServicio');
+        const fotos=contenedorFotos&&raiz.MerakiFotografias?raiz.MerakiFotografias.montar({contenedor:contenedorFotos,api,puedeConfigurar,confirmar}):null;
         const moneda = valor => new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:2}).format(Number(valor));
 
         function limpiar() {
@@ -13,10 +15,11 @@
             titulo.textContent = 'Nuevo servicio';
         }
         function controles() {
+            fotos?.actualizarPermisos();
             grupo.disabled = ocupado || !listo || !puedeConfigurar();
             selector.disabled = ocupado;
             actualizar.disabled = ocupado || !negocio;
-            for (const boton of lista.querySelectorAll('button')) boton.disabled = ocupado || !puedeConfigurar();
+            for (const boton of lista.querySelectorAll('button')) boton.disabled = ocupado || (!puedeConfigurar()&&boton.dataset?.fotoConsulta!=='1');
         }
         function editar(servicio) {
             if (ocupado || !puedeConfigurar() || !listo) return;
@@ -24,6 +27,7 @@
             titulo.textContent = 'Editar servicio: ' + servicio.servicio;
             for (const k of Object.keys(campos)) campos[k].value = (k === 'nombre' ? servicio.servicio : servicio[k]) ?? '';
             estado.textContent = 'Edita el servicio y guarda los cambios.';
+            form.scrollIntoView?.({block:'start',behavior:'smooth'});
             campos.nombre.focus();
         }
         function dibujar(servicios) {
@@ -36,14 +40,23 @@
                 detalle.textContent = `${servicio.categoria} · ${servicio.duracion_min} minutos · Precio: ${moneda(servicio.precio)} · Abono: ${moneda(servicio.monto_abono)} · ${servicio.activo ? 'Activo' : 'Desactivado'}`;
                 const editarBoton = documento.createElement('button');editarBoton.type='button';editarBoton.textContent='Editar';editarBoton.onclick=()=>editar(servicio);
                 articulo.append(encabezado,detalle,editarBoton);
+                if(servicio.activo&&servicio.tiene_profesional_activa===false){
+                    const aviso=documento.createElement('p');aviso.textContent='Publicado, pero aún no puede recibir reservas: asigna una profesional activa en Trabajadoras y servicios asignados. Los horarios se consultan después por fecha.';
+                    articulo.append(aviso);
+                }
                 if (servicio.activo) {
                     const boton = documento.createElement('button');boton.type='button';boton.textContent='Desactivar';
                     boton.onclick=()=>desactivar(servicio);articulo.append(boton);
+                } else {
+                    const boton=documento.createElement('button');boton.type='button';boton.textContent='Activar';
+                    boton.onclick=()=>activar(servicio);articulo.append(boton);
                 }
                 lista.append(articulo);
+                if(fotos){const b=documento.createElement('button');b.type='button';b.textContent='Fotografía';b.dataset.fotoConsulta='1';b.onclick=()=>fotos.abrir(servicio);articulo.append(b);}
             }
         }
         async function cargar(id) {
+            fotos?.cerrar();
             const solicitud = ++version;
             negocio = id ? Number(id) : null;
             listo = false;limpiar();lista.replaceChildren();controles();
@@ -81,6 +94,10 @@
             if (ocupado || !puedeConfigurar() || !confirmar('¿Desactivar '+servicio.servicio+'? Dejará de ofrecerse para nuevas reservas. Las reservas existentes se conservan.')) return;
             await ejecutar('/api/servicios/'+servicio.id_servicio+'/desactivar','PATCH',undefined,'Servicio desactivado correctamente.');
         }
+        async function activar(servicio) {
+            if(ocupado||!puedeConfigurar()||!confirmar('¿Volver a activar '+servicio.servicio+'? Para recibir reservas necesita una profesional y disponibilidad.'))return;
+            await ejecutar('/api/servicios/'+servicio.id_servicio+'/activar','PATCH',undefined,'Servicio activado correctamente. Revisa la profesional asignada y sus horarios.');
+        }
         form.onsubmit=async evento=>{
             evento.preventDefault();
             if (ocupado || !puedeConfigurar() || !listo || !form.reportValidity()) return;
@@ -88,8 +105,8 @@
                 id_categoria:Number(campos.id_categoria.value),precio:Number(campos.precio.value),
                 duracion_min:Number(campos.duracion_min.value),monto_abono:Number(campos.monto_abono.value)};
             if (!datos.nombre || !Number.isFinite(datos.precio) || datos.precio<=0 || !Number.isSafeInteger(datos.duracion_min) || datos.duracion_min<=0 ||
-                !Number.isFinite(datos.monto_abono) || datos.monto_abono<0 || datos.monto_abono>datos.precio) {
-                estado.textContent='Revisa el nombre, precio, duración y abono. El abono no puede superar el precio.';return;
+                !Number.isSafeInteger(datos.monto_abono) || datos.monto_abono<=0 || datos.monto_abono>99999999 || datos.monto_abono>datos.precio) {
+                estado.textContent='El abono debe ser un entero positivo en pesos chilenos y no superar el precio. Revisa también nombre y duración.';return;
             }
             if (edicion) await ejecutar('/api/servicios/'+edicion,'PATCH',datos,'Servicio actualizado correctamente.');
             else await ejecutar('/api/servicios','POST',{...datos,id_emprendimiento:negocio},'Servicio creado correctamente. Asigna una profesional para habilitar sus reservas.');

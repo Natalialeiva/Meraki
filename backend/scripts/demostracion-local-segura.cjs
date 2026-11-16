@@ -87,7 +87,7 @@ async function ejecutar(){
         envoltura.use(require('express').urlencoded({extended:false}));
         envoltura.use((req,res,next)=>{
             res.set('X-Meraki-Demo','1');res.set('Cache-Control','no-store');res.set('Referrer-Policy','no-referrer');
-            res.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
+            res.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
             const permitidas=new Set(['POST /api/abonos/cliente/iniciar','GET /api/abonos/retorno/navegador','POST /api/abonos/retorno/navegador','GET /api/abonos/resultado']);
             const financiera=/^\/api\/(?:abonos|webpay)(?:\/|$)/.test(req.path);
             const prohibida=financiera&&!permitidas.has(req.method+' '+req.path)||

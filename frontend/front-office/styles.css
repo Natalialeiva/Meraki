@@ -1011,3 +1011,12 @@ main {
     .mapaPreparacion { padding:.65rem; }
     .mapaLeaflet { height:340px; }
 }
+
+/* Fotografías administradas desde Back Office. */
+.servicio-fotografia{order:-1;width:100%;aspect-ratio:8/5;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:10px;background:var(--lavanda);color:var(--suave);font-size:.8rem;margin-bottom:1rem;text-align:center}
+.servicio-fotografia img{display:block;width:100%;height:100%;object-fit:cover}
+.servicio-card:only-child .servicio-fotografia{grid-column:1/-1;grid-row:1;max-height:320px}
+.servicio-card:only-child{grid-template-areas:'photo photo photo' 'category price abono' 'title price abono' 'business duration button' 'comuna status button' 'desc desc desc'}
+.servicio-card:only-child .servicio-fotografia{grid-area:photo}
+@media(max-width:850px){.servicio-card:only-child{grid-template-areas:'photo photo' 'category price' 'title price' 'business abono' 'comuna duration' 'desc desc' 'status button'}}
+@media(max-width:620px){.servicio-card:only-child{grid-template-areas:'photo photo' 'category category' 'title title' 'business business' 'comuna comuna' 'desc desc' 'price abono' 'duration duration' 'status status' 'button button'}}

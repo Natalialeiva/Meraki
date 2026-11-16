@@ -10,6 +10,21 @@ class Elemento {
     focus(){}
 }
 const servicio={id_servicio:3,id_emprendimiento:1,id_categoria:1,servicio:'Manicure',categoria:'Uñas',precio:'20000',duracion_min:60,monto_abono:'5000',descripcion:null,activo:true};
+test('Formulario de servicios rechaza abonos incompatibles antes de enviar',async()=>{
+ for(const valor of ['0','-1','0.5','5000.25','20001','no-numero','']){
+  const p=pantalla();await p.gestion.cargar(1);p.completar();p.campos.monto_abono.value=valor;await p.guardar();
+  assert(!p.llamadas.some(x=>x.method),'No enviar '+valor);
+ }
+ for(const valor of ['1','18000']){
+  const p=pantalla();await p.gestion.cargar(1);p.completar();p.campos.monto_abono.value=valor;await p.guardar();assert(p.llamadas.some(x=>x.method==='POST'));
+ }
+});
+test('Back Office no envía abonos cero, negativos, decimales, superiores al precio o inválidos',async()=>{
+ for(const monto of ['0','-1','0.50','4000.25','18001','','no-numero','Infinity']){
+  const p=pantalla();await p.gestion.cargar(1);p.completar();p.campos.monto_abono.value=monto;await p.guardar();assert(!p.llamadas.some(x=>x.method),monto);
+ }
+ for(const monto of ['1','4000','18000']){const p=pantalla();await p.gestion.cargar(1);p.completar();p.campos.monto_abono.value=monto;await p.guardar();assert(p.llamadas.some(x=>x.method==='POST'));}
+});
 function pantalla(responder,confirmar=()=>true,puedeConfigurar=()=>true){
     const campos=Object.fromEntries(['nombre','descripcion','id_categoria','precio','duracion_min','monto_abono'].map(k=>[k,new Elemento()]));
     const grupo=new Elemento(),nuevo=new Elemento(),titulo=new Elemento(),lista=new Elemento(),estado=new Elemento(),selector=new Elemento(),actualizar=new Elemento();
@@ -52,6 +67,13 @@ test('Servicios distingue guardado correcto de falla posterior al recargar',asyn
 test('Servicios desactiva solo tras confirmación y usa la ruta correspondiente',async()=>{
     let aceptar=false;const p=pantalla(undefined,()=>aceptar);await p.gestion.cargar(1);await p.lista.children[0].children[3].onclick();assert(!p.llamadas.some(x=>x.method));
     aceptar=true;await p.lista.children[0].children[3].onclick();assert.equal(p.llamadas.find(x=>x.method).url,'/api/servicios/3/desactivar');assert.match(p.estado.textContent,/desactivado correctamente/);
+});
+test('Servicios inactivos permiten activar con confirmación sin reenviar precios',async()=>{
+    let aceptar=false;
+    const p=pantalla(async(url)=>url==='/api/mis-servicios'?[{...servicio,activo:false}]:undefined,()=>aceptar);
+    await p.gestion.cargar(1);const b=p.lista.children[0].children[3];assert.equal(b.textContent,'Activar');
+    await b.onclick();assert(!p.llamadas.some(x=>x.method));aceptar=true;await b.onclick();
+    const envio=p.llamadas.find(x=>x.method);assert.equal(envio.url,'/api/servicios/3/activar');assert.equal(envio.method,'PATCH');assert.equal(envio.datos,undefined);assert.match(p.estado.textContent,/activado correctamente/);
 });
 test('Servicios evita doble envío y bloquea controles mientras guarda',async()=>{
     let terminar;const p=pantalla((url,method)=>method?new Promise(resolve=>{terminar=resolve;}):undefined);await p.gestion.cargar(1);p.completar();const guardando=p.guardar();

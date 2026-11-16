@@ -21,7 +21,7 @@ function fechaLegible(valor) {
     return new Intl.DateTimeFormat('es-CL', {weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'UTC'}).format(fecha);
 }
 async function api(url, method = 'GET', datos, cabeceras = {}) {
-    const respuesta = await fetch(url, {method, headers:{'Content-Type':'application/json',...cabeceras}, body:datos ? JSON.stringify(datos) : undefined});
+    const respuesta = await fetch(url, {method, cache:'no-store', headers:{'Content-Type':'application/json',...cabeceras}, body:datos ? JSON.stringify(datos) : undefined});
     let d; try { d = JSON.parse(await respuesta.text()); } catch { throw Object.assign(Error('No se pudo leer la respuesta del servidor. Intenta nuevamente.'),{status:respuesta.status,codigo:'RESPUESTA_INVALIDA'}); }
     if (!respuesta.ok) throw Object.assign(Error(d?.mensaje || 'No se pudo completar la operación'),{status:respuesta.status,codigo:d?.codigo,retryAfter:respuesta.headers?.get('Retry-After')});
     return d;
@@ -87,6 +87,17 @@ function tarjetasServicios() {
         tarjeta.dataset.seleccionado = String(String(s.id_servicio) === $('#servicio').value);
         tarjeta.dataset.disponible = String(s.reservable !== false);
         h.textContent = s.servicio; tarjeta.append(h);
+        const fotografia = document.createElement('div');
+        fotografia.className = 'servicio-fotografia';
+        const sinFoto = () => { fotografia.replaceChildren(); fotografia.textContent = 'Fotografía no disponible'; };
+        if (typeof s.imagen_url === 'string' && /^\/media\/servicios\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.webp$/.test(s.imagen_url)) {
+            const imagen = document.createElement('img');
+            imagen.alt = s.servicio; imagen.width = 640; imagen.height = 400;
+            imagen.loading = 'lazy'; imagen.decoding = 'async';
+            imagen.onerror = sinFoto; imagen.src = s.imagen_url;
+            fotografia.append(imagen);
+        } else sinFoto();
+        tarjeta.append(fotografia);
         const detalles = [
             [negocio.nombre, 'servicio-negocio'],
             [negocio.comuna, 'servicio-comuna'],
@@ -95,7 +106,7 @@ function tarjetasServicios() {
             [s.precio != null ? 'Precio total: ' + dinero(s.precio) : '', 'servicio-precio'],
             [s.duracion_min != null ? 'Duración: ' + s.duracion_min + ' minutos' : '', 'servicio-duracion'],
             [s.monto_abono != null ? 'Abono requerido: ' + dinero(s.monto_abono) : '', 'servicio-abono'],
-            [s.reservable === false ? noDisponible : 'Disponible para reservar', 'servicio-estado']
+            [s.reservable === false ? 'Servicio publicado. '+noDisponible : 'Servicio publicado · Disponible para reservar', 'servicio-estado']
         ];
         for (const [texto, clase] of detalles) {
             if (!texto) continue;
@@ -109,7 +120,7 @@ function tarjetasServicios() {
             tarjeta.append(p);
         }
         const elegir = document.createElement('button'); elegir.type = 'button'; elegir.disabled = s.reservable === false || enviando || creada || intentoBloqueado();
-        elegir.textContent = s.reservable === false ? 'No disponible por el momento' : 'Elegir ' + s.servicio;
+        elegir.textContent = s.reservable === false ? 'Sin reservas disponibles' : 'Elegir ' + s.servicio;
         elegir.onclick = () => {
             if (enviando || creada || intentoBloqueado()) return;
             $('#servicio').value = String(s.id_servicio);
@@ -169,6 +180,33 @@ async function seleccionar(dato) {
         if (version === versionSeleccion) informar('No se pudieron cargar los servicios de ' + dato.nombre + '. Vuelve a elegir el emprendimiento para reintentar.', 'error');
     }
 }
+
+let actualizandoServicios=null;
+async function actualizarServicios(){
+    if(!negocio||enviando||creada||intentoBloqueado())return;
+    if(actualizandoServicios)return actualizandoServicios;
+    const version=versionSeleccion,id=negocio.id_emprendimiento;
+    const boton=$('#actualizarCatalogoServicios');boton.disabled=true;
+    actualizandoServicios=(async()=>{
+        try{
+            const datos=await api('/api/emprendimientos/'+id+'/servicios');
+            if(version!==versionSeleccion||enviando||creada||intentoBloqueado())return;
+            const anterior=servicioActual(),elegido=$('#servicio').value;
+            servicios=datos;
+            opciones($('#servicio'),datos,'id_servicio',s=>s.servicio+' · '+dinero(s.precio)+(s.reservable===false?' · No disponible por el momento':''),'Selecciona un servicio');
+            const vigente=datos.find(s=>String(s.id_servicio)===elegido&&s.reservable!==false);
+            $('#servicio').value=vigente?elegido:'';
+            const cambio=!vigente||!anterior||['precio','monto_abono','duracion_min','reservable'].some(k=>String(anterior[k])!==String(vigente[k]));
+            tarjetasServicios();resumen();
+            if(cambio)await profesionales();
+            informar('Servicios actualizados.'+(cambio?' Revisa la selección y vuelve a consultar disponibilidad.':''));
+        }catch(e){if(version===versionSeleccion&&!enviando&&!creada&&!intentoBloqueado())informar('No se pudieron actualizar los servicios. Intenta nuevamente.','error');}
+    })();
+    try{await actualizandoServicios;}finally{actualizandoServicios=null;boton.disabled=false;}
+}
+$('#actualizarCatalogoServicios').onclick=actualizarServicios;
+document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState==='visible')void actualizarServicios();});
+globalThis.addEventListener?.('focus',()=>{void actualizarServicios();});
 
 // Solo memoria de esta visita; las distancias se derivan al dibujar y no se guardan.
 let resultadosCatalogo = [], ubicacionCatalogo = null, calcularDistancia = null;

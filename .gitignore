@@ -9,3 +9,6 @@ node_modules/
 !.env.example
 # Configuración local de clave pública restringida de Maps
 /frontend/front-office/mapas-config.local.json
+
+# FotografÃ­as locales de servicios (copiar por canal privado)
+backend/almacenamiento/

@@ -1,5 +1,8 @@
 // Importamos Express.
 const express = require("express");
+const {normalizarNegocio,crearCuenta,montarIncorporacion}=require('./incorporacion');
+const {montarFotos}=require('./fotos-servicios');
+const {abonoCLPValido}=require('./montos-abono');
 
 // Importamos el SDK de Transbank para gestionar abonos mediante Webpay Plus.
 const {
@@ -199,7 +202,8 @@ app.get("/api/servicios", async (req, res) => {
                 c.nombre AS categoria,
                 s.precio,
                 s.duracion_min,
-                s.monto_abono
+                s.monto_abono,
+                (SELECT i.url FROM imagen_servicio i WHERE i.id_servicio=s.id_servicio AND i.url LIKE '/media/servicios/%' ORDER BY i.id_imagen DESC LIMIT 1) AS imagen_url
             FROM servicio s
             INNER JOIN emprendimiento e
                 ON s.id_emprendimiento = e.id_emprendimiento
@@ -242,7 +246,10 @@ app.get("/api/mis-servicios", verificarSesion, async (req, res) => {
                 s.precio,
                 s.duracion_min,
                 s.monto_abono,
-                s.activo
+                (SELECT i.url FROM imagen_servicio i WHERE i.id_servicio=s.id_servicio AND i.url LIKE '/media/servicios/%' ORDER BY i.id_imagen DESC LIMIT 1) AS imagen_url,
+                s.activo,
+                EXISTS (SELECT 1 FROM trabajadora_servicio ts JOIN trabajadora t USING(id_trabajadora)
+                  WHERE ts.id_servicio=s.id_servicio AND t.activa=TRUE AND t.id_emprendimiento=s.id_emprendimiento) AS tiene_profesional_activa
             FROM servicio s
             INNER JOIN emprendimiento e
                 ON s.id_emprendimiento = e.id_emprendimiento
@@ -1858,13 +1865,10 @@ if (
 
 // Validamos que el abono no sea negativo ni supere el precio.
 if (
-    typeof monto_abono !== "number" ||
-    !Number.isFinite(monto_abono) ||
-    monto_abono < 0 ||
-    monto_abono > precio || Number(monto_abono.toFixed(2)) !== monto_abono
+    !abonoCLPValido(monto_abono,precio)
 ) {
     return res.status(400).json({
-        mensaje: "El abono debe estar entre cero y el precio del servicio"
+        mensaje: "El abono debe ser un entero positivo en pesos chilenos y no superar el precio del servicio"
     });
 }
 
@@ -2059,12 +2063,10 @@ if (duracion_min !== undefined) {
 // Validamos el abono si fue enviado.
 if (monto_abono !== undefined) {
     if (
-        typeof monto_abono !== "number" ||
-        !Number.isFinite(monto_abono) ||
-        monto_abono < 0 || monto_abono > 99999999.99 || Number(monto_abono.toFixed(2)) !== monto_abono
+        !abonoCLPValido(monto_abono)
     ) {
         return res.status(400).json({
-            mensaje: "El abono debe ser un número mayor o igual a cero"
+        mensaje: "El abono debe ser un entero positivo en pesos chilenos"
         });
     }
 }
@@ -2087,9 +2089,9 @@ const precioFinal = precio !== undefined ? precio : precioActual;
 const abonoFinal = monto_abono !== undefined ? monto_abono : abonoActual;
 
 // Comprobamos que el abono no supere el precio final.
-if (abonoFinal > precioFinal) {
+if (!abonoCLPValido(abonoFinal,precioFinal)) {
     return res.status(400).json({
-        mensaje: "El abono no puede superar el precio del servicio"
+        mensaje: "El abono debe ser un entero positivo en pesos chilenos y no superar el precio del servicio"
     });
 }
 
@@ -2110,6 +2112,8 @@ const resultado = await pool.query(`
     WHERE id_servicio = $7
       -- Se evalúa contra la fila vigente, incluso si hubo otra edición simultánea.
       AND COALESCE($6, monto_abono) <= COALESCE($4, precio)
+      AND COALESCE($6, monto_abono) BETWEEN 1 AND 99999999
+      AND COALESCE($6, monto_abono) = trunc(COALESCE($6, monto_abono))
       AND id_emprendimiento IN (
           SELECT id_emprendimiento
           FROM emprendimiento
@@ -2160,6 +2164,24 @@ return res.json({
 });
 
 
+
+// Reactivar un servicio propio sin modificar sus demás datos.
+app.patch('/api/servicios/:id/activar', verificarSesion, async(req,res)=>{
+    if(req.get('Sec-Fetch-Site')==='cross-site'||(req.get('Origin')&&req.get('Origin')!==req.protocol+'://'+req.get('Host')))return res.status(403).json({mensaje:'Solicitud no autorizada'});
+    const id=Number(req.params.id);
+    if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({mensaje:'El identificador del servicio no es válido'});
+    if(Object.keys(req.body||{}).length)return res.status(400).json({mensaje:'La activación no admite cambios de otros campos'});
+    try{
+        const r=await pool.query(`UPDATE servicio SET activo=TRUE
+          WHERE id_servicio=$1 AND activo=FALSE
+          AND id_emprendimiento IN (SELECT id_emprendimiento FROM emprendimiento WHERE id_emprendedora=$2)
+          RETURNING id_servicio,nombre,activo`,[id,req.session.idEmprendedora]);
+        if(r.rows.length)return res.json({mensaje:'Servicio activado correctamente',servicio:r.rows[0]});
+        const propio=await pool.query(`SELECT s.id_servicio FROM servicio s JOIN emprendimiento e USING(id_emprendimiento)
+          WHERE s.id_servicio=$1 AND e.id_emprendedora=$2`,[id,req.session.idEmprendedora]);
+        return res.status(propio.rows.length?409:404).json({mensaje:propio.rows.length?'El servicio ya está activo':'El servicio no existe'});
+    }catch(error){return res.status(500).json({mensaje:'No se pudo activar el servicio'});}
+});
 
  // Ruta para desactivar servicios del Back Office.
  // Solo las emprendedoras autenticadas pueden desactivar sus servicios.
@@ -2671,6 +2693,10 @@ app.post("/api/reservas", verificarSesion, async (req, res) => {
 
         // Obtenemos la información verificada del servicio.
         const datos = disponibilidad.rows[0];
+        if(!abonoCLPValido(Number(datos.monto_abono),Number(datos.precio))){
+            await clienteDB.query('ROLLBACK');
+            return res.status(409).json({mensaje:'El abono del servicio requiere corrección antes de reservar.'});
+        }
 
         // Registramos la reserva como pendiente de abono.
        
@@ -3431,9 +3457,14 @@ app.patch("/api/reservas/:id/no-atendida", verificarSesion, async (req, res) => 
 
 
 
+montarIncorporacion(app,pool,verificarSesion);
+montarFotos(app,{pool,verificarSesion});
+
 // Ruta para registrar nuevas emprendedoras en Meraki.
 app.post("/api/auth/registro", async (req, res) => {
     try {
+        if(!req.body||typeof req.body!=='object'||Array.isArray(req.body)||Object.keys(req.body).some(k=>!['nombre','apellido','rut','correo','password','telefono'].includes(k))){return res.status(400).json({mensaje:'Datos de registro inválidos'});}
+        if(req.get('Sec-Fetch-Site')==='cross-site'||(req.get('Origin')&&req.get('Origin')!==req.protocol+'://'+req.get('Host')))return res.status(403).json({mensaje:'Solicitud no autorizada'});
         // Recibimos los datos enviados desde el formulario.
         const {
             nombre,
@@ -3472,7 +3503,7 @@ app.post("/api/auth/registro", async (req, res) => {
         // Normalizamos los datos para evitar diferencias innecesarias.
         const nombreLimpio = nombre.trim();
         const apellidoLimpio = apellido.trim();
-        const rutLimpio = rut.trim().toUpperCase();
+        const rutLimpio = rut.trim().toUpperCase().replaceAll('.','');
         const correoLimpio = correo.trim().toLowerCase();
         const telefonoLimpio = telefono?.trim() || null;
 
@@ -3496,7 +3527,7 @@ app.post("/api/auth/registro", async (req, res) => {
 
         // Validación básica del formato del RUT.
         // Más adelante agregaremos la comprobación del dígito verificador.
-        if (!/^[0-9.\-K]+$/.test(rutLimpio)) {
+        if (!/^\d{1,8}-[0-9K]$/.test(rutLimpio)) {
             return res.status(400).json({
                 mensaje: "El RUT contiene caracteres no permitidos"
             });
@@ -3506,31 +3537,7 @@ app.post("/api/auth/registro", async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 12);
 
         // Registramos la emprendedora en PostgreSQL.
-        const resultado = await pool.query(`
-            INSERT INTO emprendedora (
-                nombre,
-                apellido,
-                rut,
-                correo,
-                password_hash,
-                telefono
-            )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING
-                id_emprendedora,
-                nombre,
-                apellido,
-                rut,
-                correo,
-                telefono;
-        `, [
-            nombreLimpio,
-            apellidoLimpio,
-            rutLimpio,
-            correoLimpio,
-            passwordHash,
-            telefonoLimpio
-        ]);
+        const resultado = await crearCuenta(pool,[nombreLimpio,apellidoLimpio,rutLimpio,correoLimpio,passwordHash,telefonoLimpio]);
 
         // Respondemos sin mostrar la contraseña ni su hash.
         return res.status(201).json({
@@ -3804,71 +3811,10 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
             });
         }
 
-        // Campos que permitimos modificar en esta primera versión.
-        const camposPermitidos = {
-            nombre: 150,
-            descripcion: 1000,
-            direccion: 200,
-            comuna: 100,
-            telefono: 20,
-            latitud: null,
-            longitud: null
-        };
-
-        const datos = req.body || {};
-        const campos = Object.keys(datos);
-
-        // Exigimos al menos un campo editable.
-        if (campos.length === 0) {
-            return res.status(400).json({
-                mensaje: "Debes indicar al menos un campo para modificar"
-            });
-        }
-
-        const tieneLatitud = Object.hasOwn(datos, 'latitud');
-        const tieneLongitud = Object.hasOwn(datos, 'longitud');
-        let ubicacion;
-        if (tieneLatitud || tieneLongitud) {
-            const numero = (v, limite) => {
-                if (typeof v !== 'number' && !(typeof v === 'string' && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(v.trim()))) return null;
-                const n = Number(v);
-                return Number.isFinite(n) && Math.abs(n) <= limite ? n : null;
-            };
-            const borrar = datos.latitud === null && datos.longitud === null;
-            const latitud = numero(datos.latitud, 90), longitud = numero(datos.longitud, 180);
-            if (!tieneLatitud || !tieneLongitud || (!borrar && (latitud === null || longitud === null))) {
-                return res.status(400).json({mensaje:'Indica ambas coordenadas válidas: latitud entre -90 y 90 y longitud entre -180 y 180, o deja ambas vacías.'});
-            }
-            ubicacion = borrar ? {latitud:null,longitud:null} : {latitud,longitud};
-        }
-
-        // Evitamos que se modifiquen campos protegidos,
-        // como el propietario, el estado o el identificador.
-        for (const campo of campos) {
-            if (!Object.hasOwn(camposPermitidos, campo)) {
-                return res.status(400).json({
-                    mensaje: `No está permitido modificar el campo ${campo}`
-                });
-            }
-
-            if (campo === "latitud" || campo === "longitud") continue;
-            const valor = datos[campo];
-
-            // Permitimos null para limpiar los campos opcionales.
-            if (valor === null && campo !== "nombre") {
-                continue;
-            }
-
-            if (
-                typeof valor !== "string" ||
-                valor.trim().length > camposPermitidos[campo] ||
-                (campo === "nombre" && valor.trim() === "")
-            ) {
-                return res.status(400).json({
-                    mensaje: `El campo ${campo} contiene un valor inválido`
-                });
-            }
-        }
+        let datos;
+        try{datos=normalizarNegocio(req.body);}catch(e){return res.status(400).json({mensaje:e.message});}
+        const campos=Object.keys(datos);
+        const ubicacion={latitud:datos.latitud,longitud:datos.longitud};
 
         // Construimos solamente los campos enviados.
         // Los valores se envían mediante parámetros SQL.
@@ -4139,7 +4085,8 @@ app.get("/api/emprendimientos/:id/servicios", async (req, res) => {
                     SELECT 1 FROM emprendimiento negocio JOIN suscripcion plan ON plan.id_emprendedora=negocio.id_emprendedora
                     WHERE negocio.id_emprendimiento=s.id_emprendimiento
                       AND plan.acceso_hasta>(CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date
-                ) AS reservable
+                ) AS reservable,
+                (SELECT i.url FROM imagen_servicio i WHERE i.id_servicio=s.id_servicio AND i.url LIKE '/media/servicios/%' ORDER BY i.id_imagen DESC LIMIT 1) AS imagen_url
             FROM servicio s
             INNER JOIN categoria c
                 ON s.id_categoria = c.id_categoria

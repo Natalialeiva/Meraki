@@ -232,7 +232,7 @@ test('MVP integral: base efímera, rutas originales y cero proveedores externos'
                     return {status:r.status,ok:r.status>=200&&r.status<300,text:async()=>r.text};
                 },
                 MerakiNavegacion:{montar:()=>({iniciar(){}})},
-                MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,
+                MerakiIncorporacion:modulo,MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,
                 MerakiAgenda:real('../frontend/back-office/agenda'),MerakiPagos:real('../frontend/back-office/pagos'),
                 MerakiResumen:real('../frontend/back-office/resumen'),MerakiResumenTemporal:real('../frontend/back-office/resumen-temporal'),
                 MerakiPresentacionReservas:real('../frontend/back-office/presentacion-reservas'),

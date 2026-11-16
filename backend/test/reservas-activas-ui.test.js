@@ -80,7 +80,7 @@ async function montar(temporal={
         MerakiAgenda,MerakiPagos,MerakiPresentacionReservas,MerakiDashboardGraficos,MerakiEstadisticasReservas:estadisticas,
         MerakiResumen:{calcularReservasPorCerrar,calcularResumenOperativo(){throw Error('A4.1b no debe ejecutarse');}},
         MerakiResumenTemporal:temporal,
-        MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,
+        MerakiIncorporacion:modulo,MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,
         FormData:class {constructor(form){this.form=form;}get(){return this.form.campo.value;}},
         setInterval(){},confirm:()=>true
     });

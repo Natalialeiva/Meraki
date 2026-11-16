@@ -1,5 +1,6 @@
 // Reserva invitada transaccional, basada en el prototipo revisado. Sin proveedores.
 const {randomBytes,randomUUID,createHmac,createHash,timingSafeEqual}=require('node:crypto');
+const {abonoCLPValido}=require('./montos-abono');
 const sha=valor=>createHash('sha256').update(valor).digest('hex');
 const error=(http,codigo)=>Object.assign(Error(codigo),{http,codigo});
 function normalizar(body){
@@ -69,6 +70,7 @@ function crearServicioInvitada({pool,secreto,consultarTurno,ahora=Date.now,trasC
                 await db.query("UPDATE intento_reserva_invitada SET estado='rechazada',codigo='HORARIO_NO_DISPONIBLE' WHERE contexto_hash=$1 AND clave_hash=$2",[scope,key]);
                 await db.query('COMMIT');return {http:409,cuerpo:{codigo:'HORARIO_NO_DISPONIBLE'}};
             }
+            if(!abonoCLPValido(Number(turno.monto_abono),Number(turno.precio)))throw error(409,'ABONO_NO_DISPONIBLE');
             const token=randomUUID();
             const r=(await db.query(`INSERT INTO reserva(id_emprendimiento,id_servicio,id_trabajadora,id_clienta,
               fecha_hora_inicio,fecha_hora_fin,estado,precio_servicio,monto_abono,token_consulta,nombre_clienta,correo_confirmacion)
