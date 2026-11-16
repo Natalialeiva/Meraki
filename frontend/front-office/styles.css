@@ -1020,3 +1020,9 @@ main {
 .servicio-card:only-child .servicio-fotografia{grid-area:photo}
 @media(max-width:850px){.servicio-card:only-child{grid-template-areas:'photo photo' 'category price' 'title price' 'business abono' 'comuna duration' 'desc desc' 'status button'}}
 @media(max-width:620px){.servicio-card:only-child{grid-template-areas:'photo photo' 'category category' 'title title' 'business business' 'comuna comuna' 'desc desc' 'price abono' 'duration duration' 'status status' 'button button'}}
+
+/* Importes y datos del resumen con jerarquía uniforme. */
+.resumen-fila{min-width:0}
+.resumen-fila dd{min-width:0;margin:0;overflow-wrap:anywhere}
+.resumen-precio dd,.resumen-abono dd{font-family:var(--serif);font-size:1.3rem;font-weight:500;line-height:1.3;white-space:nowrap;overflow-wrap:normal;word-break:normal;font-variant-numeric:tabular-nums}
+@media(max-width:620px){.resumen-precio dd,.resumen-abono dd{font-size:1.3rem}}

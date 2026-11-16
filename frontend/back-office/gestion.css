@@ -97,3 +97,6 @@ body:has(#acceso:not([hidden]),#altaNegocio:not([hidden]))>.estado-global{positi
 @media(max-width:600px){#acceso .campo-clave #mostrarClave{width:44px;top:1px;bottom:1px;min-height:44px}#acceso .campo-clave #claveIngreso{padding-right:50px}}
 
 .gestion-foto-servicio{margin-top:24px;padding:20px;border:1px solid var(--borde);border-radius:12px;min-width:0}.gestion-foto-servicio img{display:block;max-width:100%;height:auto;max-height:320px;object-fit:contain;margin:16px 0}.gestion-foto-servicio button{margin:5px 6px 0 0}.gestion-foto-servicio input{max-width:100%}
+
+/* Mensajes de acceso junto al formulario. */
+#estadoAcceso .estado-global,#estadoAccesoNegocio .estado-global{position:static;max-width:100%;margin:16px 0;padding:12px 14px;box-shadow:none;font-size:13px;line-height:1.5;overflow-wrap:anywhere}

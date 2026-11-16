@@ -1,4 +1,5 @@
 const $=s=>document.querySelector(s);const estado=$('#estado');
+$('#estadoAcceso')?.append(estado);
 const navegacion=MerakiNavegacion.montar({contenedor:$('#panel'),menu:$('#menuGestion'),titulo:$('#tituloVista'),descripcion:$('#descripcionVista'),alCambiar:cambiarVistaResumen});
 const claveIngreso=$('#claveIngreso'),mostrarClave=$('#mostrarClave');
 function ocultarClave(){
@@ -34,6 +35,7 @@ async function api(url,method='GET',data,vigente=()=>true){
         $('#solicitudesCancelacion')?.replaceChildren();
         $('#login').hidden=false;
         $('#acceso').hidden=false;
+        $('#estadoAcceso')?.append(estado);
         estado.textContent='Debes iniciar sesión para acceder al Back Office';
     }
     let d;
@@ -414,7 +416,7 @@ async function iniciar(){
     const negocios=await api('/api/mis-emprendimientos');
     if(sesion!==versionSesion)return;
     $('#altaNegocio').hidden=negocios.length>0;
-    if(!negocios.length){$('#login').hidden=true;$('#acceso').hidden=true;$('#panel').hidden=true;estado.textContent='Completa los datos de tu emprendimiento.';return;}
+    if(!negocios.length){$('#login').hidden=true;$('#acceso').hidden=true;$('#panel').hidden=true;$('#estadoAccesoNegocio')?.append(estado);estado.textContent='Completa los datos de tu emprendimiento.';return;}
     if(sesion!==versionSesion)return;
     negociosPerfil=negocios;
     const selector=$('#negocio');
@@ -428,6 +430,7 @@ async function iniciar(){
     $('#login').hidden=true;
     $('#acceso').hidden=true;
     $('#panel').hidden=false;
+    document.body?.append(estado);
     navegacion.iniciar();
     cargarPerfil();
     if(negocios.length)await reservas();

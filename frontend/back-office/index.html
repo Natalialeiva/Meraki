@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f7f5f8">
 <title>Mi negocio | Meraki</title>
-<link rel="stylesheet" href="gestion.css?v=incorporacion-responsive-1">
+<link rel="stylesheet" href="gestion.css?v=entrega-visual-1">
 </head>
 <body>
 <a class="saltar" href="#tituloVista">Saltar al contenido</a>
@@ -15,6 +15,7 @@
 <img class="logo-acceso" src="../front-office/assets/logo-meraki-transparente.png" alt="Meraki" width="180" height="60">
 <h1>Tu negocio, en orden.</h1>
 <p>Ingresa para gestionar tus reservas y acompañar a tus clientas.</p>
+<div id="estadoAcceso"></div>
 <form id="login">
 <label>Correo <input name="correo" type="email" required autocomplete="username">
 </label>
@@ -53,6 +54,7 @@
 <section id="altaNegocio" class="acceso" hidden aria-labelledby="tituloAltaNegocio"><div class="tarjeta-acceso">
 <h1 id="tituloAltaNegocio">Presenta tu emprendimiento</h1>
 <p>Completa tu perfil para comenzar a administrar tus servicios.</p>
+<div id="estadoAccesoNegocio"></div>
 <form id="registroNegocio"><fieldset><legend>Datos del emprendimiento</legend>
 <label>Nombre del emprendimiento <input name="nombre" maxlength="150" required></label>
 <label>Comuna <input name="comuna" maxlength="100" required></label>
@@ -506,6 +508,6 @@
 <script src="suscripcion.js?v=gestion-1"></script>
 <script src="navegacion.js?v=dashboard-1"></script>
 <script src="dashboard-graficos.js?v=evolucion-seis-meses-1"></script>
-<script src="back.js?v=fotos-2"></script>
+<script src="back.js?v=entrega-visual-1"></script>
 </body>
 </html>
