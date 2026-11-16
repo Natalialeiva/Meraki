@@ -5,6 +5,8 @@ const nombre = $('#formReserva input[name="nombre"]');
 const correo = $('#formReserva input[name="correo"]');
 const telefono = $('#formReserva input[name="telefono"]');
 let intentoInvitada=null;
+const intentoBloqueado=()=>['enviando','resultado_incierto','intento_vencido'].includes(intentoInvitada?.estado);
+let versionIntento=0;
 let negocio = null, servicios = [], creada = false, enviando = false, horas = [], contextoHoras = '';
 let versionBusqueda = 0, versionSeleccion = 0, versionProfesional = 0, versionHoras = 0;
 const dinero = valor => new Intl.NumberFormat('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0}).format(Number(valor));
@@ -20,8 +22,8 @@ function fechaLegible(valor) {
 }
 async function api(url, method = 'GET', datos, cabeceras = {}) {
     const respuesta = await fetch(url, {method, headers:{'Content-Type':'application/json',...cabeceras}, body:datos ? JSON.stringify(datos) : undefined});
-    let d; try { d = JSON.parse(await respuesta.text()); } catch { throw Error('No se pudo leer la respuesta del servidor. Intenta nuevamente.'); }
-    if (!respuesta.ok) throw Error(d.mensaje || 'No se pudo completar la operación');
+    let d; try { d = JSON.parse(await respuesta.text()); } catch { throw Object.assign(Error('No se pudo leer la respuesta del servidor. Intenta nuevamente.'),{status:respuesta.status,codigo:'RESPUESTA_INVALIDA'}); }
+    if (!respuesta.ok) throw Object.assign(Error(d?.mensaje || 'No se pudo completar la operación'),{status:respuesta.status,codigo:d?.codigo,retryAfter:respuesta.headers?.get('Retry-After')});
     return d;
 }
 function opciones(elemento, datos, clave, etiqueta = v => v.nombre, indicacion = 'Selecciona una opción') {
@@ -75,7 +77,7 @@ function resumen() {
         fila.append(titulo, dato); panel.append(fila);
     }
     const horaValida = contextoHoras === contexto() && horas.includes($('#hora').value);
-    $('#crearReserva').disabled = creada || enviando || !s || s.reservable === false || !$('#profesional').value || !horaValida || !validar();
+    $('#crearReserva').disabled = creada || enviando || intentoBloqueado() || !s || s.reservable === false || !$('#profesional').value || !horaValida || !validar();
 }
 function tarjetasServicios() {
     const lista = $('#listaServicios'); lista.replaceChildren();
@@ -106,10 +108,10 @@ function tarjetasServicios() {
             } else p.textContent = texto;
             tarjeta.append(p);
         }
-        const elegir = document.createElement('button'); elegir.type = 'button'; elegir.disabled = s.reservable === false || enviando || creada;
+        const elegir = document.createElement('button'); elegir.type = 'button'; elegir.disabled = s.reservable === false || enviando || creada || intentoBloqueado();
         elegir.textContent = s.reservable === false ? 'No disponible por el momento' : 'Elegir ' + s.servicio;
         elegir.onclick = () => {
-            if (enviando || creada) return;
+            if (enviando || creada || intentoBloqueado()) return;
             $('#servicio').value = String(s.id_servicio);
             // La tarjeta se vuelve a dibujar; conservar el foco en un control estable.
             $('#servicio').focus();
@@ -119,6 +121,7 @@ function tarjetasServicios() {
     }
 }
 async function profesionales() {
+    if (intentoBloqueado()) return;
     const version = ++versionProfesional;
     opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional'); limpiarHoras(); tarjetasServicios();
     $('#disponibilidad').disabled = true;
@@ -134,7 +137,7 @@ async function profesionales() {
     } catch (error) { if (version === versionProfesional) { $('#avisoServicio').textContent = error.message; informar(error.message, 'error'); } }
 }
 async function seleccionar(dato) {
-    if (enviando) return;
+    if (enviando || intentoBloqueado()) return;
     const version = ++versionSeleccion;
     versionProfesional++;
     // El aviso anterior puede estar en la reserva que se va a ocultar.
@@ -230,7 +233,7 @@ const camposBusqueda = {nombre:'Nombre', comuna:'Comuna', id_categoria:'Categor�
 let ultimaBusqueda = new URLSearchParams();
 
 function repetirBusqueda(filtros, campoFoco) {
-    if (enviando) return;
+    if (enviando || intentoBloqueado()) return;
     const formulario = $('#buscar');
     for (const clave of Object.keys(camposBusqueda)) {
         formulario.elements.namedItem(clave).value = filtros.get(clave) || '';
@@ -269,7 +272,7 @@ function mostrarFiltros(filtros) {
 $('#reintentarBusqueda').onclick = () => repetirBusqueda(ultimaBusqueda);
 
 $('#buscar').onsubmit = async evento => {
-    evento.preventDefault(); if (enviando) return;
+    evento.preventDefault(); if (enviando || intentoBloqueado()) return;
     const filtros = new URLSearchParams(new FormData(evento.target));
     if (!filtros.get('id_categoria')) filtros.delete('id_categoria');
     ultimaBusqueda = filtros;
@@ -294,20 +297,21 @@ $('#buscar').onsubmit = async evento => {
     }
 };
 $('#limpiarBusqueda').onclick = () => {
-    if (enviando) return;
+    if (enviando || intentoBloqueado()) return;
     const orden = $('#ordenCercania').value;
     $('#buscar').reset();
     $('#ordenCercania').value = orden;
     return $('#buscar').requestSubmit();
 };
 $('#servicio').onchange = profesionales;
-$('#profesional').onchange = () => { limpiarHoras(); $('#disponibilidad').disabled = !$('#profesional').value; };
-$('#fecha').onchange = () => { limpiarHoras(); errorCampo($('#fecha'), '#errorFecha', !$('#fecha').value ? 'Selecciona una fecha.' : $('#fecha').value < $('#fecha').min ? 'Elige hoy o una fecha posterior.' : ''); };
-$('#hora').onchange = () => { resumen(); if ($('#hora').value) informar('Revisa el resumen y completa tus datos para crear la reserva.'); };
+$('#profesional').onchange = () => { if (intentoBloqueado()) return; limpiarHoras(); $('#disponibilidad').disabled = !$('#profesional').value; };
+$('#fecha').onchange = () => { if (intentoBloqueado()) return; limpiarHoras(); errorCampo($('#fecha'), '#errorFecha', !$('#fecha').value ? 'Selecciona una fecha.' : $('#fecha').value < $('#fecha').min ? 'Elige hoy o una fecha posterior.' : ''); };
+$('#hora').onchange = () => { if (intentoBloqueado()) return; resumen(); if ($('#hora').value) informar('Revisa el resumen y completa tus datos para crear la reserva.'); };
 for (const campo of [nombre, correo, telefono]) {
-    campo.oninput = campo.onblur = () => { camposInteractuados.add(campo); validar(); resumen(); };
+    campo.oninput = campo.onblur = () => { if (intentoBloqueado()) return; camposInteractuados.add(campo); validar(); resumen(); };
 }
 $('#disponibilidad').onclick = async () => {
+    if (intentoBloqueado()) return;
     limpiarHoras();
     const s = servicioActual();
     if (!s || s.reservable === false || !$('#profesional').value) { informar('Selecciona un servicio disponible y una profesional.', 'error'); return; }
@@ -328,23 +332,97 @@ $('#disponibilidad').onclick = async () => {
     } catch (error) { if (version === versionHoras) informar(error.message, 'error'); }
     finally { if (version === versionHoras) { $('#disponibilidad').disabled = !$('#profesional').value; $('#hora').setAttribute('aria-busy', 'false'); } }
 };
-$('#formReserva').onsubmit = async evento => {
-    evento.preventDefault(); if (enviando || creada) return;
-    validar(true); resumen(); if ($('#crearReserva').disabled) { informar('Completa los datos obligatorios y selecciona una hora disponible.', 'error'); return; }
-    const datos = {nombre:nombre.value.trim(), correo:correo.value.trim(), telefono:telefono.value.trim()};
-    const reserva = {id_servicio:Number($('#servicio').value), id_trabajadora:Number($('#profesional').value), fecha:$('#fecha').value, hora:$('#hora').value.slice(0, 5)};
-    enviando = true; $('#camposReserva').disabled = true; tarjetasServicios(); resumen(); informar('Creando tu reserva…', 'carga');
+function presentarIntento(mensaje) {
+    const estadoIntento=intentoInvitada?.estado||'preparacion';
+    $('#recuperacionReserva').hidden=!['resultado_incierto','intento_vencido'].includes(estadoIntento)&&!(enviando&&intentoInvitada?.recuperando);
+    $('#recuperacionReserva').setAttribute('aria-busy',String(enviando));
+    $('#mensajeRecuperacion').textContent=mensaje||'';
+    $('#verificarSolicitud').hidden=estadoIntento!=='resultado_incierto'&&!(enviando&&intentoInvitada?.recuperando);
+    $('#verificarSolicitud').disabled=enviando||Date.now()<(intentoInvitada?.reintentarDesde||0);
+    $('#camposReserva').disabled=creada||enviando||intentoBloqueado();
+    $('#reserva').dataset.intento=estadoIntento;
+    tarjetasServicios();resumen();
+}
+function plazoReintento(valor) {
+    if(typeof valor!=='string')return 0;
+    if(/^\d+$/.test(valor))return Date.now()+Math.min(Number(valor)*1000,86400000);
+    const fecha=Date.parse(valor);return Number.isFinite(fecha)?Math.min(Math.max(Date.now(),fecha),Date.now()+86400000):0;
+}
+async function enviarIntento(recuperando=false) {
+    const intento=intentoInvitada;
+    if(!intento||enviando||Date.now()<(intento.reintentarDesde||0))return;
+    if(recuperando&&intento.estado!=='resultado_incierto')return;
+    const version=++versionIntento;
+    const vigente=()=>version===versionIntento&&intento===intentoInvitada;
+    intento.recuperando=recuperando;
+    enviando=true;
+    versionBusqueda++;versionSeleccion++;versionProfesional++;versionHoras++;
+    intento.estado='enviando';presentarIntento();
+    informar(recuperando?'Verificando la misma solicitud…':'Preparando tu solicitud…','carga');
+    let postIniciado=false;
     try {
-        const body={...reserva,contacto:datos},huella=JSON.stringify(body);
-        if(!intentoInvitada||intentoInvitada.huella!==huella)intentoInvitada={huella,clave:crypto.randomUUID()};
-        await api('/api/reservas/invitada/contexto');
-        const d = await api('/api/reservas/invitada', 'POST', body, {'X-Meraki-Action':'1','Idempotency-Key':intentoInvitada.clave});
-        creada = true; $('#consulta').href = '/consulta/#' + encodeURIComponent(d.reserva.token_consulta); $('#consulta').hidden = false; $('#nuevaReserva').hidden = false;
-        informar('Reserva ' + d.reserva.id_reserva + ' creada y pendiente de abono. Guarda el enlace privado y continúa con Webpay. Todavía no se ha realizado un cobro.', 'exito');
-    } catch (error) { informar(error.message, 'error'); $('#camposReserva').disabled = false; }
-    finally { enviando = false; tarjetasServicios(); resumen(); }
+        // Solo la primera solicitud obtiene contexto; nunca se renueva al recuperar.
+        if(!recuperando){
+            const contextoInvitado=await api('/api/reservas/invitada/contexto');
+            if(contextoInvitado?.disponible!==true)throw Error('Contexto no disponible');
+        }
+        if(!vigente())return;
+        postIniciado=true;
+        informar(recuperando?'Verificando la misma solicitud…':'Creando tu reserva…','carga');
+        const d=await api('/api/reservas/invitada','POST',intento.cuerpo,{'X-Meraki-Action':'1','Idempotency-Key':intento.clave});
+        if(!vigente())return;
+        const r=d?.reserva;
+        if(!r||!Number.isSafeInteger(r.id_reserva)||r.id_reserva<=0||typeof r.token_consulta!=='string'||
+            !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(r.token_consulta)||
+            !['pendiente_abono','confirmada','cancelada','atendida','no_atendida'].includes(r.estado))throw Error('Respuesta incompleta');
+        creada=true;intento.estado='reserva_completada';
+        $('#consulta').href='/consulta/#'+encodeURIComponent(r.token_consulta);$('#consulta').hidden=false;$('#nuevaReserva').hidden=false;
+        const etiquetas={pendiente_abono:'pendiente de abono',confirmada:'confirmada',cancelada:'cancelada',atendida:'atendida',no_atendida:'no atendida'};
+        informar('Reserva '+r.id_reserva+(recuperando?' recuperada':' registrada')+' y '+etiquetas[r.estado]+'. Guarda el enlace privado para consultarla. Esta verificación no inicia pagos.','exito');
+    } catch(error) {
+        if(!vigente())return;
+        if(!postIniciado) {
+            intento.estado='preparacion';
+            informar('No se envió la reserva porque no se pudo preparar la conexión. Puedes volver a intentarlo.','error');
+        } else if(error.status===410||error.status===401) {
+            intento.estado='intento_vencido';
+            const mensaje='No podemos verificar este intento porque venció o su contexto ya no está disponible. La reserva podría existir. No crees otra sin revisar con el emprendimiento. No renueves el contexto ni recargues para reintentar.';
+            presentarIntento(mensaje);informar('El intento requiere revisión.','error');
+        } else if(!recuperando&&((error.status===409&&error.codigo==='HORARIO_NO_DISPONIBLE')||
+            (error.status===400&&['DATOS_INVALIDOS','CLAVE_INVALIDA'].includes(error.codigo))||error.status===403)) {
+            intento.estado='rechazo_definitivo';
+            informar(error.codigo==='HORARIO_NO_DISPONIBLE'?'El horario ya no está disponible. Consulta otra hora antes de crear una nueva solicitud.':'La solicitud fue rechazada antes de registrarse. Revisa los datos antes de continuar.','error');
+            limpiarHoras();
+        } else {
+            intento.estado='resultado_incierto';
+            intento.reintentarDesde=error.status===429?plazoReintento(error.retryAfter):0;
+            const mensaje='No fue posible comprobar si la reserva se registró. Conservamos esta misma solicitud durante esta visita. '+
+                (error.status===429?'Espera antes de verificar nuevamente. ':'')+
+                'Verificar mi solicitud reenviará la misma operación y podría completarla si todavía no se había registrado. No recargues: la recuperación no se conserva al cerrar o recargar esta página.';
+            presentarIntento(mensaje);informar('Resultado de la reserva pendiente de verificar.','error');
+            if(intento.reintentarDesde>Date.now())globalThis.setTimeout?.(()=>{if(vigente()&&intento.estado==='resultado_incierto')presentarIntento(mensaje);},intento.reintentarDesde-Date.now());
+        }
+    } finally {
+        if(vigente()) {enviando=false;presentarIntento($('#mensajeRecuperacion').textContent);}
+    }
+}
+$('#formReserva').onsubmit=async evento=>{
+    evento.preventDefault();if(enviando||creada||intentoBloqueado())return;
+    validar(true);resumen();if($('#crearReserva').disabled){informar('Completa los datos obligatorios y selecciona una hora disponible.','error');return;}
+    const cuerpo=Object.freeze({id_servicio:Number($('#servicio').value),id_trabajadora:Number($('#profesional').value),fecha:$('#fecha').value,hora:$('#hora').value.slice(0,5),
+        contacto:Object.freeze({nombre:nombre.value.trim(),correo:correo.value.trim(),telefono:telefono.value.trim()})});
+    intentoInvitada={cuerpo,clave:crypto.randomUUID(),estado:'preparacion',reintentarDesde:0};
+    return enviarIntento();
 };
-$('#nuevaReserva').onclick = () => { intentoInvitada=null; if (enviando) return; $('#formReserva').reset(); camposInteractuados.clear(); for (const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha']) $(id).textContent = ''; for (const campo of [nombre,correo,telefono,$('#fecha')]) campo.setAttribute('aria-invalid','false'); return seleccionar(negocio); };
+$('#verificarSolicitud').onclick=()=>enviarIntento(true);
+$('#nuevaReserva').onclick=()=>{
+    if(enviando||intentoBloqueado()||!creada)return;
+    versionIntento++;intentoInvitada=null;$('#recuperacionReserva').hidden=true;
+    $('#formReserva').reset();camposInteractuados.clear();
+    for(const id of ['#errorNombre','#errorCorreo','#errorTelefono','#errorFecha'])$(id).textContent='';
+    for(const campo of [nombre,correo,telefono,$('#fecha')])campo.setAttribute('aria-invalid','false');
+    return seleccionar(negocio);
+};
 $('#fecha').min = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Santiago', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
 opciones($('#profesional'), [], 'id_trabajadora', undefined, 'Selecciona una profesional'); limpiarHoras(); $('#buscar').requestSubmit();
 void cargarCategorias();

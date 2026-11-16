@@ -1,3 +1,10 @@
+# Estado vigente: Leaflet y OpenStreetMap
+
+El mapa principal usa Leaflet local y teselas OSM. No necesita clave, Map ID,
+Google Cloud ni el archivo local de configuración Google. Ver README del repositorio.
+La preparación Google que sigue se conserva como documentación histórica/opcional,
+no como requisito del mapa principal. No se activó ningún servicio Google.
+
 # A3.4.2 — proveedor Google preparado, deshabilitado
 
 No hay claves, SDK descargado, servicios activados ni facturación configurada en
@@ -128,3 +135,89 @@ prueba sin proveedor real: faltan comprobaciones reales de credenciales, cuotas,
 accesibilidad y errores del SDK. A3.4.4 pendiente de definir/autorizar; revisar
 con ChatGPT antes de agregar enlaces de navegación o habilitar Google.
 Sin commit ni push.
+
+
+## Preparación persistente para entrega académica — 16/11/2026
+
+El proveedor existente admite ahora `mapas-config.local.json`, junto al HTML del
+Front Office. Está excluido de Git; en Adriana se creó deshabilitado y sin clave.
+La plantilla compartible es `mapas-config.example.json`. La lectura se realiza solo
+al abrir el panel con coordenadas válidas. Ausencia, fallo de lectura o configuración
+incompleta conservan el catálogo y el proveedor de preparación existente. No se
+agregó otra cartografía ni un simulador. La configuración global por memoria sigue
+siendo compatible y tiene prioridad. Recargar después de modificar la configuración.
+
+### Pasos manuales, iguales para Adriana, Natalia y el profesor
+
+1. Obtener autorización antes de activar Google Cloud/facturación. Crear o elegir
+   un proyecto propio o del equipo con permisos administrativos suficientes para
+   administrar facturación, habilitar APIs y gestionar credenciales/map IDs.
+2. Vincular una cuenta de facturación y habilitar **Maps JavaScript API**. No se
+   necesitan Places, Directions ni Geocoding para estos marcadores.
+3. Crear un Map ID para JavaScript. Utilizar un ID propio; DEMO_MAP_ID no evita costos.
+4. Crear una clave de **navegador**, restringida a Maps JavaScript API y Websites
+   (HTTP referrers): `http://localhost:3000/*` y, solo si se utiliza,
+   `http://127.0.0.1:3000/*`. Añadir por separado cualquier dominio HTTPS de despliegue.
+   No usar restricciones de IP de servidor para la clave del navegador.
+5. Revisar cuotas, límites aplicables y alertas de presupuesto. Las alertas no
+   constituyen un corte automático de gastos. No se promete costo cero: revisar
+   tarifas vigentes de Dynamic Maps y la configuración del proyecto.
+6. Si falta el archivo local, copiar `mapas-config.example.json` a
+   `mapas-config.local.json` en la misma carpeta. Completar apiKey y mapId
+   privadamente y poner habilitado/autorizado en true únicamente tras autorización.
+   Mantener entorno en produccion para Map ID propio. Nunca guardar contraseñas,
+   secretos de sesión, credenciales de pagos o tokens OAuth en este archivo.
+7. El archivo es servido al navegador: la clave NO es secreta. Su protección depende
+   de las restricciones de sitio/API. No subir el archivo a Git ni compartir capturas
+   con la clave. Cada computador debe configurarlo localmente.
+8. Abrir `http://localhost:3000/front-office/`, recargar y pulsar Ver mapa.
+   No se requiere reiniciar el backend por cambiar un recurso estático. No iniciar
+   el servidor sobre una configuración financiera insegura para probar el mapa.
+9. Para comprobar funcionamiento real faltan coordenadas autorizadas: confirmar
+   SDK oficial, mapa con calles, dos marcadores, selección/Ver servicios y filtros.
+   También probar móvil, cierre/reapertura y ausencia de permiso de ubicación.
+   No mostrar claves en evidencias. Los fallos permiten continuar con las tarjetas.
+
+### Ubicaciones propuestas, NO guardadas
+
+Son referencias públicas académicas, no domicilios reales de Camila ni Sofía.
+Requieren autorización concreta antes de actualizar cualquier fila:
+
+| Negocio propuesto | Referencia | Latitud | Longitud | Comuna de la referencia |
+| --- | --- | --- | --- | --- |
+| Camila (ID 1) | Plaza de Armas de Santiago | -33.4379667 | -70.6504000 | Santiago |
+| Sofía (ID 9) | Museo Parque de las Esculturas | -33.4201806 | -70.6129056 | Providencia |
+
+Fuentes de coordenadas (redondeadas a siete decimales para DECIMAL(10,7)):
+https://es.wikipedia.org/wiki/Plaza_de_Armas_de_Santiago y
+https://es.wikipedia.org/wiki/Museo_Parque_de_las_Esculturas_de_Providencia .
+La municipalidad confirma el segundo lugar y dirección Santa María 2205:
+https://www.providencia.cl/provi/explora/turismo/conocenos/parque-de-las-esculturas .
+No acreditan una entrada exacta ni la existencia de estos negocios en esos lugares.
+Para Sofía, usar esa referencia exigiría autorizar también cambiar comuna/dirección
+para evitar contradicción con su comuna actual Santiago, o elegir otro punto aprobado.
+
+El Back Office incorpora ahora latitud y longitud opcionales en Perfil del negocio.
+Ambas deben ser válidas o quedar vacías; cero explícito es válido. El servidor
+acepta números o cadenas decimales, valida rangos y conserva la propiedad por sesión.
+Enviar ambas como null elimina la ubicación; omitir ambas conserva la anterior.
+PostgreSQL conserva su precisión existente DECIMAL(10,7). No hay migración.
+No se guardaron ubicaciones de Camila ni Sofía durante esta implementación.
+La integración SQL comprobó autenticación, propiedad, rechazo de pares incompletos,
+lectura pública actualizada y conservación de otros campos y reservas en base efímera.
+Resultado de regresión posterior: 493 aprobadas, cero fallidas y omitidas.
+Tener coordenadas permite marcadores y distancias; no habilita automáticamente
+Cómo llegar: la API sigue sin evidencia de confirmación de destino real.
+
+### Fuentes de configuración y costos
+
+- https://developers.google.com/maps/documentation/javascript/get-api-key
+- https://developers.google.com/maps/documentation/javascript/usage-and-billing
+- https://developers.google.com/maps/api-security-best-practices
+
+### Verificación de esta preparación
+
+47 pruebas focalizadas aprobadas, cero fallidas y omitidas: configuración local
+bajo demanda, lectura compartida, ausencia/fallo/archivo inválido, compatibilidad
+por memoria, proveedor Google simulado, selección, filtros y ubicación denegada.
+No se activó Google Cloud, no se llamó al SDK real y no se cambiaron datos.

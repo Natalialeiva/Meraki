@@ -44,7 +44,8 @@ test('URL solo contiene api y destino público; nunca origen, token o campos pri
 });
 test('Sin confirmación no hay enlace enfocable, href ni destino de navegación',async()=>{
     const {crearVistaIndicaciones}=await modulo;const vista=crearVistaIndicaciones(documento,negocio);
-    assert.equal(vista.children.length,1);assert.equal(vista.children[0].tag,'p');assert.equal(vista.children[0].textContent,'Ubicación exacta no disponible');
+    assert.equal(vista.children.length,1);assert.equal(vista.children[0].tag,'p');assert.match(vista.children[0].textContent,/Coordenadas disponibles.*pendiente de confirmar/);
+    const sinDatos=crearVistaIndicaciones(documento,{});assert.equal(sinDatos.children[0].textContent,'Ubicación exacta no disponible');
 });
 test('Enlace preparado es HTML nativo para Tab/Enter, con etiqueta y aviso de salida',async()=>{
     const {crearVistaIndicaciones}=await modulo;const vista=crearVistaIndicaciones(documento,negocio,true);const a=vista.children[0];

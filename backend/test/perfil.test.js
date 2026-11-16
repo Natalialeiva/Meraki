@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {montar} = require('../../frontend/back-office/perfil');
 
 function pantalla(api = async () => ({emprendimiento:negocio})) {
-    const entradas = Object.fromEntries(['nombre','descripcion','direccion','comuna','telefono'].map(k=>[k,{value:'',focus(){}}]));
+    const entradas = Object.fromEntries(['nombre','descripcion','direccion','comuna','telefono','latitud','longitud'].map(k=>[k,{value:'',focus(){}}]));
     const grupo = {disabled:false};
     const restaurar = {};
     const form = {elements:{namedItem:k=>entradas[k]},reportValidity:()=>true,
@@ -26,7 +26,7 @@ test('Perfil carga datos, permite restaurar y cambia al negocio seleccionado',()
 test('Perfil guarda solo campos editables, recorta espacios y limpia opcionales',async()=>{
     const p=pantalla(async()=>({emprendimiento:{...negocio,nombre:'Nombre nuevo'}}));p.perfil.cargar(negocio);
     p.entradas.nombre.value=' Nombre nuevo ';p.entradas.comuna.value=' Santiago ';await p.guardar();
-    assert.deepEqual(p.llamadas,[['/api/emprendimientos/7','PATCH',{nombre:'Nombre nuevo',descripcion:null,direccion:null,comuna:'Santiago',telefono:null}]]);
+    assert.deepEqual(p.llamadas,[['/api/emprendimientos/7','PATCH',{nombre:'Nombre nuevo',descripcion:null,direccion:null,comuna:'Santiago',telefono:null,latitud:null,longitud:null}]]);
     assert.equal(p.guardados.length,1);assert.equal(p.entradas.nombre.value,'Nombre nuevo');assert.match(p.estado.textContent,/guardado correctamente/);
 });
 test('Perfil rechaza nombre con espacios antes de enviar',async()=>{
@@ -40,4 +40,12 @@ test('Perfil bloquea doble envío y cambio de negocio mientras guarda',async()=>
     let terminar;const p=pantalla(()=>new Promise(resolve=>{terminar=resolve;}));p.perfil.cargar(negocio);
     const primera=p.guardar();assert.equal(p.grupo.disabled,true);assert.equal(p.selector.disabled,true);await p.guardar();assert.equal(p.llamadas.length,1);
     terminar({emprendimiento:negocio});await primera;assert.equal(p.grupo.disabled,false);assert.equal(p.selector.disabled,false);
+});
+
+test('Perfil conserva coordenadas decimales y acepta cero explícito',async()=>{
+ const p=pantalla();p.perfil.cargar({...negocio,latitud:'-33.4000000',longitud:'-70.6000000'});
+ assert.equal(p.entradas.latitud.value,'-33.4000000');p.entradas.latitud.value='0';p.entradas.longitud.value='0';await p.guardar();assert.equal(p.llamadas[0][2].latitud,'0');
+});
+for(const [lat,lon]of [['-91','0'],['0','181'],['','0'],['NaN','1'],['Infinity','2'],['texto','0']])test('Perfil rechaza par inválido '+lat+'/'+lon,async()=>{
+ const p=pantalla();p.perfil.cargar(negocio);p.entradas.latitud.value=lat;p.entradas.longitud.value=lon;await p.guardar();assert.equal(p.llamadas.length,0);assert.match(p.estado.textContent,/ambas coordenadas/);
 });

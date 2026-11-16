@@ -154,3 +154,39 @@ Pendientes externos: renovar la validación de Gmail cuando se autorice; ensayar
 La evidencia histórica de correo conserva datos operativos en el historial de Git. Para la entrega consultar la [versión académica anonimizada](docs/recuperacion-gmail-academica.json) y sus [limitaciones de privacidad](docs/PRIVACIDAD-EVIDENCIA-CORREO.md). La copia anonimizada no retira automáticamente el original del historial.
 
 Continuidad del equipo: [traspaso a Adriana](docs/TRASPASO-ADRIANA-2026-11-15.md). Cada computador debe revisar sus propios cambios, configuración y migraciones antes de integrar.
+
+
+## Mapa académico: Leaflet y OpenStreetMap
+
+El Front Office original usa Leaflet 1.9.4, instalado con versión fija en backend
+(package-lock incluido). La biblioteca, CSS, iconos y licencia BSD se sirven desde
+`frontend/front-office/vendor/leaflet/`, sin CDN ni clave de Google. Se conservan
+los módulos Google históricos como referencia, pero el mapa principal elige Leaflet
+local; no requiere `mapas-config.local.json` ni facturación.
+
+Para el profesor: instalar dependencias con `npm.cmd ci` desde backend, configurar
+la única base principal meraki_db según la guía académica y abrir
+http://localhost:3000/front-office/ . Pulsar Ver mapa. No conceder ubicación es
+válido: el mapa usa únicamente coordenadas públicas del catálogo. Pulsar un marcador
+y después Ver servicios reutiliza la selección existente. Buscar por nombre/comuna
+actualiza los marcadores; negocios sin coordenadas siguen disponibles en tarjetas.
+Si no hay coordenadas, se muestra Santiago como referencia general, sin inventar
+marcadores. Camila está actualmente en la coordenada académica de Plaza de Armas;
+no se modificaron esas coordenadas en esta tarea. Sofía continúa sin coordenadas.
+
+Internet es necesario para teselas de `https://tile.openstreetmap.org/{z}/{x}/{y}.png`.
+La atribución © OpenStreetMap contributors permanece visible. Solo se descargan
+las teselas solicitadas por la vista, con Referer y caché normal del navegador.
+No realizar descargas masivas, precarga ni almacenamiento offline. El servicio es
+comunitario, sin garantía de disponibilidad ni capacidad ilimitada; para tráfico
+alto se debe evaluar otro proveedor o alojamiento propio, no añadir reintentos
+agresivos. Política: https://operations.osmfoundation.org/policies/tiles/ .
+Abrir el mapa comparte IP, Referer y las zonas cartográficas solicitadas con OSM;
+no se envían las coordenadas personales obtenidas por la geolocalización opcional.
+Si falla Internet/cartografía, el aviso conserva la posibilidad de usar las tarjetas;
+una carga inicial del catálogo también necesita que el backend local esté disponible.
+Google Maps/Cloud no se activa y no hay servicios de facturación nuevos.
+
+Verificación: cartografía oficial cargada en navegador, marcador de Camila,
+selección/servicios y filtros comprobados en localhost:3000. No se efectuaron
+reservas, pagos ni correos para esta comprobación.

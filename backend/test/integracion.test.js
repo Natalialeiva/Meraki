@@ -109,13 +109,28 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
    assert.equal(guardado.estado,original.estado);assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,reservas);
    await agent.patch('/api/emprendimientos/1').send(Object.fromEntries(['nombre','descripcion','direccion','comuna','telefono'].map(k=>[k,original[k]]))).expect(200);
   });
+  await t.test('Ubicación: actualiza solo par autorizado, valida y publica sin cambiar reservas',async()=>{
+   const original=(await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0];
+   const reservas=(await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows;
+   await request(app).patch('/api/emprendimientos/1').send({latitud:0,longitud:0}).expect(401);
+   for(const datos of [{latitud:1},{longitud:1},{latitud:null,longitud:1},{latitud:'',longitud:''},{latitud:91,longitud:0},{latitud:0,longitud:-181},{latitud:true,longitud:0},{latitud:'NaN',longitud:0},{latitud:'Infinity',longitud:0}])await agent.patch('/api/emprendimientos/1').send(datos).expect(400);
+   for(const datos of [{latitud:'-33.4379667',longitud:'-70.6504000'},{latitud:0,longitud:0},{latitud:null,longitud:null}]){
+    await agent.patch('/api/emprendimientos/1').send(datos).expect(200);
+    const actual=(await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0];
+    for(const k of Object.keys(original))if(!['latitud','longitud'].includes(k))assert.deepEqual(actual[k],original[k]);
+    const publico=(await request(app).get('/api/emprendimientos').expect(200)).body.find(n=>n.id_emprendimiento===1);
+    assert.equal(publico.latitud,actual.latitud);assert.equal(publico.longitud,actual.longitud);
+   }
+   await agent.patch('/api/emprendimientos/1').send({latitud:original.latitud,longitud:original.longitud}).expect(200);
+   assert.deepEqual((await pool.query('SELECT * FROM reserva ORDER BY id_reserva')).rows,reservas);
+  });
   await t.test('Perfil: no permite editar el emprendimiento de otra propietaria',async()=>{
    const otra=request.agent(app);
    const cuenta=(await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Perfil','Ajeno','perfil-ajeno','perfil@meraki.test',$1) RETURNING id_emprendedora",[await bcrypt.hash('clave-prueba',4)])).rows[0];
    await pool.query("INSERT INTO suscripcion(id_emprendedora,fecha_inicio,monto_mensual,estado,acceso_hasta) VALUES($1,CURRENT_DATE,9990,'prueba',DATE '2099-01-01')",[cuenta.id_emprendedora]);
    await otra.post('/api/auth/login').send({correo:'perfil@meraki.test',password:'clave-prueba'}).expect(200);
    const antes=(await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0];
-   await otra.patch('/api/emprendimientos/1').send({nombre:'Cambio ajeno'}).expect(404);
+   await otra.patch('/api/emprendimientos/1').send({nombre:'Cambio ajeno',latitud:0,longitud:0}).expect(404);
    assert.deepEqual((await pool.query('SELECT * FROM emprendimiento WHERE id_emprendimiento=1')).rows[0],antes);
    await otra.post('/api/auth/logout').expect(200);
   });

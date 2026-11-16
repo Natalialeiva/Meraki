@@ -38,11 +38,11 @@ function iniciar(config = {}) {
     elementos['#buscar'].campos = [filtroNombre,comuna,categoria];
     elementos['#buscar'].elements = {namedItem: clave => elementos['#buscar'].campos.find(c => c.name === clave)};
     const peticiones = []; let reservasCreadas = 0;
-    const contexto = vm.createContext({Intl,Date,URLSearchParams,console,crypto:require("node:crypto"),
+    const contexto = vm.createContext({Intl,Date:config.reloj||Date,setTimeout:config.temporizador,URLSearchParams,console,crypto:require("node:crypto"),
         document:{querySelector:s => { assert(elementos[s], 'Selector existente: ' + s); return elementos[s]; }, createElement:tag => new Elemento(tag)},
         FormData:class { constructor(form) { this.form = form; } *[Symbol.iterator]() { for (const c of this.form.campos || []) if (c.name && !c.disabled) yield [c.name,c.value]; } },
         fetch:async (url, opciones) => {
-            peticiones.push({url, method:opciones.method, body:opciones.body ? JSON.parse(opciones.body) : undefined});
+            peticiones.push({url, method:opciones.method, headers:opciones.headers, body:opciones.body ? JSON.parse(opciones.body) : undefined});
             let datos;
             if (url === '/api/categorias') datos = config.categorias ? await config.categorias() : [{id_categoria:4,nombre:'Belleza'}];
             else if (url.startsWith('/api/emprendimientos?')) datos = config.buscar ? await config.buscar(url) : [{id_emprendimiento:1,nombre:'Belleza Camila',comuna:'Santiago'}];
@@ -52,8 +52,9 @@ function iniciar(config = {}) {
             else if (url.startsWith('/api/disponibilidad?')) datos = config.disponibilidad ? await config.disponibilidad(url) : [{hora_inicio:'11:00:00'},{hora_inicio:'12:00:00'}];
             else if (url === '/api/reservas/invitada/contexto') datos = {disponible:true};
             else if (url === '/api/reservas/invitada') {
+                if(config.respuestaReserva)return await config.respuestaReserva(opciones);
                 if (config.reservar) await config.reservar();
-                reservasCreadas++; datos = {reserva:{id_reserva:21,token_consulta:'11111111-1111-4111-8111-111111111111'}};
+                reservasCreadas++; datos = {reserva:{id_reserva:21,estado:'pendiente_abono',token_consulta:'11111111-1111-4111-8111-111111111111'}};
             } else throw Error('Ruta inesperada: ' + url);
             return {ok:true,status:200,text:async () => JSON.stringify(datos)};
         }
@@ -267,10 +268,10 @@ test('Datos completos habilitan reserva sin casilla y evitan doble envío', asyn
     assert.equal(p.elementos['#camposReserva'].disabled,true); assert.equal(p.elementos['#consulta'].hidden,false); assert.match(p.elementos['#consulta'].href,/^\/consulta\/#/); assert.match(p.elementos['#estado'].textContent,/pendiente de abono/); assert.equal(p.elementos['#estado'].dataset.tipo,'exito');
     await p.elementos['#formReserva'].requestSubmit(); assert.equal(p.creadas(),1); assert(!p.peticiones.some(r=>/abonos|suscripcion/.test(r.url)));
 });
-test('Fallo al reservar conserva datos, libera controles y permite reintentar', async () => {
+test('Fallo al reservar conserva intento, bloquea edición y permite verificar', async () => {
     let falla=true; const p=iniciar({reservar:async()=>{if(falla)throw Error('El horario ya no está disponible');}}); await p.preparar(); await p.elementos['#formReserva'].requestSubmit();
-    assert.equal(p.creadas(),0); assert.equal(p.elementos['#camposReserva'].disabled,false); assert.equal(p.elementos['#estado'].dataset.tipo,'error'); assert.equal(p.nombre.value,' Clienta prueba ');
-    falla=false; await p.elementos['#formReserva'].requestSubmit(); assert.equal(p.creadas(),1);
+    assert.equal(p.creadas(),0); assert.equal(p.elementos['#camposReserva'].disabled,true); assert.equal(p.elementos['#estado'].dataset.tipo,'error'); assert.equal(p.nombre.value,' Clienta prueba ');
+    falla=false; await p.elementos['#verificarSolicitud'].onclick(); assert.equal(p.creadas(),1);
 });
 test('Comenzar otra reserva limpia datos y vuelve a exigir profesional y hora', async () => {
     const p=iniciar(); await p.preparar(); await p.elementos['#formReserva'].requestSubmit(); await p.elementos['#nuevaReserva'].onclick();
@@ -469,8 +470,52 @@ test('Indicaciones conserva catálogo y reserva aunque coordenadas de API no est
  const p=iniciar({buscar:async()=>[{id_emprendimiento:1,nombre:'Demo',comuna:'Santiago',latitud:0,longitud:0,ubicacion_confirmada:true}]});await p.preparar();
  const doc={createElement:tag=>new Elemento(tag)};
  p.configurarIndicaciones(negocio=>crearVistaIndicaciones(doc,negocio));
- assert.match(textos(p.elementos['#resultados']),/Ubicación exacta no disponible/);
+ assert.match(textos(p.elementos['#resultados']),/Coordenadas disponibles.*pendiente de confirmar/);
  assert(!p.elementos['#resultados'].children[0].children.some(n=>n.tag==='a'));
  assert.equal(p.elementos['#crearReserva'].disabled,false);assert.equal(p.creadas(),0);
  assert(p.peticiones.every(r=>r.method==='GET'));
+});
+
+const respuestaInvitada=(status=201,body={reserva:{id_reserva:21,estado:'pendiente_abono',token_consulta:'11111111-1111-4111-8111-111111111111'}})=>({ok:status>=200&&status<300,status,headers:{get:()=>null},text:async()=>JSON.stringify(body)});
+for(const caso of ['antes de crear','después de crear'])test('Respuesta perdida '+caso+' verifica exactamente la misma operación',async()=>{
+ let llamadas=0;const p=iniciar({respuestaReserva:async()=>{if(++llamadas===1)throw Error('Respuesta perdida simulada');return respuestaInvitada(caso==='antes de crear'?201:200);}});await p.preparar();
+ await p.elementos['#formReserva'].requestSubmit();assert.equal(p.elementos['#reserva'].dataset.intento,'resultado_incierto');assert.equal(p.elementos['#camposReserva'].disabled,true);
+ const antes=p.peticiones.length;await p.elementos['#formReserva'].requestSubmit();assert.equal(p.peticiones.length,antes);
+ p.nombre.value='No debe enviarse';p.elementos['#hora'].value='12:00:00';
+ await p.elementos['#verificarSolicitud'].onclick();const posts=p.peticiones.filter(x=>x.url==='/api/reservas/invitada');
+ assert.deepEqual(posts[0].body,posts[1].body);assert.equal(posts[0].headers['Idempotency-Key'],posts[1].headers['Idempotency-Key']);
+ assert.equal(p.peticiones.filter(x=>x.url.endsWith('/contexto')).length,1);assert.equal(p.elementos['#reserva'].dataset.intento,'reserva_completada');assert.match(p.elementos['#estado'].textContent,/recuperada/);
+ assert(!p.peticiones.some(x=>/abonos|suscripcion|notificaciones/.test(x.url)));
+});
+for(const [status,codigo,esperado]of [[409,'HORARIO_NO_DISPONIBLE','rechazo_definitivo'],[409,'CLAVE_CONTENIDO_DISTINTO','resultado_incierto'],[409,'INTENTO_EN_REVISION','resultado_incierto'],[410,'INTENTO_VENCIDO','intento_vencido'],[401,'CONTEXTO_NO_DISPONIBLE','intento_vencido'],[429,'LIMITE_INTENTOS','resultado_incierto'],[503,'NO_DISPONIBLE','resultado_incierto']])test('Reserva distingue HTTP '+status+' '+codigo,async()=>{
+ const p=iniciar({respuestaReserva:async()=>respuestaInvitada(status,{codigo,mensaje:'Error simulado'})});await p.preparar();await p.elementos['#formReserva'].requestSubmit();assert.equal(p.elementos['#reserva'].dataset.intento,esperado);
+ assert.equal(p.elementos['#camposReserva'].disabled,esperado!=='rechazo_definitivo');
+ if(esperado==='intento_vencido'){const n=p.peticiones.length;await p.elementos['#verificarSolicitud'].onclick();await p.elementos['#nuevaReserva'].onclick();assert.equal(p.peticiones.length,n);assert.match(p.elementos['#mensajeRecuperacion'].textContent,/podría existir/);}
+});
+for(const respuesta of [()=>({ok:true,status:201,text:async()=>'<html>'}),()=>respuestaInvitada(201,{}),()=>respuestaInvitada(200,{reserva:{id_reserva:21}})])test('Respuesta inválida o incompleta conserva incertidumbre',async()=>{
+ const p=iniciar({respuestaReserva:async()=>respuesta()});await p.preparar();await p.elementos['#formReserva'].requestSubmit();assert.equal(p.elementos['#reserva'].dataset.intento,'resultado_incierto');assert.equal(p.elementos['#consulta'].hidden,true);
+});
+test('Durante incertidumbre no cambia negocio, filtros, servicio ni consulta disponibilidad',async()=>{
+ const p=iniciar({respuestaReserva:async()=>{throw Error('Desconexión')}});await p.preparar();await p.elementos['#formReserva'].requestSubmit();const n=p.peticiones.length;
+ await p.elementos['#buscar'].requestSubmit();await p.elementos['#limpiarBusqueda'].onclick();await p.seleccionarMapa({id_emprendimiento:8,nombre:'Otro'});await p.elementos['#disponibilidad'].onclick();await p.elementos['#nuevaReserva'].onclick();assert.equal(p.peticiones.length,n);assert.equal(p.elementos['#camposReserva'].disabled,true);
+});
+test('Doble clic de verificación comparte un único envío pendiente',async()=>{
+ let n=0;const espera=diferida();const p=iniciar({respuestaReserva:async()=>{if(++n===1)throw Error('Red');return espera.promise;}});await p.preparar();await p.elementos['#formReserva'].requestSubmit();const a=p.elementos['#verificarSolicitud'].onclick();await p.elementos['#verificarSolicitud'].onclick();assert.equal(n,2);espera.resolve(respuestaInvitada(200));await a;assert.equal(p.elementos['#reserva'].dataset.intento,'reserva_completada');
+});
+test('429 conserva espera Retry-After y no envía antes del plazo',async()=>{
+ const p=iniciar({respuestaReserva:async()=>({...respuestaInvitada(429,{codigo:'LIMITE_INTENTOS'}),headers:{get:()=> '30'}})});await p.preparar();await p.elementos['#formReserva'].requestSubmit();const n=p.peticiones.length;await p.elementos['#verificarSolicitud'].onclick();assert.equal(p.peticiones.length,n);assert.equal(p.elementos['#verificarSolicitud'].disabled,true);
+});
+
+test('Un aviso temporizado antiguo no modifica un intento posterior',async()=>{
+ let ahora=Date.now(),aviso;class Reloj extends Date{static now(){return ahora;}}
+ let n=0;const p=iniciar({reloj:Reloj,temporizador:fn=>{aviso=fn;},respuestaReserva:async()=>++n===1?{...respuestaInvitada(429,{codigo:'LIMITE_INTENTOS'}),headers:{get:()=> '1'}}:respuestaInvitada(200)});
+ await p.preparar();await p.elementos['#formReserva'].requestSubmit();ahora+=2000;await p.elementos['#verificarSolicitud'].onclick();
+ await p.elementos['#nuevaReserva'].onclick();await p.preparar();await p.elementos['#formReserva'].requestSubmit();const texto=p.elementos['#estado'].textContent;aviso();
+ assert.equal(p.elementos['#estado'].textContent,texto);assert.equal(p.elementos['#reserva'].dataset.intento,'reserva_completada');assert.equal(p.elementos['#recuperacionReserva'].hidden,true);
+});
+test('Un rechazo 409 después de una desconexión no descarta el intento incierto',async()=>{
+ let n=0;const p=iniciar({respuestaReserva:async()=>{if(++n===1)throw Error('Red');return respuestaInvitada(409,{codigo:'HORARIO_NO_DISPONIBLE'});}});await p.preparar();await p.elementos['#formReserva'].requestSubmit();await p.elementos['#verificarSolicitud'].onclick();assert.equal(p.elementos['#reserva'].dataset.intento,'resultado_incierto');assert.equal(p.elementos['#camposReserva'].disabled,true);
+});
+test('La recuperación no requiere volver a consultar disponibilidad',async()=>{
+ let veces=0;const p=iniciar({respuestaReserva:async()=>{if(++veces===1)throw Error('Red');return respuestaInvitada(200);}});await p.preparar();await p.elementos['#formReserva'].requestSubmit();const n=p.peticiones.filter(x=>x.url.startsWith('/api/disponibilidad')).length;await p.elementos['#verificarSolicitud'].onclick();assert.equal(p.peticiones.filter(x=>x.url.startsWith('/api/disponibilidad')).length,n);
 });

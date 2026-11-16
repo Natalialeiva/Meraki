@@ -20,7 +20,7 @@ export function crearMapa({proveedor, mostrar, seleccionar, presentarSeleccion=(
         if (disponibles.length) {if(proveedor.invalidar) proveedor.invalidar();else proveedor.limpiar();}
         else proveedor.limpiar();
         mostrar({abierto, mensaje:disponibles.length ? 'Preparando vista…' : 'No hay emprendimientos con coordenadas válidas en esta búsqueda.'});
-        if (!disponibles.length) return;
+        if (!disponibles.length && !proveedor.admiteVacio) return;
         try {
             // Solo campos públicos de negocio, nunca estado de ubicación personal.
             const datos=disponibles;
@@ -32,7 +32,7 @@ export function crearMapa({proveedor, mostrar, seleccionar, presentarSeleccion=(
             });
             if (!abierto || actual!==version) return;
             proveedor.renderizar(contenido);
-            mostrar({abierto,mensaje:datos.length+' emprendimiento(s) disponibles'+(proveedor.modo==='google'?' en el mapa.':' en esta vista de preparación.')});
+            mostrar({abierto,mensaje:datos.length ? datos.length+' emprendimiento(s) disponibles'+(['google','leaflet'].includes(proveedor.modo)?' en el mapa.':' en esta vista de preparación.') : 'No hay emprendimientos con coordenadas válidas en esta búsqueda. El mapa muestra una referencia general de Santiago.'});
         } catch {
             if (actual===version && abierto) {proveedor.limpiar();mostrar({abierto,mensaje:'No se pudo preparar la vista. Puedes seguir usando las tarjetas o cerrar y volver a intentar.'});}
         }
@@ -73,8 +73,8 @@ export function montarMapa(documento, suscribir) {
         const pierdeFoco=!abierto && panel.contains?.(documento.activeElement);
         panel.hidden=!abierto;if(pierdeFoco)boton.focus();boton.setAttribute('aria-expanded',String(abierto));
         boton.textContent=abierto?'Cerrar mapa':'Ver mapa';estado.textContent=mensaje;
-        documento.querySelector('#tituloMapa').textContent=proveedor.modo==='google'?'Mapa de emprendimientos':'Vista de preparación del mapa';
-        documento.querySelector('#descripcionMapa').textContent=proveedor.modo==='google'?'Mapa real de Google. Puedes seleccionar un emprendimiento para consultar sus servicios.':'Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.';
+        documento.querySelector('#tituloMapa').textContent=['google','leaflet'].includes(proveedor.modo)?'Mapa de emprendimientos':'Vista de preparación del mapa';
+        documento.querySelector('#descripcionMapa').textContent=proveedor.modo==='leaflet'?'Cartografía de OpenStreetMap. Selecciona un marcador para consultar sus servicios.':proveedor.modo==='google'?'Mapa real de Google. Puedes seleccionar un emprendimiento para consultar sus servicios.':'Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.';
     },seleccionar:negocio=>globalThis.seleccionar?.(negocio)});
     boton.onclick=control.alternar;
     accion.onclick=()=>control.verServicios();

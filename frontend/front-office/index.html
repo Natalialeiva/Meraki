@@ -6,7 +6,8 @@
 <meta name="theme-color" content="#f6f0eb">
 <meta name="description" content="Explora emprendimientos de cuidado personal, elige un servicio y consulta sus horarios disponibles en Meraki.">
 <title>Meraki | Belleza y bienestar</title>
-<link rel="stylesheet" href="styles.css?v=filtros-aplicados-1">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="styles.css?v=ajustes-moviles-2">
 </head>
 <body>
 <a class="saltar" href="#buscar">Saltar a la búsqueda</a>
@@ -24,6 +25,7 @@
             <figure class="banner-oficial-nuevo">
                 <img src="assets/banner-meraki-nuevo.png" width="1672" height="941" alt="Encuentra el cuidado que buscas, cerca de ti. Descubre servicios de cuidado personal ofrecidos por emprendedoras" fetchpriority="high">
             </figure>
+            <a class="banner-ampliable" href="assets/banner-meraki-nuevo.png" target="_blank" rel="noopener" aria-label="Abrir el banner original en otra pestaña para ampliar su texto">Abrir banner para ampliar <span aria-hidden="true">↗</span></a>
             <div class="hero-acciones">
                 <a class="hero-cta" href="#catalogo">Explorar emprendimientos <span aria-hidden="true">→</span></a>
             </div>
@@ -61,7 +63,7 @@
         <section id="panelMapa" class="mapaPreparacion" hidden aria-labelledby="tituloMapa">
             <h3 id="tituloMapa">Vista de preparación del mapa</h3>
             <p id="descripcionMapa">Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.</p>
-            <p class="ayuda">El mapa real solo se habilitará con configuración y autorización previas. Abrirlo establecerá conexiones con Google. La vista de preparación no se conecta y tu ubicación no se comparte.</p>
+            <p class="ayuda">Abrir el mapa conecta con OpenStreetMap para cargar cartografía. No requiere clave. Tu ubicación personal no se utiliza para centrarlo ni se envía como coordenadas al proveedor.</p>
             <p id="estadoMapa" role="status" aria-live="polite"></p>
             <div id="negociosMapa" class="acciones" aria-label="Emprendimientos con coordenadas válidas"></div>
             <section id="seleccionMapa" class="seleccionMapa" hidden aria-label="Emprendimiento seleccionado" aria-live="polite">
@@ -109,11 +111,16 @@
                 </section>
             </div>
         </fieldset></form>
+        <section id="recuperacionReserva" class="paso" hidden aria-label="Recuperación de la solicitud">
+            <p id="mensajeRecuperacion" role="status" aria-live="polite" aria-atomic="true"></p>
+            <button id="verificarSolicitud" class="secundario" type="button" aria-describedby="mensajeRecuperacion">Verificar mi solicitud</button>
+        </section>
         <div class="continuarReserva"><p><a id="consulta" hidden>Consultar reserva y pagar abono</a></p><button id="nuevaReserva" class="secundario" type="button" hidden>Comenzar otra reserva</button></div>
     </section>
 </main>
 <footer class="pie"><p>Catálogo de servicios de cuidado personal</p><a href="#inicio">Volver al inicio <span aria-hidden="true">↑</span></a></footer>
-<script src="front.js?v=avisos-servicios-1"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="front.js?v=recuperacion-invitada-1"></script>
 <script type="module" src="ubicacion.mjs?v=a3-2"></script>
 <script type="module" src="mapa.mjs?v=a3-4-1"></script>
 </body>

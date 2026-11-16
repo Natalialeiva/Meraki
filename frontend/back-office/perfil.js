@@ -1,6 +1,6 @@
 (function (raiz) {
     // El servidor determina la propietaria; el formulario solo envía campos editables.
-    const campos = ['nombre', 'descripcion', 'direccion', 'comuna', 'telefono'];
+    const campos = ['nombre', 'descripcion', 'direccion', 'comuna', 'telefono', 'latitud', 'longitud'];
     function montar({form, estado, selector, api, alGuardar}) {
         const grupo = form.querySelector('fieldset');
         const entradas = Object.fromEntries(campos.map(campo => [campo, form.elements.namedItem(campo)]));
@@ -26,6 +26,13 @@
             if (!datos.nombre) {
                 estado.textContent = 'Indica el nombre del emprendimiento.';
                 entradas.nombre.focus();
+                return;
+            }
+            const numero = (v, limite) => v !== null && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(v) && Number.isFinite(Number(v)) && Math.abs(Number(v)) <= limite;
+            const vacias = datos.latitud === null && datos.longitud === null;
+            if (!vacias && (!numero(datos.latitud, 90) || !numero(datos.longitud, 180))) {
+                estado.textContent = 'Completa ambas coordenadas: latitud entre -90 y 90 y longitud entre -180 y 180, o deja ambas vacías.';
+                entradas.latitud.focus();
                 return;
             }
             guardando = true;

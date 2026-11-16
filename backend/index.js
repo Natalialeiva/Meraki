@@ -3810,7 +3810,9 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
             descripcion: 1000,
             direccion: 200,
             comuna: 100,
-            telefono: 20
+            telefono: 20,
+            latitud: null,
+            longitud: null
         };
 
         const datos = req.body || {};
@@ -3823,6 +3825,23 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
             });
         }
 
+        const tieneLatitud = Object.hasOwn(datos, 'latitud');
+        const tieneLongitud = Object.hasOwn(datos, 'longitud');
+        let ubicacion;
+        if (tieneLatitud || tieneLongitud) {
+            const numero = (v, limite) => {
+                if (typeof v !== 'number' && !(typeof v === 'string' && /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(v.trim()))) return null;
+                const n = Number(v);
+                return Number.isFinite(n) && Math.abs(n) <= limite ? n : null;
+            };
+            const borrar = datos.latitud === null && datos.longitud === null;
+            const latitud = numero(datos.latitud, 90), longitud = numero(datos.longitud, 180);
+            if (!tieneLatitud || !tieneLongitud || (!borrar && (latitud === null || longitud === null))) {
+                return res.status(400).json({mensaje:'Indica ambas coordenadas válidas: latitud entre -90 y 90 y longitud entre -180 y 180, o deja ambas vacías.'});
+            }
+            ubicacion = borrar ? {latitud:null,longitud:null} : {latitud,longitud};
+        }
+
         // Evitamos que se modifiquen campos protegidos,
         // como el propietario, el estado o el identificador.
         for (const campo of campos) {
@@ -3832,6 +3851,7 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
                 });
             }
 
+            if (campo === "latitud" || campo === "longitud") continue;
             const valor = datos[campo];
 
             // Permitimos null para limpiar los campos opcionales.
@@ -3857,6 +3877,7 @@ app.patch("/api/emprendimientos/:id", verificarSesion, async (req, res) => {
 
         for (const campo of campos) {
             valores.push(
+                campo === "latitud" || campo === "longitud" ? ubicacion[campo] :
                 datos[campo] === null ? null : datos[campo].trim()
             );
 
