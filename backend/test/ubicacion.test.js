@@ -46,11 +46,15 @@ test('Dejar ubicación borra memoria e ignora callbacks tardíos incluso tras re
 test('Montaje accesible conserva filtros y búsqueda sin red ni almacenamiento',async()=>{
     const {montarUbicacion}=await modulo;
     const nodos=Object.fromEntries(['#usarUbicacion','#dejarUbicacion','#estadoUbicacion'].map(k=>[k,{dataset:{},setAttribute(){}}]));
-    const consultas=[];let aceptar;
+    const consultas=[];let aceptar,rechazar;
     const doc={querySelector:s=>{consultas.push(s);assert(nodos[s]);return nodos[s];}};
-    const control=montarUbicacion(doc,{geolocation:{getCurrentPosition:ok=>{aceptar=ok;}}},true);
+    const control=montarUbicacion(doc,{geolocation:{getCurrentPosition:(ok,error)=>{aceptar=ok;rechazar=error;}}},true);
     assert.equal(aceptar,undefined);nodos['#usarUbicacion'].onclick();assert.equal(nodos['#usarUbicacion'].disabled,true);
-    aceptar(resultado);assert.equal(nodos['#dejarUbicacion'].hidden,false);nodos['#dejarUbicacion'].onclick();assert.equal(control.obtener(),null);
+    aceptar(resultado);assert.equal(nodos['#dejarUbicacion'].hidden,false);
+    assert.equal(nodos['#estadoUbicacion'].hidden,true);assert.equal(nodos['#estadoUbicacion'].textContent,'');
+    nodos['#usarUbicacion'].onclick();assert.equal(nodos['#estadoUbicacion'].hidden,false);
+    rechazar({code:1});assert.equal(nodos['#estadoUbicacion'].hidden,false);assert.match(nodos['#estadoUbicacion'].textContent,/Permiso rechazado/);
+    nodos['#dejarUbicacion'].onclick();assert.equal(control.obtener(),null);
     assert.equal(nodos['#dejarUbicacion'].hidden,true);
     const fuente=fs.readFileSync(path.join(__dirname,'../../frontend/front-office/ubicacion.mjs'),'utf8');
     assert.doesNotMatch(fuente,/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|\.cookie|console\.|watchPosition|location\.(?:href|search)/);

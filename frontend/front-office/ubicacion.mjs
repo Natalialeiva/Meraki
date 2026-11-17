@@ -49,7 +49,8 @@ export function montarUbicacion(documento, navegador, seguro) {
         usar.setAttribute('aria-busy', String(estado.pendiente));
         usar.textContent = estado.pendiente ? 'Obteniendo ubicación…' : estado.activa ? 'Actualizar mi ubicación' : 'Usar mi ubicación';
         dejar.hidden = !estado.activa && !estado.pendiente;
-        mensaje.textContent = estado.mensaje;
+        mensaje.hidden = estado.codigo === 'obtenida';
+        mensaje.textContent = mensaje.hidden ? '' : estado.mensaje;
         mensaje.dataset.estado = estado.codigo;
     }});
     usar.onclick = control.solicitar;

@@ -493,7 +493,7 @@ test('Indicaciones conserva catálogo y reserva aunque coordenadas de API no est
  const p=iniciar({buscar:async()=>[{id_emprendimiento:1,nombre:'Demo',comuna:'Santiago',latitud:0,longitud:0,ubicacion_confirmada:true}]});await p.preparar();
  const doc={createElement:tag=>new Elemento(tag)};
  p.configurarIndicaciones(negocio=>crearVistaIndicaciones(doc,negocio));
- assert.match(textos(p.elementos['#resultados']),/Coordenadas disponibles.*pendiente de confirmar/);
+ assert.match(textos(p.elementos['#resultados']),/Coordenadas disponibles en el mapa\./);
  assert(!p.elementos['#resultados'].children[0].children.some(n=>n.tag==='a'));
  assert.equal(p.elementos['#crearReserva'].disabled,false);assert.equal(p.creadas(),0);
  assert(p.peticiones.every(r=>r.method==='GET'));

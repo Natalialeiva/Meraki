@@ -11,7 +11,10 @@
     "start": "node index.js",
     "db:notificaciones": "node scripts/aplicar-migraciones-notificaciones.js",
     "prueba:recuperacion": "node scripts/probar-recuperacion-gmail.js --enviar-confirmacion",
-    "test:aislado": "node scripts/probar-mvp-aislado.cjs --ejecutar"
+    "test:aislado": "node scripts/probar-mvp-aislado.cjs --ejecutar",
+    "evaluacion:configurar": "node scripts/preparar-evaluacion.cjs --configurar",
+    "evaluacion:preparar": "node scripts/preparar-evaluacion.cjs --crear",
+    "evaluacion:iniciar": "node scripts/iniciar-evaluacion.cjs"
   },
   "keywords": [],
   "author": "",

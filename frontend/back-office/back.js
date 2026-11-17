@@ -415,7 +415,58 @@ $('#reintentarAgenda').onclick=async()=>{
     if(sesion===versionSesion&&negocio===$('#negocio').value&&!$('#panel').hidden&&$('#reintentarAgenda').hidden)$('#cargar').focus();
 };
 
-async function notificaciones(){const datos=await api('/api/notificaciones');mostrar($('#notificaciones'),datos);[...$('#notificaciones').children].forEach((a,i)=>{const n=datos[i];if(!n)return;const opciones=n.requiere_revision?[['entregado','Confirmar entrega'],['no_entregado','Confirmar que no se entregó']]:['fallido','pendiente'].includes(n.estado)&&n.intentos<3?[['reintentar','Reintentar envío']]:[];if(!opciones.length)return;const label=document.createElement('label'),e=document.createElement('textarea');label.textContent='Evidencia (sin enlaces privados ni datos personales)';e.minLength=10;e.maxLength=500;label.append(e);a.append(label);for(const [decision,titulo] of opciones){const b=document.createElement('button');b.textContent=titulo;b.onclick=async()=>{if(e.value.trim().length<10){estado.textContent='Registra al menos 10 caracteres de evidencia.';return;}if(!confirm(titulo+' para la reserva '+n.id_reserva+'?'))return;for(const x of a.querySelectorAll('button'))x.disabled=true;try{const d=await api('/api/notificaciones/'+n.id_notificacion+'/'+(decision==='reintentar'?'reintentar':'revisar'),'POST',{decision,evidencia:e.value});estado.textContent=d.requiereRevision?'Resultado incierto. Revisa el proveedor antes de reenviar.':d.enviado?'Proveedor aceptó el mensaje.':d.revisado?'Revisión registrada.':'No se envió. Consulta el estado actualizado.';await notificaciones();}catch(err){estado.textContent=err.message;for(const x of a.querySelectorAll('button'))x.disabled=false;}};a.append(b);}});}
+let versionNotificaciones=0;
+async function notificaciones(){
+    const version=++versionNotificaciones,sesion=versionSesion;
+    const vigente=()=>version===versionNotificaciones&&sesion===versionSesion;
+    const lista=$('#notificaciones'),aviso=$('#estadoNotificaciones'),boton=$('#actualizar');
+    lista.replaceChildren();lista.setAttribute('aria-busy','true');
+    aviso.textContent='Cargando notificaciones…';boton.disabled=true;
+    try{
+        const datos=await api('/api/notificaciones','GET',undefined,vigente);
+        if(!vigente())return;
+        if(!Array.isArray(datos)||datos.some(n=>!n||typeof n!=='object'))throw Error('Respuesta inválida');
+        aviso.textContent=datos.length?'Notificaciones actualizadas.':'Todavía no hay correos de confirmación para mostrar.';
+        datos.forEach(n=>{
+            const a=MerakiNotificacionesUI.tarjeta(document,n);lista.append(a);
+            const opciones=MerakiNotificacionesUI.modelo(n).opciones;
+            if(!opciones.length)return;
+            let accionEnCurso=false;
+            const controles=document.createElement('details'),titulo=document.createElement('summary');
+            titulo.textContent='Revisar envío';controles.append(titulo);a.append(controles);
+            const label=document.createElement('label'),e=document.createElement('textarea');
+            label.textContent='Evidencia (sin enlaces privados ni datos personales)';
+            e.minLength=10;e.maxLength=500;label.append(e);controles.append(label);
+            for(const [decision,titulo] of opciones){
+                const b=document.createElement('button');b.textContent=titulo;
+                b.onclick=async()=>{
+                    if(!vigente()||accionEnCurso)return;
+                    if(e.value.trim().length<10){estado.textContent='Registra al menos 10 caracteres de evidencia.';e.focus();return;}
+                    if(!confirm(titulo+' para la reserva '+n.id_reserva+'?'))return;
+                    accionEnCurso=true;
+                    for(const x of a.querySelectorAll('button'))x.disabled=true;
+                    try{
+                        const d=await api('/api/notificaciones/'+n.id_notificacion+'/'+(decision==='reintentar'?'reintentar':'revisar'),'POST',{decision,evidencia:e.value},vigente);
+                        if(!vigente())return;
+                        estado.textContent=d.requiereRevision?'Resultado incierto. Revisa el proveedor antes de reenviar.':d.enviado?'Proveedor aceptó el mensaje.':d.revisado?'Revisión registrada.':'No se envió. Consulta el estado actualizado.';
+                        await notificaciones();
+                    }catch(error){
+                        if(vigente()){
+                            estado.textContent='No se pudo completar la acción. Actualiza la lista antes de intentar nuevamente.';
+                            for(const x of a.querySelectorAll('button'))x.disabled=false;
+                        }
+                    }finally{accionEnCurso=false;}
+                };
+                controles.append(b);
+            }
+        });
+    }catch(error){
+        if(vigente()){lista.replaceChildren();aviso.textContent='No se pudieron cargar las notificaciones. Intenta actualizar nuevamente.';}
+    }finally{
+        if(version===versionNotificaciones){lista.setAttribute('aria-busy','false');boton.disabled=false;}
+    }
+}
+
 async function iniciar(){
     const sesion=++versionSesion;
     versionAgenda++;

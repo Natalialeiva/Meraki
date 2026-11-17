@@ -77,7 +77,7 @@ async function montar(temporal={
             throw Error('Solicitud inesperada: '+url);
         },
         MerakiNavegacion:{montar:opciones=>{alCambiarVista=opciones.alCambiar;return {iniciar(){}};}},
-        MerakiAgenda,MerakiPagos,MerakiPresentacionReservas,MerakiDashboardGraficos,MerakiEstadisticasReservas:estadisticas,
+        MerakiNotificacionesUI:require('../../frontend/back-office/notificaciones-ui'),MerakiAgenda,MerakiPagos,MerakiPresentacionReservas,MerakiDashboardGraficos,MerakiEstadisticasReservas:estadisticas,
         MerakiResumen:{calcularReservasPorCerrar,calcularResumenOperativo(){throw Error('A4.1b no debe ejecutarse');}},
         MerakiResumenTemporal:temporal,
         MerakiIncorporacion:modulo,MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,

@@ -212,7 +212,7 @@ globalThis.addEventListener?.('focus',()=>{void actualizarServicios();});
 let resultadosCatalogo = [], ubicacionCatalogo = null, calcularDistancia = null;
 function actualizarCercania(posicion, calcular) {
     ubicacionCatalogo = posicion ? {...posicion} : null; calcularDistancia = calcular;
-    $('#controlCercania').hidden = !posicion; $('#notaDistancias').hidden = !posicion;
+    $('#controlCercania').hidden = !posicion;
     if (!posicion) $('#ordenCercania').value = 'original';
     dibujarCatalogo();
 }
@@ -234,7 +234,7 @@ function dibujarCatalogo() {
             b.type = 'button'; b.dataset.accion='servicios'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
             a.append(h, p, b);
             if (vistaIndicaciones) a.append(vistaIndicaciones(d));
-            else {const aviso=document.createElement('p');aviso.className='ayuda';aviso.textContent='Ubicación exacta no disponible';a.append(aviso);}
+            else {const aviso=document.createElement('p');aviso.className='ayuda';aviso.textContent='Ubicación exacta no disponible.';a.append(aviso);}
             if (ubicacionCatalogo) {
                 const distanciaTexto = document.createElement('p'); distanciaTexto.className = 'distanciaNegocio';
                 distanciaTexto.textContent = distancia === null ? 'Distancia no disponible' : 'Aprox. ' + (distancia < 0.1 ? 'menos de 0,1' : new Intl.NumberFormat('es-CL', {maximumFractionDigits:1}).format(distancia)) + ' km';

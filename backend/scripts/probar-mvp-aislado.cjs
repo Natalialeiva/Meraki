@@ -16,7 +16,7 @@ async function main(){
   try{await setup.query('CREATE EXTENSION btree_gist');}finally{await setup.end();}
   console.log('Base exclusiva de prueba: '+nombre);
   const files=fs.readdirSync(path.join(__dirname,'../test')).filter(f=>f.endsWith('.test.js')).map(f=>'test/'+f);
-  const child=spawn(process.execPath,['--test',...files],{cwd:path.join(__dirname,'..'),stdio:'inherit',env:{...process.env,DB_NAME:nombre,MERAKI_DB_TEST:'1',MERAKI_MVP_DB_TEST:'1',MERAKI_SUSCRIPCIONES_AUTOMATICAS:'0'}});
+  const child=spawn(process.execPath,['--require',path.join(__dirname,'red-aislada-pruebas.cjs'),'--test',...files],{cwd:path.join(__dirname,'..'),stdio:'inherit',env:{...process.env,DB_NAME:nombre,MERAKI_DB_TEST:'1',MERAKI_MVP_DB_TEST:'1',MERAKI_SUSCRIPCIONES_AUTOMATICAS:'0',MERAKI_PROVEEDORES_EXTERNOS:'1',PUBLIC_BASE_URL:'http://localhost:3000',WEBPAY_RETURN_URL:'http://localhost:3000/api/abonos/retorno',GMAIL_USER:'',GOOGLE_CLIENT_ID:'',GOOGLE_CLIENT_SECRET:'',GOOGLE_REFRESH_TOKEN:''}});
   const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
   if(code!==0)process.exitCode=1;
  }finally{

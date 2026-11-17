@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f7f5f8">
 <title>Mi negocio | Meraki</title>
-<link rel="stylesheet" href="gestion.css?v=dashboard-pulido-2">
+<link rel="stylesheet" href="gestion.css?v=notificaciones-1">
 </head>
 <body>
 <a class="saltar" href="#tituloVista">Saltar al contenido</a>
@@ -42,7 +42,7 @@
 <label>RUT <input name="rut" maxlength="20" placeholder="12.345.678-9" required></label>
 <label>Correo de la cuenta <input name="correo" type="email" maxlength="150" autocomplete="email" required></label>
 <label>Teléfono (opcional) <input name="telefono" type="tel" maxlength="20" autocomplete="tel"></label>
-<label>Contraseña nueva <input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+<label>Contraseña <input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
 <label>Confirma tu contraseña <input name="confirmacion" type="password" minlength="12" autocomplete="new-password" required></label>
 <p>La contraseña debe tener al menos 12 caracteres. Tu cuenta incluye un mes gratuito; no se inscribe una tarjeta ni se activa un cobro automático al registrarte.</p>
 <p id="estadoRegistro" class="mensaje-incorporacion" role="status" aria-live="polite"></p>
@@ -488,9 +488,11 @@
 </section>
 <section class="vista" data-vista="notificaciones" hidden>
 <h2 id="tituloNotificaciones" tabindex="-1">Notificaciones</h2>
-<p>Antes de resolver un envío interrumpido, verifica su entrega en el proveedor y registra la evidencia. Un resultado incierto debe permanecer en revisión.</p>
+<p>Consulta el estado de los correos de confirmación enviados a tus clientas.</p>
+<details class="notificaciones-ayuda"><summary>Ayuda sobre los estados de envío</summary><p>Un envío aceptado por Gmail no confirma su lectura ni su llegada a la bandeja de entrada. Antes de resolver un envío interrumpido, comprueba su entrega en el proveedor y registra la evidencia. Un resultado incierto debe permanecer en revisión.</p></details>
 <button id="actualizar">Actualizar notificaciones</button>
-<div id="notificaciones"></div>
+<p id="estadoNotificaciones" role="status" aria-live="polite" aria-atomic="true"></p>
+<div id="notificaciones" aria-busy="false"></div>
 </section>
 </div>
 </main>
@@ -509,6 +511,7 @@
 <script src="suscripcion.js?v=gestion-2"></script>
 <script src="navegacion.js?v=dashboard-1"></script>
 <script src="dashboard-graficos.js?v=evolucion-seis-meses-1"></script>
-<script src="back.js?v=dashboard-pulido-2"></script>
+<script src="notificaciones-ui.js?v=tarjetas-1"></script>
+<script src="back.js?v=notificaciones-1"></script>
 </body>
 </html>

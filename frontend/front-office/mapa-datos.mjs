@@ -21,8 +21,8 @@ export function crearVistaIndicaciones(documento, negocio, destinoConfirmado=fal
     const destino=crearEnlaceIndicaciones(negocio,destinoConfirmado);
     const mensaje=documento.createElement('p');mensaje.className='ayuda';
     if (!destino) mensaje.textContent=evaluarUbicacion(negocio).coordenadas
-        ? 'Coordenadas disponibles en el mapa. Dirección exacta pendiente de confirmar; Cómo llegar no está habilitado.'
-        : 'Ubicación exacta no disponible';
+        ? 'Coordenadas disponibles en el mapa.'
+        : 'Ubicación exacta no disponible.';
     else {
         const enlace=documento.createElement('a');enlace.href=destino;
         enlace.className='enlaceIndicaciones';enlace.textContent='Cómo llegar';

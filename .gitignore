@@ -7,8 +7,16 @@ node_modules/
 
 # ExcepciÃ³n para futuros archivos de ejemplo sin credenciales
 !.env.example
-# Configuración local de clave pública restringida de Maps
+# Configuraciï¿½n local de clave pï¿½blica restringida de Maps
 /frontend/front-office/mapas-config.local.json
 
 # FotografÃ­as locales de servicios (copiar por canal privado)
 backend/almacenamiento/
+
+# Artefactos locales de entrega y ejecuciÃ³n
+*.log
+*.zip
+*.dump
+*.backup
+coverage/
+.cache/

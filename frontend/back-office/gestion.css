@@ -121,3 +121,22 @@ body:has(#acceso:not([hidden]),#altaNegocio:not([hidden]))>.estado-global{positi
 
 /* Mensajes de acceso junto al formulario. */
 #estadoAcceso .estado-global,#estadoAccesoNegocio .estado-global{position:static;max-width:100%;margin:16px 0;padding:12px 14px;box-shadow:none;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+
+/* Confirmaciones: presentación, sin cambios en el envío. */
+#notificaciones{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));align-items:start}
+#notificaciones .notificacion-cabecera{display:flex;justify-content:space-between;align-items:start;gap:12px;flex-wrap:wrap}
+#notificaciones h3{font-size:16px;margin:0;line-height:1.4}
+#notificaciones .notificacion-estado{background:#eee8f7;color:#56367a;border-radius:16px;padding:5px 10px;font-size:12px;font-weight:700}
+#notificaciones .notificacion-atencion{background:#fff1d8;color:#754509}
+#notificaciones .notificacion-reserva{font-size:14px;font-weight:600;margin:10px 0 16px}
+#notificaciones .notificacion-datos{display:grid;gap:4px;margin:0 0 14px}
+#notificaciones dt{font-size:12px;color:#655b70}
+#notificaciones dd{font-size:14px;margin:0 0 8px;overflow-wrap:anywhere}
+#notificaciones .notificacion-aviso{font-size:14px;background:#fff6e8;padding:10px;border-radius:8px;line-height:1.5}
+#notificaciones details{border-top:1px solid var(--borde);padding-top:8px;margin-top:10px;min-width:0}
+#notificaciones summary,.notificaciones-ayuda summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;color:#624080;font-size:14px}
+#notificaciones summary:focus-visible,.notificaciones-ayuda summary:focus-visible{outline:3px solid #8055a4;outline-offset:3px;border-radius:4px}
+#notificaciones textarea{max-width:100%;box-sizing:border-box}
+#notificaciones button{min-height:44px;white-space:normal;max-width:100%}
+#estadoNotificaciones{font-size:14px;line-height:1.5}
+@media(max-width:480px){#notificaciones article{padding:14px}#notificaciones{grid-template-columns:minmax(0,1fr)}}
