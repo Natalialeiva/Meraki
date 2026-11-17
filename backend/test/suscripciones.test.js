@@ -39,11 +39,11 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
  const esquema='meraki_sub_test_'+Date.now();assert.match(esquema,/^meraki_sub_test_\d+$/);
  const configuracion={host:process.env.DB_HOST,port:Number(process.env.DB_PORT),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD};
  const admin=new Pool(configuracion);let pool;
- let fecha='2026-11-04',inicios=0,finalizaciones=0,cargos=0,consultas=0,revocaciones=0,modo='aprobar',modoFin='aprobar',esperarCargo;
+ let fecha='2026-11-04',inicios=0,finalizaciones=0,cargos=0,consultas=0,revocaciones=0,modo='aprobar',modoFin='aprobar',esperarCargo,falloInicio=false;
  const respuestas=new Map(),consentimiento={acepta_renovacion:true,version_plan:PLAN.version};
  const responder=(p,aprobado=true)=>({buy_order:p.orden_compra,details:[{buy_order:p.orden_tienda,commerce_code:p.codigo_comercio,amount:Number(p.monto),status:aprobado?'AUTHORIZED':'FAILED',response_code:aprobado?0:-1,authorization_code:'PRUEBA'}]});
  const proveedor={ambiente:'integracion',codigoComercio:'tienda-simulada',
-  async iniciar(usuario,correo,retorno){inicios++;assert.match(retorno,/\/api\/suscripcion\/retorno$/);return{token:'token-inscripcion-'+inicios,url_webpay:'https://webpay3gint.transbank.cl/webpayserver/bp_multicode_inscription.cgi'};},
+  async iniciar(usuario,correo,retorno){inicios++;assert.match(retorno,/\/api\/suscripcion\/retorno$/);if(falloInicio)throw Error('Respuesta perdida');return{token:'token-inscripcion-'+inicios,url_webpay:'https://webpay3gint.transbank.cl/webpayserver/bp_multicode_inscription.cgi'};},
   async finalizar(){finalizaciones++;if(modoFin==='timeout')throw Error('Simulado');return modoFin==='rechazar'?{response_code:-1}:{response_code:0,tbk_user:'identificador-privado-tbk',card_number:'XXXXXXXXXXXX6623',card_type:'Visa'};},
   async eliminar(token){assert.equal(token,'identificador-privado-tbk');revocaciones++;},
   async autorizar(usuario,token,p){assert.equal(token,'identificador-privado-tbk');cargos++;let r=responder(p,modo!=='rechazar');
@@ -84,6 +84,9 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
    const d=await servicio.obtener(1);assert.equal(d.suscripcion.estado,'prueba');assert.equal(d.suscripcion.fecha_fin_prueba,'2026-12-04');assert.equal(d.suscripcion.fecha_proximo_cobro,'2026-12-04');
    assert(!JSON.stringify(d).includes('identificador-privado'));assert(!JSON.stringify(d).includes('tarjeta_cifrada'));assert(!JSON.stringify(d).includes('usuario_oneclick'));
    assert.equal(d.suscripcion.tarjeta_ultimos4,'6623');assert.equal(d.suscripcion.tarjeta_tipo,'Visa');
+   assert.equal(d.suscripcion.renovacion_automatica,false);
+   const permiso=(await pool.query('SELECT reintento_autorizado,consentimiento_fecha FROM suscripcion')).rows[0];
+   assert.equal(permiso.reintento_autorizado,false);assert.equal(permiso.consentimiento_fecha,null);
    assert.equal(descifrar((await pool.query('SELECT tarjeta_cifrada FROM suscripcion')).rows[0].tarjeta_cifrada,'clave-prueba-suscripcion'),'identificador-privado-tbk');
    await post('inscribir').expect(409);
   });
@@ -93,6 +96,9 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
    await request(app).get('/api/suscripcion/retorno').query({TBK_TOKEN:'inventado'}).expect(404);assert.equal(finalizaciones,1);
   });
   await t.test('Antes del vencimiento no cobra; procesadores concurrentes cobran solo una vez',async()=>{
+   // Compatibilidad con una suscripción histórica cuyo consentimiento ya existía.
+   // Solo se prepara esta fila ficticia en PostgreSQL efímero.
+   await pool.query('UPDATE suscripcion SET renovacion_automatica=TRUE WHERE id_emprendedora=1');
    fecha='2026-12-03';await servicio.ciclo();assert.equal(cargos,0);
    fecha='2026-12-04';await Promise.all(Array.from({length:5},()=>servicio.procesar(1)));assert.equal(cargos,1);
    const d=await servicio.obtener(1);assert.equal(d.capacidades.configurar,true);assert.equal(d.suscripcion.estado,'activa');assert.equal(d.suscripcion.acceso_hasta,'2027-01-04');assert.equal(Number(d.pagos[0].monto),9990);
@@ -129,6 +135,8 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
   await t.test('Reinscripción no regala otra prueba y renueva el período vencido',async()=>{
    token=(await post('inscribir').expect(200)).body.token;await request(app).post('/api/suscripcion/retorno').send({TBK_TOKEN:token}).expect(303);
    assert.equal((await servicio.obtener(1)).suscripcion.fecha_fin_prueba,'2026-12-04');assert.equal(cargos,6);
+   assert.equal((await servicio.obtener(1)).suscripcion.renovacion_automatica,false);
+   await pool.query('UPDATE suscripcion SET renovacion_automatica=TRUE WHERE id_emprendedora=1');
    await servicio.procesar(1);assert.equal(cargos,7);assert.equal((await servicio.obtener(1)).suscripcion.acceso_hasta,'2027-06-04');
   });
   await t.test('Procesador atrasado cobra un solo mes desde hoy, sin acumular mensualidades',async()=>{
@@ -166,6 +174,65 @@ test('Suscripciones Oneclick: PostgreSQL aislado y proveedor simulado',{skip:pro
    }
    const procesador=crearSuscripciones(opciones());await procesador.ciclo();assert.equal(cargos,antes);
    await procesador.ciclo();assert.equal(cargos,antes+1);
+  });
+  await t.test('Inscripción independiente, prueba vigente y cobro manual con autorización sin activar renovaciones',async()=>{
+   fecha='2028-01-10';modo='aprobar';modoFin='aprobar';
+   const cuenta=(await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Manual','Prueba','MANUAL','manual@example.test','hash-fixture') RETURNING id_emprendedora")).rows[0].id_emprendedora;
+   await pool.query("INSERT INTO suscripcion(id_emprendedora,fecha_inicio,fecha_fin_prueba,acceso_hasta,monto_mensual,estado) VALUES($1,'2028-01-01','2028-02-01','2028-02-01',9990,'prueba')",[cuenta]);
+   const cargosAntes=cargos;
+   await post('inscribir',{acepta_inscripcion:false,version_plan:PLAN.version},cuenta).expect(400);
+   const r=await post('inscribir',{acepta_inscripcion:true,version_plan:PLAN.version},cuenta).expect(200);
+   await request(app).post('/api/suscripcion/retorno').send({TBK_TOKEN:r.body.token}).expect(303);
+   await request(app).get('/api/suscripcion/retorno').query({TBK_TOKEN:r.body.token}).expect(303);
+   let d=await servicio.obtener(cuenta);
+   assert.equal(d.suscripcion.fecha_inicio,'2028-01-01');assert.equal(d.suscripcion.fecha_fin_prueba,'2028-02-01');assert.equal(d.suscripcion.acceso_hasta,'2028-02-01');
+   assert.equal(d.suscripcion.renovacion_automatica,false);
+   await post('inscribir',{acepta_inscripcion:true,version_plan:PLAN.version},cuenta).expect(409);
+   const autorizar={acepta_cobro:true,version_plan:PLAN.version,ultimo_pago:null};
+   await post('cobrar',autorizar,cuenta).expect(409);assert.equal(cargos,cargosAntes);
+   fecha='2028-02-01';assert.equal(await servicio.procesar(cuenta),'omitida');assert.equal(cargos,cargosAntes);
+   for(const datos of [{},{...autorizar,acepta_cobro:false},{...autorizar,monto:1}])await post('cobrar',datos,cuenta).expect(400);
+   await post('cobrar',autorizar,999).expect(409);
+   const resultados=await Promise.all([post('cobrar',autorizar,cuenta),post('cobrar',autorizar,cuenta)]);
+   assert.deepEqual(resultados.map(r=>r.status).sort(),[200,409]);assert.equal(cargos,cargosAntes+1);
+   d=await servicio.obtener(cuenta);assert.equal(d.suscripcion.acceso_hasta,'2028-03-01');assert.equal(d.suscripcion.renovacion_automatica,false);assert.equal(d.pagos.length,1);assert.equal(Number(d.pagos[0].monto),9990);
+   autorizar.ultimo_pago=d.pagos[0].id_pago_suscripcion;
+   fecha='2028-03-01';modo='timeout';const incierto=await post('cobrar',autorizar,cuenta).expect(200);assert.equal(incierto.body.resultado,'revision');
+   await post('cobrar',autorizar,cuenta).expect(409);
+   autorizar.ultimo_pago=(await servicio.obtener(cuenta)).pagos[0].id_pago_suscripcion;
+   const trasIncierto=cargos;const recuperado=await post('cobrar',autorizar,cuenta).expect(200);assert.equal(recuperado.body.resultado,'aprobado');assert.equal(cargos,trasIncierto);
+   await post('cancelar',{},cuenta).expect(200);assert.equal((await servicio.obtener(cuenta)).suscripcion.acceso_hasta,'2028-04-01');
+   fecha='2028-04-01';await post('cobrar',autorizar,cuenta).expect(409);assert.equal(cargos,trasIncierto);
+  });
+  await t.test('Inicio de inscripción con respuesta perdida queda en revisión y bloquea otra alta',async()=>{
+   const cuenta=(await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Incierta','Prueba','INCIERTA','incierta@example.test','hash-fixture') RETURNING id_emprendedora")).rows[0].id_emprendedora;
+   falloInicio=true;const datos={acepta_inscripcion:true,version_plan:PLAN.version};
+   await post('inscribir',datos,cuenta).expect(502);
+   const veces=inicios;await post('inscribir',datos,cuenta).expect(409);assert.equal(inicios,veces);
+   const d=await servicio.obtener(cuenta);assert.equal(d.suscripcion.inscripcion,'revision');assert.equal(d.suscripcion.renovacion_automatica,false);
+   falloInicio=false;
+  });
+  await t.test('Dos autorizaciones simultáneas con pantalla antigua no duplican un rechazo',async()=>{
+   const cuenta=(await pool.query("INSERT INTO emprendedora(nombre,apellido,rut,correo,password_hash) VALUES('Rechazo','Prueba','RECHAZO','rechazo@example.test','hash-fixture') RETURNING id_emprendedora")).rows[0].id_emprendedora;
+   await pool.query("INSERT INTO suscripcion(id_emprendedora,fecha_inicio,fecha_fin_prueba,fecha_proximo_cobro,acceso_hasta,monto_mensual,estado,tarjeta_cifrada,usuario_oneclick,dia_cobro) VALUES($1,'2028-01-01','2028-02-01','2028-02-01','2028-02-01',9990,'vencida',$2,'manual-fixture',1)",[cuenta,cifrar('identificador-privado-tbk','clave-prueba-suscripcion')]);
+   modo='rechazar';const antes=cargos,datos={acepta_cobro:true,version_plan:PLAN.version,ultimo_pago:null};
+   const respuestas=await Promise.all([post('cobrar',datos,cuenta),post('cobrar',datos,cuenta)]);
+   assert.deepEqual(respuestas.map(r=>r.status).sort(),[200,409]);assert.equal(cargos,antes+1);
+   assert.equal((await servicio.obtener(cuenta)).suscripcion.renovacion_automatica,false);
+  });
+  await t.test('Alta real concede un solo mes desde el registro sin tarjeta y restringe configuración al vencer',async()=>{
+   const {crearCuenta}=require('../incorporacion');
+   const {tieneAcceso}=require('../acceso-suscripcion');
+   const valores=['Alta','Prueba','ALTA-UNICA','alta@example.test','hash-fixture',null];
+   const cuenta=(await crearCuenta(pool,valores)).rows[0].id_emprendedora;
+   const s=(await pool.query("SELECT renovacion_automatica,tarjeta_cifrada,fecha_inicio=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date inicio_hoy,fecha_fin_prueba=(fecha_inicio+interval '1 month')::date mes_correcto,acceso_hasta=fecha_fin_prueba acceso_prueba FROM suscripcion WHERE id_emprendedora=$1",[cuenta])).rows[0];
+   assert.equal(s.inicio_hoy,true);assert.equal(s.mes_correcto,true);assert.equal(s.acceso_prueba,true);assert.equal(s.renovacion_automatica,false);assert.equal(s.tarjeta_cifrada,null);
+   assert.equal(await tieneAcceso(pool,cuenta),true);
+   await assert.rejects(()=>crearCuenta(pool,valores),{code:'23505'});
+   assert.equal((await pool.query('SELECT count(*)::int n FROM suscripcion WHERE id_emprendedora=$1',[cuenta])).rows[0].n,1);
+   // Vencimiento exclusivamente en el registro ficticio de esta base efímera.
+   await pool.query("UPDATE suscripcion SET acceso_hasta=(CURRENT_TIMESTAMP AT TIME ZONE 'America/Santiago')::date WHERE id_emprendedora=$1",[cuenta]);
+   assert.equal(await tieneAcceso(pool,cuenta),false);
   });
  }finally{if(pool)await pool.end();await admin.query('DROP SCHEMA IF EXISTS '+esquema+' CASCADE');await admin.end();}
 });

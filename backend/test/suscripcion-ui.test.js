@@ -7,7 +7,7 @@ class Elemento{
 const plan={version:'meraki-9990-mes-v1'};
 const activa={estado:'prueba',renovacion_automatica:true,fecha_fin_prueba:'2026-12-04',fecha_proximo_cobro:'2026-12-04',acceso_hasta:'2026-12-04',tarjeta_ultimos4:'6623',tarjeta_tipo:'Visa'};
 function pantalla(responder){
- const elementos=Object.fromEntries(['estadoSuscripcion','detalleSuscripcion','pagosSuscripcion','consentimientoSuscripcion','inscribirSuscripcion','cancelarSuscripcion','reintentarSuscripcion','actualizarSuscripcion','consentimientoPlan'].map(id=>['#'+id,new Elemento()]));
+ const elementos=Object.fromEntries(['estadoSuscripcion','detalleSuscripcion','pagosSuscripcion','consentimientoSuscripcion','inscribirSuscripcion','cancelarSuscripcion','reintentarSuscripcion','actualizarSuscripcion','consentimientoPlan','cobrarSuscripcion'].map(id=>['#'+id,new Elemento()]));
  const cuerpo=new Elemento(),llamadas=[];let confirmar=true;
  const gestion=montar({contenedor:{querySelector:s=>elementos[s]},documento:{body:cuerpo,createElement:()=>new Elemento()},confirmar:()=>confirmar,
   api:async(url,method,datos)=>{llamadas.push({url,method,datos});return responder?responder(url,method,datos):{plan,suscripcion:null,pagos:[]};}});
@@ -20,7 +20,7 @@ test('Suscripción UI solo consulta al cargar y exige consentimiento para inscri
 test('Suscripción UI inicia inscripción con el plan exacto y envía solo TBK_TOKEN a Transbank',async()=>{
  const p=pantalla((url,method)=>method?{url:'https://webpay3gint.transbank.cl/webpayserver/bp_multicode_inscription.cgi',token:'token-inscripcion-simulado'}:{plan,suscripcion:null,pagos:[]});
  await p.gestion.cargar();p.aceptar();await p.elementos['#inscribirSuscripcion'].onclick();
- assert.deepEqual(p.llamadas[1].datos,{acepta_renovacion:true,version_plan:plan.version});assert.equal(p.cuerpo.children.length,1);
+ assert.deepEqual(p.llamadas[1].datos,{acepta_inscripcion:true,version_plan:plan.version});assert.equal(p.cuerpo.children.length,1);
  const form=p.cuerpo.children[0];assert.equal(form.method,'POST');assert.equal(form.enviado,true);assert.equal(form.children[0].name,'TBK_TOKEN');
 });
 test('Suscripción UI rechaza redirecciones fuera del proveedor y muestra error',async()=>{
@@ -50,4 +50,27 @@ test('Suscripción UI bloquea doble inscripción mientras espera respuesta',asyn
  let terminar;const p=pantalla((url,method)=>method?new Promise(resolve=>{terminar=resolve;}):{plan,suscripcion:null,pagos:[]});await p.gestion.cargar();p.aceptar();
  const primero=p.elementos['#inscribirSuscripcion'].onclick();await p.elementos['#inscribirSuscripcion'].onclick();assert.equal(p.llamadas.filter(x=>x.method).length,1);
  terminar({url:'https://webpay3gint.transbank.cl/inscribir',token:'token'});await primero;assert.equal(p.cuerpo.children.length,1);
+});
+
+test('Tarjeta inscrita sin renovación permite cancelar y oculta otra inscripción',async()=>{
+ const s={...activa,renovacion_automatica:false,acceso_vigente:true};
+ const p=pantalla(()=>({plan,suscripcion:s,pagos:[],planificador_habilitado:false}));await p.gestion.cargar();
+ assert.equal(p.elementos['#inscribirSuscripcion'].hidden,true);assert.equal(p.elementos['#cancelarSuscripcion'].hidden,false);
+ assert.equal(p.elementos['#cobrarSuscripcion'].hidden,true);
+ assert(p.elementos['#detalleSuscripcion'].children.some(x=>x.textContent.includes('planificador de renovaciones automáticas está detenido')));
+});
+
+test('Cobro manual pide confirmación, no usa renovación y bloquea doble clic',async()=>{
+ let resolver;const p=pantalla((url,method)=>method?new Promise(r=>{resolver=r;}):{plan,suscripcion:{...activa,renovacion_automatica:false,acceso_vigente:false},pagos:[]});
+ await p.gestion.cargar();assert.equal(p.elementos['#cobrarSuscripcion'].hidden,false);
+ p.confirmar(false);await p.elementos['#cobrarSuscripcion'].onclick();assert.equal(p.llamadas.length,1);
+ p.confirmar(true);const envio=p.elementos['#cobrarSuscripcion'].onclick();await p.elementos['#cobrarSuscripcion'].onclick();assert.equal(p.llamadas.filter(x=>x.method).length,1);
+ assert.deepEqual(p.llamadas[1].datos,{acepta_cobro:true,version_plan:plan.version,ultimo_pago:null});assert.equal(p.llamadas[1].url,'/api/suscripcion/cobrar');
+ resolver({resultado:'aprobado',mensaje:'Cobro procesado'});await envio;
+});
+
+test('Planificador detenido ofrece cobro manual y distingue la consulta de un cargo incierto',async()=>{
+ const p=pantalla(()=>({plan,planificador_habilitado:false,suscripcion:{...activa,acceso_vigente:false},pagos:[{estado:'pendiente',proceso:'revision',monto:9990}]}));
+ await p.gestion.cargar();assert.equal(p.elementos['#reintentarSuscripcion'].hidden,true);
+ assert.equal(p.elementos['#cobrarSuscripcion'].textContent,'Consultar resultado del cobro');
 });

@@ -25,14 +25,14 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
     }
     async function obtener(cuenta){
         const s=(await pool.query(fechas+' WHERE id_emprendedora=$1',[cuenta])).rows[0];
-        if(!s)return {plan:PLAN,suscripcion:null,pagos:[],capacidades:{crear_reservas:false,configurar:false}};
+        if(!s)return {plan:PLAN,planificador_habilitado:process.env.MERAKI_SUSCRIPCIONES_AUTOMATICAS!=='0',suscripcion:null,pagos:[],capacidades:{crear_reservas:false,configurar:false}};
         const pagos=(await pool.query(`SELECT id_pago_suscripcion,monto,estado,proceso,intento,codigo_respuesta,
          TO_CHAR(periodo_inicio,'YYYY-MM-DD') AS periodo_inicio,TO_CHAR(periodo_fin,'YYYY-MM-DD') AS periodo_fin,fecha_pago
          FROM pago_suscripcion WHERE id_suscripcion=$1 ORDER BY id_pago_suscripcion DESC LIMIT 12`,[s.id_suscripcion])).rows;
         const inscripcion=(await pool.query(`SELECT CASE WHEN estado IN ('iniciando','pendiente') AND fecha_creacion<CURRENT_TIMESTAMP-INTERVAL '20 minutes' THEN 'expirada' ELSE estado END AS estado
          FROM inscripcion_suscripcion WHERE id_suscripcion=$1 ORDER BY id_inscripcion DESC LIMIT 1`,[s.id_suscripcion])).rows[0];
         const vigente=Boolean(s.acceso_hasta&&s.acceso_hasta>hoy());
-        return {plan:PLAN,capacidades:{crear_reservas:vigente,configurar:vigente},suscripcion:{id_suscripcion:s.id_suscripcion,
+        return {plan:PLAN,planificador_habilitado:process.env.MERAKI_SUSCRIPCIONES_AUTOMATICAS!=='0',capacidades:{crear_reservas:vigente,configurar:vigente},suscripcion:{id_suscripcion:s.id_suscripcion,
             estado:s.estado==='cancelada'?'cancelada':s.acceso_hasta&&s.acceso_hasta>hoy()?s.estado:'vencida',
             fecha_inicio:s.fecha_inicio,fecha_fin_prueba:s.fecha_fin_prueba,fecha_proximo_cobro:s.fecha_proximo_cobro,
             acceso_hasta:s.acceso_hasta,acceso_vigente:Boolean(s.acceso_hasta&&s.acceso_hasta>hoy()),
@@ -44,7 +44,10 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
             throw error(400,'Debes aceptar el plan de $9.990 mensuales y su renovación automática');
     }
     async function inscribir(cuenta,datos,origenSolicitado){
-        consentimiento(datos);
+        const campos=Object.keys(datos||{});
+        const acepta=datos?.acepta_inscripcion===true||datos?.acepta_renovacion===true;
+        if(!acepta||datos?.version_plan!==PLAN.version||campos.some(k=>!['acepta_inscripcion','acepta_renovacion','version_plan'].includes(k)))
+            throw error(400,'Debes aceptar la inscripción de tarjeta y el plan de $9.990 mensuales');
         const retorno=urlRetorno(base,origenSolicitado);
         return exclusivo(cuenta,async db=>{
             const persona=(await db.query("SELECT correo FROM emprendedora WHERE id_emprendedora=$1 AND estado='activa'",[cuenta])).rows[0];
@@ -53,7 +56,7 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
             await db.query(`INSERT INTO suscripcion(id_emprendedora,fecha_inicio,monto_mensual,estado)
              VALUES($1,$2,$3,'cancelada') ON CONFLICT(id_emprendedora) DO NOTHING`,[cuenta,hoy(),PLAN.monto]);
             const s=(await db.query(fechas+' WHERE id_emprendedora=$1 FOR UPDATE',[cuenta])).rows[0];
-            if(s.renovacion_automatica&&s.tarjeta_cifrada)throw error(409,'Ya tienes una tarjeta inscrita y renovación habilitada');
+            if(s.tarjeta_cifrada)throw error(409,'Ya tienes una tarjeta inscrita. Cancela su inscripción antes de reemplazarla');
             const pendiente=(await db.query(`SELECT id_inscripcion FROM inscripcion_suscripcion WHERE id_suscripcion=$1
              AND (estado IN ('confirmando','revision') OR (estado IN ('iniciando','pendiente') AND fecha_creacion>CURRENT_TIMESTAMP-INTERVAL '20 minutes'))`,[s.id_suscripcion])).rows[0];
             if(pendiente)throw error(409,'Existe una inscripción en curso o en revisión; termina ese proceso antes de iniciar otro');
@@ -67,7 +70,7 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
                 const url=new URL(respuesta.url_webpay);
                 if(url.protocol!=='https:'||url.hostname!=='webpay3gint.transbank.cl'||url.username||url.password||typeof respuesta.token!=='string'||!respuesta.token||respuesta.token.length>255)throw Error('Respuesta inválida');
                 await db.query("UPDATE inscripcion_suscripcion SET token_hash=$1,estado='pendiente' WHERE id_inscripcion=$2",[hash(respuesta.token),i.id_inscripcion]);
-            }catch(e){await db.query("UPDATE inscripcion_suscripcion SET estado='rechazada',fecha_resolucion=CURRENT_TIMESTAMP WHERE id_inscripcion=$1",[i.id_inscripcion]);throw error(502,'No se pudo iniciar la inscripción; no se realizó un cobro');}
+            }catch(e){await db.query("UPDATE inscripcion_suscripcion SET estado='revision' WHERE id_inscripcion=$1",[i.id_inscripcion]);throw error(502,'El inicio de la inscripción requiere revisión; no inicies otra. No se realizó un cobro');}
             return {token:respuesta.token,url:respuesta.url_webpay,ambiente:'integracion'};
         });
     }
@@ -95,9 +98,9 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
             await db.query(`UPDATE suscripcion SET fecha_inicio=CASE WHEN $1 THEN $2::date ELSE fecha_inicio END,
              fecha_fin_prueba=$3,fecha_proximo_cobro=COALESCE(fecha_proximo_cobro,$3::date),acceso_hasta=COALESCE(acceso_hasta,$3::date),
              dia_cobro=COALESCE(dia_cobro,$4),usuario_oneclick=$5,tarjeta_cifrada=$6,tarjeta_ultimos4=$7,tarjeta_tipo=$8,
-             renovacion_automatica=TRUE,consentimiento_fecha=CURRENT_TIMESTAMP,consentimiento_version=$9,
-             estado=$10,reintento_autorizado=TRUE,cancelada_fecha=NULL WHERE id_suscripcion=$11`,
-             [primera,hoy(),fin,Number((primera?hoy():s.fecha_inicio).slice(8,10)),i.usuario_oneclick,cifrar(r.tbk_user,secreto),tarjeta.ultimos4,tarjeta.tipo,PLAN.version,vigente?(primera||hoy()<fin?'prueba':'activa'):'vencida',s.id_suscripcion]);
+             renovacion_automatica=FALSE,consentimiento_fecha=NULL,consentimiento_version=NULL,
+             estado=$9,reintento_autorizado=FALSE,cancelada_fecha=NULL WHERE id_suscripcion=$10`,
+             [primera,hoy(),fin,Number((primera?hoy():s.fecha_inicio).slice(8,10)),i.usuario_oneclick,cifrar(r.tbk_user,secreto),tarjeta.ultimos4,tarjeta.tipo,vigente?(primera||hoy()<fin?'prueba':'activa'):'vencida',s.id_suscripcion]);
             await db.query("UPDATE inscripcion_suscripcion SET estado='completada',fecha_resolucion=CURRENT_TIMESTAMP WHERE id_inscripcion=$1",[i.id_inscripcion]);
             await evento(db,s.id_suscripcion,'tarjeta_inscrita',{version:PLAN.version,primera_prueba:primera});await db.query('COMMIT');
         });
@@ -143,9 +146,20 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
         }
         await db.query('COMMIT');return resultado;
     }
-    async function procesar(cuenta){
+    async function cobrar(cuenta,datos){
+        if(datos?.acepta_cobro!==true||datos?.version_plan!==PLAN.version||
+            !(datos?.ultimo_pago===null||(Number.isSafeInteger(datos?.ultimo_pago)&&datos.ultimo_pago>0))||
+            Object.keys(datos).some(k=>!['acepta_cobro','version_plan','ultimo_pago'].includes(k)))
+            throw error(400,'Debes autorizar un cobro de $9.990 CLP para el período vencido');
+        return {resultado:await procesar(cuenta,{manual:true,ultimoPago:datos.ultimo_pago}),mensaje:'Revisa el resultado del cobro y la vigencia antes de realizar otra operación'};
+    }
+    async function procesar(cuenta,{manual=false,ultimoPago=null}={}){
         return exclusivo(cuenta,async db=>{
-            const s=(await db.query(fechas+' WHERE id_emprendedora=$1',[cuenta])).rows[0];if(!s)return 'omitida';
+            const s=(await db.query(fechas+' WHERE id_emprendedora=$1',[cuenta])).rows[0];if(!s){if(manual)throw error(409,'No hay una suscripción cobrable');return 'omitida';}
+            if(manual){
+                const ultimo=(await db.query('SELECT id_pago_suscripcion FROM pago_suscripcion WHERE id_suscripcion=$1 ORDER BY id_pago_suscripcion DESC LIMIT 1',[s.id_suscripcion])).rows[0];
+                if((ultimo?.id_pago_suscripcion??null)!==ultimoPago)throw error(409,'El estado del pago cambió. Actualiza y revisa el resultado antes de autorizar otra operación');
+            }
             // Se resuelven cobros inciertos aun después de cancelar; consultar no vuelve a cobrar.
             const pendiente=(await db.query(`SELECT p.*,TO_CHAR(periodo_fin,'YYYY-MM-DD') AS periodo_fin FROM pago_suscripcion p
              WHERE id_suscripcion=$1 AND estado='pendiente' ORDER BY id_pago_suscripcion DESC LIMIT 1`,[s.id_suscripcion])).rows[0];
@@ -153,9 +167,11 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
                 if(!pendiente.orden_compra)return 'revision';
                 try{return await resolver(db,pendiente,await proveedor.consultar(pendiente.orden_compra));}catch(e){return 'revision';}
             }
-            if(!s.renovacion_automatica||!s.tarjeta_cifrada||!s.fecha_proximo_cobro||s.fecha_proximo_cobro>hoy())return 'omitida';
+            const cobrable=s.tarjeta_cifrada&&s.estado!=='cancelada'&&s.fecha_proximo_cobro&&s.fecha_proximo_cobro<=hoy()&&(!s.fecha_fin_prueba||s.fecha_fin_prueba<=hoy())&&(!s.acceso_hasta||s.acceso_hasta<=hoy());
+            if(!cobrable){if(manual)throw error(409,'El período sigue vigente o no hay una tarjeta inscrita; no corresponde cobrar');return 'omitida';}
+            if(!manual&&!s.renovacion_automatica)return 'omitida';
             const anterior=(await db.query('SELECT estado,intento FROM pago_suscripcion WHERE id_suscripcion=$1 AND periodo_inicio=$2 ORDER BY intento DESC LIMIT 1',[s.id_suscripcion,s.fecha_proximo_cobro])).rows[0];
-            if(anterior&&(anterior.estado==='aprobado'||!s.reintento_autorizado))return 'omitida';
+            if(anterior&&(anterior.estado==='aprobado'||(!manual&&!s.reintento_autorizado)))return 'omitida';
             const tarde=s.fecha_proximo_cobro<hoy(),dia=tarde?Number(hoy().slice(8,10)):s.dia_cobro;
             const fin=siguienteMes(tarde?hoy():s.fecha_proximo_cobro,dia),orden='M'+randomUUID().replaceAll('-','').slice(0,24);
             // No se cobra deuda acumulada: un proceso tardío concede un mes desde hoy.
@@ -177,7 +193,7 @@ function crearSuscripciones({pool,proveedor=crearOneclick(),secreto=process.env.
         ultimaSuscripcionRevisada=cuentas.length===50?cuentas[cuentas.length-1].id_suscripcion:0;
         const resultados=[];for(const c of cuentas){try{resultados.push(await procesar(c.id_emprendedora));}catch(e){resultados.push('error');}}return resultados;
     }
-    return {obtener,inscribir,finalizar,cancelar,reintentar,procesar,ciclo};
+    return {obtener,inscribir,finalizar,cancelar,reintentar,cobrar,procesar,ciclo};
 }
 function montarRutasSuscripcion(app,servicio,verificarSesion){
     const manejar=accion=>async(req,res)=>{res.set('Cache-Control','no-store');try{res.json(await accion(req));}catch(e){res.status(e.estado||503).json({mensaje:e.estado?e.message:'Suscripciones temporalmente no disponibles'});}};
@@ -186,6 +202,7 @@ function montarRutasSuscripcion(app,servicio,verificarSesion){
     app.post('/api/suscripcion/inscribir',verificarSesion,accion,manejar(req=>servicio.inscribir(req.session.idEmprendedora,req.body,req.protocol+'://'+req.get('host'))));
     app.post('/api/suscripcion/cancelar',verificarSesion,accion,manejar(req=>servicio.cancelar(req.session.idEmprendedora)));
     app.post('/api/suscripcion/reintentar',verificarSesion,accion,manejar(req=>servicio.reintentar(req.session.idEmprendedora,req.body)));
+    app.post('/api/suscripcion/cobrar',verificarSesion,accion,manejar(req=>servicio.cobrar(req.session.idEmprendedora,req.body)));
     const retorno=async(req,res)=>{
         res.set('Cache-Control','no-store');res.set('Referrer-Policy','no-referrer');
         try{await servicio.finalizar(req.method==='POST'?req.body?.TBK_TOKEN:req.query.TBK_TOKEN);res.redirect(303,'/back-office/#tituloSuscripcion');}

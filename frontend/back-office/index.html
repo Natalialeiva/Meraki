@@ -471,12 +471,13 @@
 <section class="vista" data-vista="suscripcion" hidden id="gestionSuscripcion" aria-labelledby="tituloSuscripcion">
 <h2 id="tituloSuscripcion" tabindex="-1">Suscripción mensual a Meraki</h2>
 <div id="detalleSuscripcion"></div>
-<p>Un mes calendario gratuito al inscribir tu tarjeta por primera vez. Después, $9.990 CLP mensuales con renovación automática hasta que la canceles. La inscripción no realiza el cobro mensual. No se acumulan cobros de meses atrasados.</p>
+<p>Un mes calendario gratuito por cuenta. En las cuentas nuevas comienza al registrarte. Después, $9.990 CLP al mes. Inscribir una tarjeta no cobra ni activa renovaciones automáticas. Puedes autorizar un cobro cuando venza tu período. No se acumulan mensualidades atrasadas.</p>
 <label id="consentimientoPlan">
-<input id="consentimientoSuscripcion" type="checkbox"> Autorizo la inscripción y los cobros automáticos de $9.990 CLP mensuales una vez terminado mi mes gratuito. Puedo cancelar la renovación desde este panel. Si ya usé la prueba gratuita, la reactivación no concede otro mes gratis y puede generar el cobro del período vencido.</label>
+<input id="consentimientoSuscripcion" type="checkbox"> Acepto el plan de $9.990 CLP mensuales y la operación solicitada. La inscripción no activa renovaciones automáticas. Un nuevo cobro requiere autorización independiente y la reinscripción no concede otro mes gratuito.</label>
 <p>
-<button id="inscribirSuscripcion" type="button" disabled>Inscribir tarjeta y comenzar mes gratuito</button>
-<button id="cancelarSuscripcion" type="button" hidden>Cancelar renovación automática</button>
+<button id="inscribirSuscripcion" type="button" disabled>Inscribir tarjeta</button>
+<button id="cancelarSuscripcion" type="button" hidden>Cancelar inscripción y renovación</button>
+<button id="cobrarSuscripcion" type="button" hidden>Renovar período vencido · $9.990</button>
 <button id="reintentarSuscripcion" type="button" hidden>Autorizar otro intento de $9.990</button>
 <button id="actualizarSuscripcion" type="button">Actualizar suscripción</button>
 </p>
@@ -505,7 +506,7 @@
 <script src="fotografias.js?v=2"></script>
 <script src="trabajadoras.js?v=acceso-1"></script>
 <script src="horarios.js?v=acceso-1"></script>
-<script src="suscripcion.js?v=gestion-1"></script>
+<script src="suscripcion.js?v=gestion-2"></script>
 <script src="navegacion.js?v=dashboard-1"></script>
 <script src="dashboard-graficos.js?v=evolucion-seis-meses-1"></script>
 <script src="back.js?v=entrega-visual-1"></script>
