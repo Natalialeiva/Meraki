@@ -5,12 +5,15 @@ function pantalla(responder=async()=>({}),sinBoton=false){
     const boton={disabled:false},form={querySelector:()=>sinBoton?null:boton,reset(){this.limpiado=true;}};
     const estado={textContent:''},llamadas=[];let iniciadas=0;
     const inicio=fuente.indexOf("$('#login').onsubmit="),fin=fuente.indexOf("\n$('#salir')",inicio);
+    const avisoInicio=fuente.indexOf('let avisoInicioSesion='),avisoFin=fuente.indexOf('async function api(',avisoInicio);
     assert(inicio>=0&&fin>inicio);
+    assert(avisoInicio>=0&&avisoFin>avisoInicio);
     const c=vm.createContext({$:()=>form,estado,ocultarClave(){},
+        setTimeout(){},clearTimeout(){},
         api:async(...args)=>{llamadas.push(args);return responder();},iniciar:async()=>{iniciadas++;},
         FormData:class{*[Symbol.iterator](){yield ['correo','login@example.test'];yield ['password','clave-ficticia'];}}
     });
-    vm.runInContext('let ingresando=false;\n'+fuente.slice(inicio,fin),c);
+    vm.runInContext('let ingresando=false,versionSesion=0;\n'+fuente.slice(avisoInicio,avisoFin)+'\n'+fuente.slice(inicio,fin),c);
     return {boton,form,estado,llamadas,iniciadas:()=>iniciadas,
         enviar:submitter=>form.onsubmit({preventDefault(){},target:form,submitter})};
 }

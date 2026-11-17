@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f7f5f8">
 <title>Mi negocio | Meraki</title>
-<link rel="stylesheet" href="gestion.css?v=entrega-visual-1">
+<link rel="stylesheet" href="gestion.css?v=dashboard-pulido-2">
 </head>
 <body>
 <a class="saltar" href="#tituloVista">Saltar al contenido</a>
@@ -286,24 +286,24 @@
 </dl>
 <div class="graficos-dashboard">
 <section aria-labelledby="tituloGraficoEstados"><h3 id="tituloGraficoEstados">Reservas por estado</h3><div id="graficoEstados"></div></section>
-<section aria-labelledby="tituloEvolucion"><h3 id="tituloEvolucion">Evolución mensual por fecha de atención</h3><p class="ayuda-agenda">Mes seleccionado en el Resumen económico y cinco anteriores, con el filtro de estado y solo este emprendimiento. Meses sin reservas: cero. La fecha diaria no reduce esta evolución mensual. Unidad: cantidad de reservas, no CLP.</p><div id="evolucionReservas"></div></section>
+<section aria-labelledby="tituloEvolucion"><h3 id="tituloEvolucion">Evolución mensual por fecha de atención</h3><p class="ayuda-agenda">Mes seleccionado en el Resumen económico y cinco anteriores, según el filtro de estado. Meses sin reservas: cero. Unidad: cantidad de reservas. El filtro de fecha diaria no cambia esta evolución.</p><div id="evolucionReservas"></div></section>
 </div>
 <div id="dashboardDistribucion"></div>
 <section class="resumen-economico" aria-labelledby="tituloEconomico">
 <h3 id="tituloEconomico">Resumen económico</h3>
 <label class="selector-mes-economico">Mes y año de atención<input id="economiaMes" type="month" required aria-describedby="alcanceEconomico"></label>
-<p id="alcanceEconomico" class="ayuda-agenda">Importes históricos del mes seleccionado, en CLP, con el filtro de estado del Dashboard. La fecha diaria no cambia este resumen mensual. Son montos proyectados, no ingresos recibidos, pagos aprobados ni saldos por cobrar.</p>
+<p id="alcanceEconomico" class="ayuda-agenda">Importes contractuales históricos del mes de atención, en CLP, según el filtro de estado. Son valores proyectados y no representan pagos recibidos. La fecha diaria no cambia este resumen mensual.</p>
 <p id="estadoEconomico"></p>
 <div id="datosEconomicos" hidden>
 <dl class="metricas-dashboard">
-<div><dt>Valor de servicios del mes sin canceladas</dt><dd id="valorServicios">—</dd><p>Incluye confirmadas, pendientes de abono, atendidas y no atendidas. Puede coincidir con el valor activo cuando no hay citas cerradas en la selección.</p></div>
-<div><dt>Valor proyectado de reservas activas del mes</dt><dd id="valorReservasActivas">—</dd><p>Solo confirmadas y pendientes de abono. No incluye atendidas, no atendidas ni canceladas.</p></div>
-<div><dt>Abonos esperados contractualmente del mes</dt><dd id="abonosActivos">—</dd><p>Requeridos por reservas activas. No son abonos pagados ni necesariamente pendientes: esta fuente no permite comprobarlo.</p></div>
+<div><dt>Valor de servicios del mes sin canceladas</dt><dd id="valorServicios">—</dd><p>Confirmadas, pendientes de abono, atendidas y no atendidas.</p></div>
+<div><dt>Valor proyectado de reservas activas del mes</dt><dd id="valorReservasActivas">—</dd><p>Solo confirmadas y pendientes de abono.</p></div>
+<div><dt>Abonos esperados contractualmente del mes</dt><dd id="abonosActivos">—</dd><p>Requeridos por reservas activas. No indica cuánto se pagó ni cuánto falta por pagar.</p></div>
 </dl>
 <h4>Comparación de valores contractuales activos</h4><p class="ayuda-agenda">Los abonos forman parte del valor de los servicios: no deben sumarse como valores adicionales. No representa movimientos de dinero.</p>
 <div id="comparacionEconomica"></div>
 <div id="detalleEconomico" class="tabla-economica"></div>
-<h4>Evolución económica de seis meses</h4><p class="ayuda-agenda">Mes seleccionado y cinco anteriores, por fecha de atención y filtro de estado. Meses sin reservas: cero. Solo proyecciones contractuales, no pagos recibidos.</p>
+<h4>Evolución económica de seis meses</h4><p class="ayuda-agenda">Valor de reservas activas y abonos contractuales esperados del mes seleccionado y cinco anteriores. Según el filtro de estado; meses sin reservas: cero. No representa ingresos recibidos.</p>
 <div id="evolucionEconomica"></div>
 </div>
 </section>
@@ -509,6 +509,6 @@
 <script src="suscripcion.js?v=gestion-2"></script>
 <script src="navegacion.js?v=dashboard-1"></script>
 <script src="dashboard-graficos.js?v=evolucion-seis-meses-1"></script>
-<script src="back.js?v=entrega-visual-1"></script>
+<script src="back.js?v=dashboard-pulido-2"></script>
 </body>
 </html>

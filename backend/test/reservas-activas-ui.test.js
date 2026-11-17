@@ -50,7 +50,7 @@ async function montar(temporal={
             : {estado:'sin_proximas'}};
     }
 },estadisticas=MerakiEstadisticasReservas){
-    const nodos=new Map(), solicitudes=[], pendientes=[];let alCambiarVista;
+    const nodos=new Map(), solicitudes=[], pendientes=[],temporizadores=[];let alCambiarVista;
     const $=id=>{
         if(!nodos.has(id))nodos.set(id,elemento());
         return nodos.get(id);
@@ -82,13 +82,14 @@ async function montar(temporal={
         MerakiResumenTemporal:temporal,
         MerakiIncorporacion:modulo,MerakiPerfil:modulo,MerakiServicios:modulo,MerakiTrabajadoras:modulo,MerakiHorarios:modulo,MerakiSuscripcion:modulo,
         FormData:class {constructor(form){this.form=form;}get(){return this.form.campo.value;}},
-        setInterval(){},confirm:()=>true
+        setInterval(){},setTimeout(fn,ms){const t={fn,ms};temporizadores.push(t);return t;},clearTimeout(t){if(t)t.cancelado=true;},confirm:()=>true
     });
     vm.runInContext(codigo,contexto);
     await pausa();
     assert.equal(pendientes.length,1);
     return {
-        $,solicitudes,pendientes,
+        $,solicitudes,pendientes,temporizadores,
+        sesionIniciada:()=>vm.runInContext('mostrarInicioSesion()',contexto),
         reloj(ms){vm.runInContext('Date.now=()=>'+Number(ms),contexto);},
         valor:()=>$('#reservasPorCerrar').textContent,
         cambiar(id){$('#negocio').value=String(id);$('#negocio').onchange();},
@@ -118,6 +119,20 @@ test('carga inicial, cero autorizado y filtros sin peticiones adicionales',async
     assert.equal(h.$('#resumenReservas').textContent,'0 de 3 reservas');
     assert.equal(h.$('#proximaAtencionDetalle').textContent,'Servicio 1 · Profesional');
     assert.equal(h.pendientes.length,2);
+});
+
+test('Sesión iniciada desaparece a los tres segundos y no se repite al navegar o filtrar Dashboard',async()=>{
+    const h=await montar();await h.completar(0,[]);h.sesionIniciada();
+    assert.equal(h.$('#estado').textContent,'Sesión iniciada.');assert.equal(h.temporizadores.length,1);assert.equal(h.temporizadores[0].ms,3000);
+    h.vista('dashboard');h.$('#dashboardEstado').onchange();h.vista('reservas');
+    assert.equal(h.temporizadores.length,1);h.temporizadores[0].fn();assert.equal(h.$('#estado').textContent,'');
+});
+
+test('El temporizador del login conserva errores y confirmaciones de otras operaciones',async()=>{
+    const h=await montar();await h.completar(0,[]);
+    for(const mensaje of ['No se pudo actualizar la agenda','Reserva actualizada correctamente']){
+        h.sesionIniciada();const timer=h.temporizadores.at(-1);h.$('#estado').textContent=mensaje;timer.fn();assert.equal(h.$('#estado').textContent,mensaje);
+    }
 });
 
 test('Dashboard reutiliza distribución y conteos de estados sin consultar otra agenda',async()=>{

@@ -18,6 +18,15 @@ mostrarClave.onclick=()=>{
 };
 $('#login').addEventListener('reset',ocultarClave);
 let versionSesion=0;
+let avisoInicioSesion=null;
+function mostrarInicioSesion(){
+    clearTimeout(avisoInicioSesion);
+    const sesion=versionSesion,mensaje='Sesión iniciada.';
+    estado.textContent=mensaje;
+    avisoInicioSesion=setTimeout(()=>{
+        if(sesion===versionSesion&&estado.textContent===mensaje)estado.textContent='';
+    },3000);
+}
 async function api(url,method='GET',data,vigente=()=>true){
     const sesion=versionSesion;
     const archivo=typeof Blob!=='undefined'&&data instanceof Blob;
@@ -446,7 +455,7 @@ $('#login').onsubmit=async e=>{
     e.preventDefault();if(ingresando)return;ingresando=true;ocultarClave();
     const b=e.submitter||e.target.querySelector('button[type="submit"],button:not([type]),input[type="submit"]');
     if(b)b.disabled=true;
-    try{await api('/api/auth/login','POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await iniciar();estado.textContent='Sesión iniciada.';}
+    try{await api('/api/auth/login','POST',Object.fromEntries(new FormData(e.target)));e.target.reset();await iniciar();mostrarInicioSesion();}
     catch(error){estado.textContent=error.message;}
     finally{ingresando=false;if(b)b.disabled=false;}
 };

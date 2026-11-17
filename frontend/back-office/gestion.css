@@ -64,6 +64,27 @@
 .comparacion-monto meter::-moz-meter-bar{background:var(--color-economico);border-radius:8px}
 @media(max-width:900px){.graficos-dashboard{grid-template-columns:1fr}.resumen-economico .metricas-dashboard{grid-template-columns:1fr}}
 @media(forced-colors:active){.dona-reservas{display:none}}
+/* Presentación del Dashboard: las tablas conservan su desplazamiento dentro de cada tarjeta. */
+[data-vista="dashboard"] h3{font-size:1.05rem;line-height:1.4;margin:0 0 12px}
+[data-vista="dashboard"] h4{font-size:.95rem;line-height:1.4;margin:24px 0 8px}
+[data-vista="dashboard"] .ayuda-agenda{line-height:1.6;margin:8px 0 16px}
+[data-vista="dashboard"] .metricas-dashboard dd{font-variant-numeric:tabular-nums;line-height:1.2}
+[data-vista="dashboard"] .resumen-economico .metricas-dashboard dd{white-space:nowrap;overflow-wrap:normal;font-size:clamp(1.1rem,2vw,1.35rem)}
+[data-vista="dashboard"] .leyenda-grafico{margin:20px 0 8px;line-height:1.5}
+[data-vista="dashboard"] .tabla-economica,
+[data-vista="dashboard"] #evolucionEconomica,
+[data-vista="dashboard"] #evolucionReservas{max-width:100%;overflow-x:auto}
+[data-vista="dashboard"] .resumen-economico table{min-width:360px}
+[data-vista="dashboard"] table td{font-variant-numeric:tabular-nums;text-align:right}
+[data-vista="dashboard"] table th:not(:first-child){text-align:right}
+[data-vista="dashboard"] table caption{line-height:1.5}
+@media(max-width:560px){
+    [data-vista="dashboard"] .graficos-dashboard>section,
+    [data-vista="dashboard"] .resumen-economico{padding:14px}
+    [data-vista="dashboard"] .metricas-dashboard dt{line-height:1.5}
+    [data-vista="dashboard"] .filtros input,
+    [data-vista="dashboard"] .filtros select{min-width:0;max-width:100%;min-height:44px}
+}
 .selector-mes-economico{max-width:280px;margin:16px 0}#evolucionEconomica{min-width:0;margin-top:18px}#evolucionEconomica p{font-size:.8rem;overflow-wrap:anywhere}
 /* Incorporación: estilos limitados al acceso y al alta, sin cambiar el panel. */
 .tarjeta-acceso details{margin-top:24px;border-top:1px solid var(--borde);padding-top:18px}
