@@ -64,6 +64,14 @@ app.get("/", (req, res) => {
 
 // Importamos la conexión con PostgreSQL.
 const pool = require("./db");
+// Lista explícita de configuración pública: nunca entregar process.env completo.
+app.get('/api/mapas/configuracion',(req,res)=>{
+    const apiKey=process.env.GOOGLE_MAPS_API_KEY?.trim();
+    res.set('Cache-Control','no-store');
+    res.json(/^[A-Za-z0-9_-]{10,200}$/.test(apiKey||'')
+        ? {habilitado:true,autorizado:true,apiKey,mapId:'DEMO_MAP_ID',entorno:'pruebas'}
+        : {habilitado:false});
+});
 const {crearNotificaciones,montarRutas}=require('./notificaciones');
 const {registrar:registrarNotificacionConfirmacion,notificar:notificarReservaConfirmada}=crearNotificaciones(pool);
 // Comprobamos que exista la clave privada de sesiones.

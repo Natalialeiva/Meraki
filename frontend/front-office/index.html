@@ -45,7 +45,7 @@
             <small id="ayudaBusqueda" class="ayuda">Los filtros se combinan. La categoría muestra emprendimientos con servicios activos de esa categoría. Al abrir un emprendimiento puedes ver todos sus servicios publicados.</small>
             <small id="estadoCategorias" class="ayuda" role="status">Cargando categorías…</small>
             <div class="ubicacion">
-                <p id="privacidadUbicacion" class="ayuda">Tu ubicación se utilizará para mostrar emprendimientos cercanos. No se almacenará ni se enviará al servidor.</p>
+                <p id="privacidadUbicacion" class="ayuda">Tu ubicación se utilizará para mostrar emprendimientos cercanos. No se guardará en Meraki. Si abres el mapa, se utilizará también para mostrar tu posición en el proveedor cartográfico.</p>
                 <div class="acciones"><button id="usarUbicacion" type="button" class="secundario" aria-describedby="privacidadUbicacion">Usar mi ubicación</button><button id="dejarUbicacion" type="button" class="secundario" hidden>Dejar de usar mi ubicación</button></div>
                 <label id="controlCercania" hidden>Orden del catálogo <select id="ordenCercania"><option value="original">Orden habitual</option><option value="cercania">Más cercanos primero</option></select></label>
                 <p id="estadoUbicacion" role="status" aria-live="polite" aria-atomic="true">Ubicación no solicitada. Puedes buscar por nombre y comuna.</p>
@@ -62,14 +62,19 @@
         <section id="panelMapa" class="mapaPreparacion" hidden aria-labelledby="tituloMapa">
             <h3 id="tituloMapa">Vista de preparación del mapa</h3>
             <p id="descripcionMapa">Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.</p>
-            <p class="ayuda">Abrir el mapa conecta con OpenStreetMap para cargar cartografía. No requiere clave. Tu ubicación personal no se utiliza para centrarlo ni se envía como coordenadas al proveedor.</p>
+            <p class="ayuda">Abrir el mapa conecta con Google Maps o, si no está disponible, con OpenStreetMap. Si autorizas tu ubicación, el proveedor cartográfico la utiliza para mostrar tu posición.</p>
             <p id="estadoMapa" role="status" aria-live="polite"></p>
+            <div class="mapaDistribucion">
             <div id="negociosMapa" class="acciones" aria-label="Emprendimientos con coordenadas válidas"></div>
+            <div class="mapaLateral">
+            <p class="mapaInvitacion">Selecciona un pin para conocer el emprendimiento y explorar sus servicios.</p>
             <section id="seleccionMapa" class="seleccionMapa" hidden aria-label="Emprendimiento seleccionado" aria-live="polite">
                 <h4 id="nombreMapa"></h4><p id="comunaMapa"></p>
-                <div id="indicacionesMapa"></div>
+                <div id="extraMapa"></div><div id="indicacionesMapa"></div>
                 <button id="serviciosMapa" type="button" class="secundario" disabled>Ver servicios</button>
             </section>
+            </div>
+            </div>
         </section>
         <div id="resultados" aria-label="Emprendimientos encontrados"></div>
     </section>

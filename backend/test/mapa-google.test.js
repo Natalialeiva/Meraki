@@ -14,6 +14,7 @@ function entorno() {
         constructor(tag){this.tag=tag;this.children=[];this.attributes={};this.hidden=false;}
         setAttribute(k,v){this.attributes[k]=v;}
         replaceChildren(...n){this.children=n;}
+        append(...n){this.children.push(...n);}
         remove(){this.eliminado=true;}
     }
     const mundo={isSecureContext:true};
@@ -190,4 +191,54 @@ test('Google con cero marcadores no carga, y limpiar tras resultados vacíos ret
  p.renderizar(await p.preparar([{...negocio,latitud:null}],()=>{}));assert.equal(e.scripts.length,0);
  const a=p.preparar([negocio],()=>{});e.aceptar();p.renderizar(await a);
  p.renderizar(await p.preparar([],()=>{}));assert.equal(e.marcadores[0].map,null);assert.equal(e.mapas[0].host.hidden,true);
+});
+
+function leafletFicticio(){
+ const mapa={setView(){return this},fitBounds(){},invalidateSize(){}};
+ const capa=()=>({on(){return this},off(){},remove(){},addTo(){return this},getElement(){return null}});
+ return {map:()=>mapa,tileLayer:capa,marker:capa,DomEvent:{on(){},off(){}}};
+}
+test('Google tiene prioridad sobre Leaflet; fallo de red conserva coordenadas y selección',async()=>{
+ const {crearProveedorMapa}=await proveedoresModulo;const e=entorno();e.mundo.L=leafletFicticio();
+ const p=crearProveedorMapa({documento:e.documento,contenedor:e.contenedor,mundo:e.mundo,leerConfiguracion:()=>configuracion});
+ const preparar=p.preparar([negocio],()=>{});assert.equal(p.modo,'google');assert.equal(e.scripts.length,1);
+ e.scripts[0].onerror();const contenido=await preparar;p.renderizar(contenido);
+ assert.equal(p.modo,'leaflet');assert.match(p.aviso,/OpenStreetMap/);assert.equal(contenido.datos[0].latitud,negocio.latitud);
+ await p.preparar([negocio],()=>{});assert.equal(e.scripts.length,1);
+});
+test('Fallo de autenticación tardío cambia a Leaflet y vuelve a dibujar',async()=>{
+ const {crearProveedorMapa}=await proveedoresModulo,{crearMapa}=await mapaModulo;const e=entorno();e.mundo.L=leafletFicticio();
+ const p=crearProveedorMapa({documento:e.documento,contenedor:e.contenedor,mundo:e.mundo,leerConfiguracion:()=>configuracion});
+ const estados=[];const c=crearMapa({proveedor:p,mostrar:s=>estados.push(s),seleccionar:()=>{}});
+ await c.actualizar([negocioAPI]);const abrir=c.alternar();e.aceptar();await abrir;
+ e.mundo.gm_authFailure();await pausa();assert.equal(p.modo,'leaflet');assert.match(p.aviso,/autenticación/);
+ assert.match(estados.at(-1).mensaje,/1 emprendimiento/);assert.equal(e.marcadores[0].map,null);
+});
+test('Sin configuración se conserva Leaflet y no se solicita Google',async()=>{
+ const {crearProveedorMapa}=await proveedoresModulo;const e=entorno();e.mundo.L=leafletFicticio();
+ const p=crearProveedorMapa({documento:e.documento,contenedor:e.contenedor,mundo:e.mundo,leerConfiguracion:()=>null});
+ p.renderizar(await p.preparar([],()=>{}));assert.equal(p.modo,'leaflet');assert.equal(e.scripts.length,0);
+});
+
+test('Pines Meraki, selección destacada y posición autorizada diferenciada sin duplicados',async()=>{
+ const {crearProveedorGoogle}=await googleModulo;const e=entorno(),c=await cargador(e),p=crearProveedorGoogle({documento:e.documento,contenedor:e.contenedor,config:configuracion,cargador:c});
+ p.ubicar({latitud:-33.5,longitud:-70.7});const a=p.preparar([negocio],()=>{});e.aceptar();p.renderizar(await a);
+ assert.equal(e.marcadores.length,2);assert.equal(e.marcadores[0].content.className,'pinMeraki');assert.equal(e.marcadores[1].content.className,'pinMeraki pinClienta');
+ assert.deepEqual(e.marcadores[1].position,{lat:-33.5,lng:-70.7});assert.equal(e.mapas[0].bounds.puntos.length,2);assert.equal(e.mapas[0].opciones.maxZoom,16);
+ e.marcadores[0].elegir();assert.equal(e.marcadores[0].content.className,'pinMeraki pinSeleccionado');
+ p.renderizar(await p.preparar([negocio,negocio],()=>{}));assert.equal(e.marcadores.length,2);
+ p.ubicar(null);p.renderizar(await p.preparar([negocio],()=>{}));assert.equal(e.marcadores[1].map,null);assert.equal(e.mapas[0].zoom,14);
+});
+test('Ubicaciones compartidas conservan un pin por ID y etiquetas diferenciadas',async()=>{
+ const {crearProveedorGoogle}=await googleModulo;const e=entorno(),c=await cargador(e),p=crearProveedorGoogle({documento:e.documento,contenedor:e.contenedor,config:configuracion,cargador:c});
+ const a=p.preparar([negocio,{...negocio,id:2,nombre:'Segundo'}, {...negocio,id:3,latitud:null}],()=>{});e.aceptar();p.renderizar(await a);
+ assert.equal(e.contenedor.children[1].children.length,2);assert.match(e.contenedor.children[1].children[1].textContent,/Segundo/);
+ assert.equal(e.marcadores.length,2);assert.deepEqual(e.marcadores.map(m=>m.content.textContent),['1','2']);assert.deepEqual(e.marcadores[0].position,e.marcadores[1].position);
+ p.ubicar({latitud:100,longitud:0});p.renderizar(await p.preparar([negocio],()=>{}));assert.equal(e.marcadores.length,2);assert.equal(e.marcadores[1].map,null);
+});
+
+test('Ubicación autorizada con cero negocios mantiene solo el marcador azul; limpiar lo retira',async()=>{
+ const {crearProveedorGoogle}=await googleModulo;const e=entorno(),c=await cargador(e),p=crearProveedorGoogle({documento:e.documento,contenedor:e.contenedor,config:configuracion,cargador:c});
+ p.ubicar({latitud:0,longitud:0});const a=p.preparar([],()=>{});e.aceptar();p.renderizar(await a);
+ assert.equal(e.marcadores.length,1);assert.equal(e.marcadores[0].title,'Mi ubicación');p.limpiar();assert.equal(e.marcadores[0].map,null);
 });

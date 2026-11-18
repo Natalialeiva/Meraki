@@ -148,6 +148,7 @@ async function profesionales() {
     } catch (error) { if (version === versionProfesional) { $('#avisoServicio').textContent = error.message; informar(error.message, 'error'); } }
 }
 async function seleccionar(dato) {
+    globalThis.destacarNegocioMapa?.(dato.id_emprendimiento);
     if (enviando || intentoBloqueado()) return;
     const version = ++versionSeleccion;
     versionProfesional++;
@@ -213,20 +214,21 @@ let resultadosCatalogo = [], ubicacionCatalogo = null, calcularDistancia = null;
 function actualizarCercania(posicion, calcular) {
     ubicacionCatalogo = posicion ? {...posicion} : null; calcularDistancia = calcular;
     $('#controlCercania').hidden = !posicion;
-    if (!posicion) $('#ordenCercania').value = 'original';
+    $('#ordenCercania').value = posicion ? 'cercania' : 'original';
     dibujarCatalogo();
 }
 let receptorMapa = null, vistaIndicaciones=null;
 function configurarIndicaciones(crearVista) {vistaIndicaciones=crearVista;dibujarCatalogo();}
-function suscribirMapa(receptor) { receptorMapa = receptor; receptor(resultadosCatalogo); }
+function suscribirMapa(receptor) { receptorMapa = receptor; receptor(resultadosCatalogo,{ubicacion:ubicacionCatalogo}); }
 function dibujarCatalogo() {
     const foco=document.activeElement;
     const idEnFoco=foco?.closest?.('article[data-id-negocio]')?.dataset.idNegocio;
     const accionEnFoco=foco?.dataset.accion;
-    receptorMapa?.(resultadosCatalogo);
+
     $('#resultados').replaceChildren();
     const filas = resultadosCatalogo.map((dato, indice) => ({dato, indice, distancia:ubicacionCatalogo && calcularDistancia ? calcularDistancia(ubicacionCatalogo.latitud, ubicacionCatalogo.longitud, dato.latitud, dato.longitud) : null}));
     if (ubicacionCatalogo && $('#ordenCercania').value === 'cercania') filas.sort((a,b) => (a.distancia ?? Infinity) - (b.distancia ?? Infinity) || a.indice - b.indice);
+    receptorMapa?.(filas.map(f=>({...f.dato,distancia:f.distancia})),{ubicacion:ubicacionCatalogo});
         for (const {dato:d, distancia} of filas) {
             const a = document.createElement('article'), h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
             a.className = 'negocio-card';a.dataset.idNegocio=String(d.id_emprendimiento);

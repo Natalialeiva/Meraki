@@ -1,8 +1,10 @@
+import {validarCoordenadas} from './geografia.mjs';
 import {normalizarMarcadores} from './mapa-datos.mjs';
 // Biblioteca local; solo teselas públicas tras una apertura explícita.
 export function crearProveedorLeaflet({documento,contenedor,L}) {
     let mapa=null,version=0,teselas=null;
     const marcadores=new Map();
+    let ubicacion=null,clienta=null;
     const superficie=documento.createElement('div');superficie.className='mapaLeaflet';
     superficie.setAttribute('aria-label','Mapa de emprendimientos con OpenStreetMap');
     const aviso=documento.createElement('p');aviso.className='ayuda';aviso.setAttribute('role','status');
@@ -21,7 +23,7 @@ export function crearProveedorLeaflet({documento,contenedor,L}) {
         }
     }
     function limpiar() {
-        version++;retirarMarcadores();retirarTeselas();
+        version++;retirarMarcadores();retirarTeselas();if(clienta){clienta.remove();clienta=null;}
         superficie.hidden=true;aviso.hidden=true;
     }
     function crearCartografia(actual) {
@@ -71,6 +73,8 @@ export function crearProveedorLeaflet({documento,contenedor,L}) {
     }
     return {
         limpiar,invalidar:limpiar,abrir:()=>{},
+        ubicar:valor=>{ubicacion=validarCoordenadas(valor?.latitud,valor?.longitud);},
+        destacar:id=>{for(const [clave,r]of marcadores){r.marcador.setZIndexOffset?.(clave===id?1000:0);r.marcador.getElement()?.classList?.toggle('pinLeafletSeleccionado',clave===id);}},
         async preparar(datos,seleccionar){return {datos:normalizarMarcadores(datos),seleccionar};},
         renderizar({datos,seleccionar}) {
             const actual=++version;
@@ -111,9 +115,12 @@ export function crearProveedorLeaflet({documento,contenedor,L}) {
                     pulsada=false;clickTeclado=false;
                 }});
             }
+            if(clienta){clienta.remove();clienta=null;}
+            if(ubicacion&&L.circleMarker)clienta=L.circleMarker([ubicacion.latitud,ubicacion.longitud],{radius:10,color:'#fff',weight:3,fillColor:'#1976d2',fillOpacity:1}).addTo(mapa);
             mapa.invalidateSize();
             // Ajustar el encuadre antes de añadir la capa evita pedir dos vistas.
-            if(publicos.length===1)mapa.setView([publicos[0].latitud,publicos[0].longitud],15,{animate:false});
+            if(ubicacion)mapa.fitBounds([...publicos.map(d=>[d.latitud,d.longitud]),[ubicacion.latitud,ubicacion.longitud]],{padding:[32,32],maxZoom:16,animate:false});
+            else if(publicos.length===1)mapa.setView([publicos[0].latitud,publicos[0].longitud],15,{animate:false});
             else if(publicos.length>1)mapa.fitBounds(publicos.map(d=>[d.latitud,d.longitud]),{padding:[32,32],maxZoom:16,animate:false});
             else mapa.setView([-33.4379667,-70.6504],13,{animate:false});
             crearCartografia(actual);

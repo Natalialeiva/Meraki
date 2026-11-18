@@ -67,7 +67,7 @@ test('Cerrar limpia selección y callbacks de Ver servicios, incluso tras reabri
 test('Panel simulado selecciona detalle público y solo Ver servicios inicia el flujo existente',async()=>{
  const {montarMapa}=await modulo;
  class Nodo {constructor(){this.children=[];this.attributes={};this.hidden=false;this.disabled=false;this.textContent='';this.listeners={};}focus(){doc.activeElement=this;}contains(el){return el===this||this.children.some(n=>n.contains?.(el));}addEventListener(k,fn){this.listeners[k]=fn;}setAttribute(k,v){this.attributes[k]=v;}replaceChildren(...hijos){this.children=hijos;}append(...hijos){this.children.push(...hijos);}}
- const ids=['verMapa','panelMapa','negociosMapa','estadoMapa','seleccionMapa','nombreMapa','comunaMapa','serviciosMapa','tituloMapa','descripcionMapa','indicacionesMapa'];
+ const ids=['verMapa','panelMapa','negociosMapa','estadoMapa','seleccionMapa','nombreMapa','comunaMapa','serviciosMapa','tituloMapa','descripcionMapa','indicacionesMapa','extraMapa'];
  const nodos=Object.fromEntries(ids.map(id=>['#'+id,new Nodo()]));
  const doc={querySelector:id=>{assert(nodos[id],id);return nodos[id];},createElement:tag=>{assert(['button','div','p'].includes(tag));return new Nodo();}};
  nodos['#panelMapa'].append(nodos['#negociosMapa'],nodos['#seleccionMapa']);nodos['#seleccionMapa'].append(nodos['#serviciosMapa']);

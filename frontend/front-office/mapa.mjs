@@ -1,4 +1,5 @@
 import {validarCoordenadas} from './geografia.mjs';
+import {aplicarDemoMapa} from './mapa-demo.mjs';
 import {normalizarMarcadores,crearVistaIndicaciones} from './mapa-datos.mjs';
 import {crearProveedorMapa} from './mapa-proveedores.mjs';
 
@@ -9,6 +10,7 @@ export function crearMapa({proveedor, mostrar, seleccionar, presentarSeleccion=(
     const borrarSeleccion=()=>{seleccion=null;presentarSeleccion(null);};
     const errorMapa=()=>{
         version++;borrarSeleccion();proveedor.limpiar();
+        if(abierto && proveedor.modo==='leaflet') {void dibujar();return;}
         if (abierto) mostrar({abierto,mensaje:'No se pudo cargar el mapa. Puedes continuar con las tarjetas. Cierra y vuelve a intentar.'});
     };
     proveedor.alError?.(errorMapa);
@@ -27,21 +29,23 @@ export function crearMapa({proveedor, mostrar, seleccionar, presentarSeleccion=(
             const contenido=await proveedor.preparar(datos, id=>{
                 if (abierto && actual===version) {
                     const negocio=datos.find(n=>n.id===id);
-                    if (negocio) {seleccion={id,version:actual};presentarSeleccion({...negocio});}
+                    if (negocio) {seleccion={id,version:actual};const original=negocios.find(n=>Number(n.id_emprendimiento)===id);const detalle={...negocio};for(const k of ['categoria','especialidad','imagen_url','distancia'])if(original?.[k]!==undefined)detalle[k]=original[k];presentarSeleccion(detalle);}
                 }
             });
             if (!abierto || actual!==version) return;
             proveedor.renderizar(contenido);
-            mostrar({abierto,mensaje:datos.length ? datos.length+' emprendimiento(s) disponibles'+(['google','leaflet'].includes(proveedor.modo)?' en el mapa.':' en esta vista de preparación.') : 'No hay emprendimientos con coordenadas válidas en esta búsqueda. El mapa muestra una referencia general de Santiago.'});
+            mostrar({abierto,mensaje:datos.length ? datos.length+' emprendimiento(s) disponibles'+(['google','leaflet'].includes(proveedor.modo)?' en el mapa.':' en esta vista de preparación.') : 'No hay emprendimientos con coordenadas válidas en esta búsqueda.'});
         } catch {
             if (actual===version && abierto) {proveedor.limpiar();mostrar({abierto,mensaje:'No se pudo preparar la vista. Puedes seguir usando las tarjetas o cerrar y volver a intentar.'});}
         }
     }
     mostrar({abierto,mensaje:''});
     return {
-        actualizar(datos) {
+        destacar:id=>proveedor.destacar?.(Number(id)),
+        actualizar(datos, contexto={}) {
+            proveedor.ubicar?.(contexto.ubicacion||null);
             negocios=datos.slice();
-            const nueva=JSON.stringify(publicos());
+            const nueva=JSON.stringify([publicos(),contexto.ubicacion||null]);
             if (nueva===firma) return;
             firma=nueva;
             if (abierto) return dibujar();
@@ -66,13 +70,21 @@ export function montarMapa(documento, suscribir) {
         const pierdeFoco=!negocio && detalle.contains?.(documento.activeElement);
         detalle.hidden=!negocio;nombre.textContent=negocio?.nombre||'';comuna.textContent=negocio?.comuna||'';
         accion.disabled=!negocio;
+        proveedor.destacar?.(negocio?.id??null);
+        documento.querySelectorAll?.('article[data-id-negocio]').forEach(n=>n.classList.toggle('negocioSeleccionado',Number(n.dataset.idNegocio)===negocio?.id));
+        const extra=documento.querySelector('#extraMapa');
+        if(extra){extra.replaceChildren();if(negocio){
+            const texto=documento.createElement('p');texto.textContent=[negocio.categoria,negocio.especialidad,typeof negocio.distancia==='number'?'Aprox. '+new Intl.NumberFormat('es-CL',{maximumFractionDigits:1}).format(negocio.distancia)+' km en línea recta':null].filter(Boolean).join(' · ');extra.append(texto);
+            if(typeof negocio.imagen_url==='string'&&/^\/media\/servicios\/[a-zA-Z0-9_-]+\.webp$/.test(negocio.imagen_url)){const img=documento.createElement('img');img.src=negocio.imagen_url;img.alt=negocio.nombre;img.onerror=()=>img.remove();extra.append(img);}
+        }}
+
         indicaciones.replaceChildren();
         if(negocio) indicaciones.append(crearVistaIndicaciones(documento,negocio));
         if(pierdeFoco)boton.focus();
     },mostrar:({abierto,mensaje})=>{
         const pierdeFoco=!abierto && panel.contains?.(documento.activeElement);
         panel.hidden=!abierto;if(pierdeFoco)boton.focus();boton.setAttribute('aria-expanded',String(abierto));
-        boton.textContent=abierto?'Cerrar mapa':'Ver mapa';estado.textContent=mensaje;
+        boton.textContent=abierto?'Cerrar mapa':'Ver mapa';estado.textContent=[proveedor.aviso,mensaje].filter(Boolean).join(' ');
         documento.querySelector('#tituloMapa').textContent=['google','leaflet'].includes(proveedor.modo)?'Mapa de emprendimientos':'Vista de preparación del mapa';
         documento.querySelector('#descripcionMapa').textContent=proveedor.modo==='leaflet'?'Cartografía de OpenStreetMap. Selecciona un marcador para consultar sus servicios.':proveedor.modo==='google'?'Mapa real de Google. Puedes seleccionar un emprendimiento para consultar sus servicios.':'Esta vista no es un mapa real. Puedes elegir un emprendimiento para consultar sus servicios.';
     },seleccionar:negocio=>globalThis.seleccionar?.(negocio)});
@@ -81,7 +93,10 @@ export function montarMapa(documento, suscribir) {
     panel.addEventListener?.('keydown',evento=>{
         if(evento.key==='Escape' && !panel.hidden) {evento.preventDefault();control.alternar();boton.focus();}
     });
-    suscribir(datos=>control.actualizar(datos));
+    globalThis.destacarNegocioMapa=id=>control.destacar(id);
+    const demo=globalThis.location && aplicarDemoMapa([{nombre:'Belleza Camila'}],globalThis.location.href)[0].comuna;
+    if(demo){const aviso=documento.createElement('p');aviso.className='ayuda';aviso.textContent='Demostración: Camila en Maipú y Daniela en Las Condes son posiciones ilustrativas, no sus direcciones reales. No se guardan en la base de datos.';panel.prepend(aviso);}
+    suscribir((datos,contexto)=>control.actualizar(globalThis.location?aplicarDemoMapa(datos,globalThis.location.href):datos,contexto));
     return control;
 }
 if (typeof document!=='undefined') montarMapa(document, escuchar=>globalThis.suscribirMapa?.(escuchar));

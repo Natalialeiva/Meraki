@@ -1,3 +1,4 @@
+import {validarCoordenadas} from './geografia.mjs';
 import {normalizarMarcadores} from './mapa-datos.mjs';
 
 // La ausencia de cualquiera de las dos autorizaciones conserva el simulador.
@@ -79,22 +80,28 @@ export function crearCargadorGoogle({documento,mundo,esperar=setTimeout,cancelar
 export function crearProveedorGoogle({documento,contenedor,config,cargador,alError=()=>{}}) {
     let mapa=null, falloAnterior=false, revision=0;
     const marcadores=new Map();
+    let ubicacion=null, clienta=null, seleccionado=null;
+    const pin=(texto,azul=false)=>{const n=documento.createElement('span');n.className=azul?'pinMeraki pinClienta':'pinMeraki';n.textContent=texto;return n;};
+    function destacar(id){seleccionado=id;for(const [clave,r] of marcadores){r.marcador.content.className='pinMeraki'+(clave===id?' pinSeleccionado':'');r.marcador.zIndex=clave===id?1000:1;}}
+
+    const coincidencias=documento.createElement('div');coincidencias.className='mapaCoincidencias';
     const superficie=documento.createElement('div'); superficie.className='mapaGoogle';
     superficie.setAttribute('aria-label','Mapa de emprendimientos');
     function invalidar() {
-        revision++;superficie.hidden=true;
+        revision++;superficie.hidden=true;coincidencias.hidden=true;if(clienta)clienta.map=null;
         for(const registro of marcadores.values()) {registro.evento?.remove();registro.evento=null;registro.marcador.map=null;}
     }
     function limpiar() {invalidar();marcadores.clear();}
     cargador.alFallar(()=>{falloAnterior=true;limpiar();alError();});
     return {
-        limpiar, invalidar,
+        limpiar, invalidar, destacar,
+        ubicar:valor=>{ubicacion=validarCoordenadas(valor?.latitud,valor?.longitud);},
         abrir:()=>{falloAnterior=false;},
         async preparar(datos, seleccionar) {
             if (falloAnterior) throw Error('Mapa no disponible. Cierra y vuelve a intentar.');
             try {
                 const publicos=normalizarMarcadores(datos);
-                if (!publicos.length) return {sdk:null,datos:[],seleccionar};
+                if (!publicos.length && !ubicacion) return {sdk:null,datos:[],seleccionar};
                 const sdk=await cargador.cargar(config);
                 return {sdk,datos:publicos,seleccionar};
             } catch {falloAnterior=true;throw Error('Mapa no disponible.');}
@@ -102,7 +109,7 @@ export function crearProveedorGoogle({documento,contenedor,config,cargador,alErr
         renderizar({sdk,datos,seleccionar}) {
             if (falloAnterior) throw Error('Mapa no disponible.');
             const publicos=normalizarMarcadores(datos);
-            if (!publicos.length) {limpiar();return;}
+            if (!publicos.length && !ubicacion) {limpiar();return;}
             try {
                 const actual=++revision;
                 const vigentes=new Set(publicos.map(d=>d.id));
@@ -112,25 +119,38 @@ export function crearProveedorGoogle({documento,contenedor,config,cargador,alErr
                 }
                 superficie.hidden=false;
                 if (!mapa) {
-                    contenedor.replaceChildren(superficie);
-                    mapa=new sdk.Map(superficie,{mapId:config.mapId,center:{lat:publicos[0].latitud,lng:publicos[0].longitud},zoom:14,streetViewControl:false,mapTypeControl:false});
+                    contenedor.replaceChildren(superficie,coincidencias);
+                    mapa=new sdk.Map(superficie,{mapId:config.mapId,center:{lat:(publicos[0]||ubicacion).latitud,lng:(publicos[0]||ubicacion).longitud},zoom:14,maxZoom:16,streetViewControl:false,mapTypeControl:false,gestureHandling:'cooperative'});
                 }
                 if(falloAnterior)throw Error('Mapa no disponible.');
                 const limites=new sdk.LatLngBounds();
+                coincidencias.replaceChildren();coincidencias.hidden=false;
+                const posiciones=new Map();
+                for(const d of publicos) {const k=d.latitud+','+d.longitud;posiciones.set(k,(posiciones.get(k)||0)+1);}
                 for(const d of publicos) {
                     const position={lat:d.latitud,lng:d.longitud};limites.extend(position);
                     let registro=marcadores.get(d.id);
                     if(!registro) {
-                        registro={marcador:new sdk.AdvancedMarkerElement({map:mapa,position,title:d.nombre}),evento:null};
+                        registro={marcador:new sdk.AdvancedMarkerElement({map:mapa,position,title:d.nombre,content:pin('●')}),evento:null};
                         marcadores.set(d.id,registro);
                     } else {
                         registro.marcador.position=position;registro.marcador.title=d.nombre;registro.marcador.map=mapa;
                     }
+                    const grupo=publicos.filter(n=>n.latitud===d.latitud&&n.longitud===d.longitud);
+                    const offset=grupo.length<=5?(grupo.findIndex(n=>n.id===d.id)-(grupo.length-1)/2)*42:0;
+                    if(grupo.length>1){const b=documento.createElement('button');b.textContent=d.nombre+' · ubicación compartida';b.type='button';b.onclick=()=>{if(actual===revision){destacar(d.id);seleccionar(d.id);}};coincidencias.append?.(b);}
+                    registro.marcador.content.style && (registro.marcador.content.style.translate=offset+'px 0');
+                    registro.marcador.content.textContent=grupo.length>1?String(grupo.findIndex(n=>n.id===d.id)+1):'●';
                     registro.evento=registro.marcador.addListener('click',()=>{
-                        if(actual===revision && marcadores.has(d.id))seleccionar(d.id);
+                        if(actual===revision && marcadores.has(d.id)){destacar(d.id);seleccionar(d.id);}
                     });
                 }
-                if(publicos.length===1) {mapa.setCenter({lat:publicos[0].latitud,lng:publicos[0].longitud});mapa.setZoom(14);}
+                destacar(seleccionado);
+                if(ubicacion){const position={lat:ubicacion.latitud,lng:ubicacion.longitud};limites.extend(position);
+                    if(!clienta)clienta=new sdk.AdvancedMarkerElement({map:mapa,position,title:'Mi ubicación',content:pin('●',true),zIndex:2000});
+                    else {clienta.position=position;clienta.map=mapa;}
+                } else if(clienta)clienta.map=null;
+                if(publicos.length===1 && !ubicacion) {mapa.setCenter({lat:publicos[0].latitud,lng:publicos[0].longitud});mapa.setZoom(14);}
                 else mapa.fitBounds(limites,32);
             } catch {falloAnterior=true;limpiar();throw Error('Mapa no disponible.');}
         }

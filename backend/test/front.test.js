@@ -176,7 +176,7 @@ test('Ver todos invalida la búsqueda por categoría pendiente y conserva el ord
     await pendiente;
     assert.equal(p.elementos['#categoriaBusqueda'].value, '');
     assert.equal(p.peticiones.at(-1).url, '/api/emprendimientos?nombre=&comuna=');
-    assert.deepEqual(mapa.at(-1), [1,2]);
+    assert.deepEqual(mapa.at(-1), [2,1]);
     assert.deepEqual(p.elementos['#resultados'].children.map(el => el.dataset.idNegocio), ['2','1']);
 });
 
@@ -438,8 +438,8 @@ test('Cercanía calcula, ordena con empates estables y conserva ausencias e inv�
  const nombres=()=>p.elementos['#resultados'].children.map(c=>c.children[0].textContent);
  assert.deepEqual(nombres(),datos.map(d=>d.nombre));
  p.actualizar({latitud:0,longitud:0},distanciaKm);
- assert.match(textos(p.elementos['#resultados'].children[0]),/222,4 km/);
- assert.match(textos(p.elementos['#resultados'].children[1]),/Distancia no disponible/);
+ assert.match(textos(p.elementos['#resultados'].children[0]),/111,2 km/);
+ assert.match(textos(p.elementos['#resultados'].children[3]),/Distancia no disponible/);
  p.elementos['#ordenCercania'].value='cercania';p.elementos['#ordenCercania'].onchange();
  assert.deepEqual(nombres(),['Cerca A','Cerca B','Lejos','Ausente','Inválido']);
  p.actualizar({latitud:0,longitud:2},distanciaKm);assert.equal(nombres()[0],'Lejos');

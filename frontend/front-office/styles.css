@@ -1026,3 +1026,26 @@ main {
 .resumen-fila dd{min-width:0;margin:0;overflow-wrap:anywhere}
 .resumen-precio dd,.resumen-abono dd{font-family:var(--serif);font-size:1.3rem;font-weight:500;line-height:1.3;white-space:nowrap;overflow-wrap:normal;word-break:normal;font-variant-numeric:tabular-nums}
 @media(max-width:620px){.resumen-precio dd,.resumen-abono dd{font-size:1.3rem}}
+
+/* Marcadores HTML de AdvancedMarkerElement: sin imágenes externas. */
+.pinMeraki {display:grid;place-items:center;width:36px;height:36px;border-radius:50% 50% 50% 8px;background:#79509b;color:white;border:3px solid white;box-shadow:0 2px 6px #33234088;font:700 16px system-ui;cursor:pointer;box-sizing:border-box;}
+.pinMeraki.pinSeleccionado {background:#4e236e;outline:3px solid #c9a7e5;transform:scale(1.12);}
+.pinMeraki.pinClienta {background:#1976d2;border-radius:50%;width:28px;height:28px;cursor:default;}
+#extraMapa img {width:100%;max-width:180px;height:110px;object-fit:cover;border-radius:12px;}
+.seleccionMapa {overflow-wrap:anywhere;max-width:100%;box-sizing:border-box;}
+.negocioSeleccionado {outline:3px solid #b18ad2;outline-offset:2px;}
+.pinLeafletSeleccionado {filter:drop-shadow(0 0 4px #663399);}
+.mapaCoincidencias {display:flex;flex-wrap:wrap;gap:8px;width:100%;}
+.mapaCoincidencias button {white-space:normal;overflow-wrap:anywhere;max-width:100%;min-height:44px;}
+
+/* Mapa y ficha comparten una composición; en móvil se apilan. */
+.mapaDistribucion {display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);gap:20px;align-items:start;margin-top:16px;}
+.mapaDistribucion > *, .mapaLateral {min-width:0;}
+.mapaDistribucion .mapaGoogle,.mapaDistribucion .mapaLeaflet {height:440px;}
+.mapaLateral {padding:22px;border:1px solid var(--borde);border-radius:16px;background:var(--papel);}
+.mapaLateral .seleccionMapa {padding:0;margin:0;border:0;background:transparent;}
+.mapaLateral:has(.seleccionMapa:not([hidden])) .mapaInvitacion {display:none;}
+.mapaLateral .seleccionMapa h4 {font-size:1.3rem;line-height:1.35;margin-bottom:10px;}
+.mapaLateral .seleccionMapa button {width:100%;min-height:46px;margin-top:20px;}
+.mapaInvitacion {color:var(--texto);line-height:1.6;}
+@media(max-width:760px){.mapaDistribucion{grid-template-columns:minmax(0,1fr);gap:14px;}.mapaDistribucion .mapaGoogle,.mapaDistribucion .mapaLeaflet{height:320px;}.mapaLateral{padding:18px;}}

@@ -10,7 +10,7 @@ const bcrypt=require('bcrypt');
 
 // Ejecuta las rutas originales con una lista cerrada de dependencias.
 // No importa db.js, pg, dotenv ni proveedores. Las sesiones son solo memoria.
-async function entorno(){
+async function entorno(configuracion={}){
     const consultas=[];
     const hash=await bcrypt.hash('solo-fixture-local',4);
     const cuenta={id_emprendedora:1,nombre:'Cuenta',apellido:'Ficticia',correo:'mvp@example.test',estado:'activa',password_hash:hash};
@@ -66,11 +66,24 @@ async function entorno(){
     vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../index.js'),'utf8'),{
         module,__dirname:path.join(__dirname,'..'),
         require:n=>{assert(Object.hasOwn(dependencias,n),'Dependencia no permitida: '+n);return dependencias[n];},
-        process:{env:{SESSION_SECRET:'fixture-mvp-sin-valor-real',MERAKI_SUSCRIPCIONES_AUTOMATICAS:'0'}},
+        process:{env:{SESSION_SECRET:'fixture-mvp-sin-valor-real',MERAKI_SUSCRIPCIONES_AUTOMATICAS:'0',...configuracion}},
         console:{log:noop,error:noop},URL,Buffer,setTimeout,clearTimeout
     });
     return {app:module.exports,consultas,fila};
 }
+
+test('Maps entrega únicamente configuración pública explícita y nunca secretos',async()=>{
+    for(const clave of [undefined,'','invalida!','CLAVE_FICTICIA_MAPS']) {
+        const {app,consultas}=await entorno({GOOGLE_MAPS_API_KEY:clave,GOOGLE_CLIENT_SECRET:'SECRETO_NO_PUBLICO'});
+        const r=await request(app).get('/api/mapas/configuracion').expect(200);
+        assert.equal(r.headers['cache-control'],'no-store');
+        assert.deepEqual(r.body,clave==='CLAVE_FICTICIA_MAPS'
+            ? {habilitado:true,autorizado:true,apiKey:clave,mapId:'DEMO_MAP_ID',entorno:'pruebas'}
+            : {habilitado:false});
+        assert.equal(consultas.length,0);
+        assert(!r.text.includes('SECRETO_NO_PUBLICO'));
+    }
+});
 
 test('MVP: recursos originales, sesión y agenda con dependencias exclusivamente en memoria',async t=>{
     const {app,consultas,fila}=await entorno();
