@@ -51,6 +51,7 @@ async function entorno(){
         './montos-abono':real('./montos-abono'),
         './incorporacion':real('./incorporacion'),
         './fotos-servicios':{montarFotos:noop},
+        './administracion':{montarAdministracion:noop},
         './gestiones-reserva':real('./gestiones-reserva'),
         './reservas-invitadas':real('./reservas-invitadas'),
         './notificaciones':{crearNotificaciones:()=>({registrar:prohibido,notificar:prohibido}),montarRutas:noop},

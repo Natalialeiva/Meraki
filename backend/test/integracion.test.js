@@ -88,6 +88,10 @@ test('Integración PostgreSQL, sesión, recuperación y notificaciones',{skip:pr
   });
   await t.test('Anónimo no lista ni reintenta',async()=>{await request(app).get('/api/notificaciones').expect(401);await request(app).post('/api/notificaciones/'+notificacionId+'/reintentar').expect(401);});
   await t.test('Login real crea sesión PostgreSQL',async()=>{await agent.post('/api/auth/login').send({correo:'camila@meraki.test',password:'clave-prueba'}).expect(200);});
+  await t.test('Registro público no permite roles administrativos y la sesión emprendedora no accede al panel',async()=>{
+   for(const extra of [{rol:'admin'},{idAdministradora:1},{admin:true}])await request(app).post('/api/auth/registro').send({nombre:'Fixture',apellido:'Local',rut:'10101010-1',correo:'no-admin@example.test',password:'Clave-ficticia-123',...extra}).expect(400);
+   await agent.get('/api/admin/emprendimientos').expect(401);await agent.get('/api/admin/resumen').expect(401);
+  });
   await t.test('Perfil: autenticación, campos protegidos y validaciones',async()=>{
    await request(app).patch('/api/emprendimientos/1').send({nombre:'Sin permiso'}).expect(401);
    for(const datos of [{},{nombre:'   '},{nombre:null},{nombre:'x'.repeat(151)},{telefono:123},{id_emprendedora:2},{estado:false},{latitud:1}]){

@@ -76,6 +76,8 @@ montarLecturaResultado(app,pool,referenciasWebpay);
 // Mensaje temporal para verificar que el servidor
 // está cargando la configuración actual de sesiones.
 console.log("MERAKI: configuración de sesiones cargada");
+// Sesión administrativa independiente; se monta antes de la sesión de emprendedoras.
+require('./administracion').montarAdministracion(app,{pool,Store:PgSession});
 
 // Configuramos las sesiones de las emprendedoras.
 app.use(session({
