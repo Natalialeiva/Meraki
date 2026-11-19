@@ -21,14 +21,33 @@
 </header>
 <main>
     <section class="portada" aria-label="Presentación y búsqueda">
-        <section class="hero-banner" aria-label="Presentación de Meraki">
-            <figure class="banner-oficial-nuevo">
-                <img src="assets/banner-meraki-nuevo.png" width="1672" height="941" alt="Encuentra el cuidado que buscas, cerca de ti. Descubre servicios de cuidado personal ofrecidos por emprendedoras" fetchpriority="high">
-            </figure>
-            <a class="banner-ampliable" href="assets/banner-meraki-nuevo.png" target="_blank" rel="noopener" aria-label="Abrir el banner original en otra pestaña para ampliar su texto">Abrir banner para ampliar <span aria-hidden="true">↗</span></a>
-            <div class="hero-acciones">
-                <a class="hero-cta" href="#catalogo">Explorar emprendimientos <span aria-hidden="true">→</span></a>
+        <section class="hero-editorial" aria-label="Descubre Meraki" aria-roledescription="carrusel">
+            <div class="hero-contenido">
+                <p class="hero-eyebrow">MERAKI · BELLEZA Y BIENESTAR</p>
+                <div id="heroDiapositivas">
+                    <div class="hero-slide" data-slide>
+                        <h1>Encuentra el cuidado<br>que buscas <em>cerca de ti.</em></h1>
+                        <p>Descubre emprendimientos de belleza y bienestar. Elige tu próximo servicio y disfruta un momento para ti.</p>
+                        <a class="hero-enlace" href="#buscar">Encuentra tu espacio <span aria-hidden="true">↗</span></a>
+                    </div>
+                    <div class="hero-slide" data-slide hidden>
+                        <h2>Tu próximo cuidado,<br><em>más cerca.</em></h2>
+                        <p>Explora el mapa y comparte tu ubicación si quieres descubrir qué emprendimientos tienes cerca.</p>
+                        <a class="hero-enlace" href="#catalogo">Explorar emprendimientos <span aria-hidden="true">↗</span></a>
+                    </div>
+                    <div class="hero-slide" data-slide hidden>
+                        <h2>Elige con calma.<br><em>Reserva para ti.</em></h2>
+                        <p>Conoce los servicios, sus precios y fotografías. Consulta la disponibilidad y encuentra tu momento.</p>
+                        <a class="hero-enlace" href="#catalogo">Descubrir servicios <span aria-hidden="true">↗</span></a>
+                    </div>
+                </div>
+                <div class="hero-controles" aria-label="Controles de portada" hidden>
+                    <button type="button" data-anterior aria-label="Mensaje anterior">←</button>
+                    <span id="heroContador" aria-live="polite">01 / 03</span>
+                    <button type="button" data-siguiente aria-label="Mensaje siguiente">→</button>
+                </div>
             </div>
+            <div class="hero-imagen" role="img" aria-label="Escena de bienestar con orquídeas, velas y toallas"></div>
         </section>
         <form id="buscar" class="buscador" aria-labelledby="tituloBusqueda">
             <div class="buscadorTitulo"><p class="etiqueta">Explora el catálogo</p><h2 id="tituloBusqueda">Encuentra un emprendimiento</h2></div>
@@ -66,17 +85,17 @@
             <p id="estadoMapa" role="status" aria-live="polite"></p>
             <div class="mapaDistribucion">
             <div id="negociosMapa" class="acciones" aria-label="Emprendimientos con coordenadas válidas"></div>
-            <div class="mapaLateral">
-            <p class="mapaInvitacion">Selecciona un pin para conocer el emprendimiento y explorar sus servicios.</p>
-            <section id="seleccionMapa" class="seleccionMapa" hidden aria-label="Emprendimiento seleccionado" aria-live="polite">
+            <div class="mapaLateral" id="catalogoLateral">
+            <h4 class="tituloListaMapa">Encuentra tu próximo cuidado</h4><div id="listaMapaCompacta" aria-label="Emprendimientos en el mapa"></div>
+            <div hidden><section id="seleccionMapa" class="seleccionMapa" hidden aria-label="Emprendimiento seleccionado" aria-live="polite">
                 <h4 id="nombreMapa"></h4><p id="comunaMapa"></p>
                 <div id="extraMapa"></div><div id="indicacionesMapa"></div>
                 <button id="serviciosMapa" type="button" class="secundario" disabled>Ver servicios</button>
-            </section>
+            </section></div>
             </div>
             </div>
         </section>
-        <div id="resultados" aria-label="Emprendimientos encontrados"></div>
+        <div id="catalogoSinMapa"><div id="resultados" aria-label="Emprendimientos encontrados"></div></div>
     </section>
 
     <section id="reserva" class="reserva" hidden aria-labelledby="tituloReserva">
@@ -127,5 +146,6 @@
 <script src="front.js?v=estado-publicacion-1"></script>
 <script type="module" src="ubicacion.mjs?v=a3-2"></script>
 <script type="module" src="mapa.mjs?v=a3-4-1"></script>
+<script type="module" src="portada.mjs"></script>
 </body>
 </html>

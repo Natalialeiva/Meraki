@@ -2,7 +2,7 @@
     'use strict';
     const estados=['pendiente_abono','confirmada','atendida','no_atendida','cancelada'];
     const etiquetas={pendiente_abono:'Pendiente de abono',confirmada:'Confirmada',atendida:'Atendida',no_atendida:'No atendida',cancelada:'Cancelada'};
-    const colores=['#846086','#456b63','#416b88','#8a6540','#9a4f65'];
+    const colores=['#4d0e13','#8a454d','#b47880','#ad8765','#715759'];
     const clp=centavos=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:2}).format(centavos/100);
     function mesActualSantiago(ahora=Date.now()){
         const partes=new Intl.DateTimeFormat('es-CL',{timeZone:'America/Santiago',year:'numeric',month:'2-digit'}).formatToParts(new Date(ahora));
@@ -109,13 +109,13 @@
             grafico.setAttribute('class','linea-reservas');
             const indice=p=>Number(p.slice(0,4))*12+Number(p.slice(5,7));
             const primero=indice(serie[0].periodo),rango=indice(serie.at(-1).periodo)-primero,max=Math.max(...serie.map(p=>p.cantidad));
-            const eje=svg('line');eje.setAttribute('x1','30');eje.setAttribute('y1','150');eje.setAttribute('x2','570');eje.setAttribute('y2','150');eje.setAttribute('stroke','#b6a6bd');grafico.append(eje);
+            const eje=svg('line');eje.setAttribute('x1','30');eje.setAttribute('y1','150');eje.setAttribute('x2','570');eje.setAttribute('y2','150');eje.setAttribute('stroke','#d8c4ac');grafico.append(eje);
             for(const [texto,x,y,ancla] of [[String(max),6,30,'start'],['0',6,153,'start'],[serie[0].periodo,30,175,'start'],...(serie.length>1?[[serie.at(-1).periodo,570,175,'end']]:[])]){
-                const etiqueta=svg('text');etiqueta.textContent=texto;etiqueta.setAttribute('x',String(x));etiqueta.setAttribute('y',String(y));etiqueta.setAttribute('text-anchor',ancla);etiqueta.setAttribute('font-size','14');etiqueta.setAttribute('fill','#503957');grafico.append(etiqueta);
+                const etiqueta=svg('text');etiqueta.textContent=texto;etiqueta.setAttribute('x',String(x));etiqueta.setAttribute('y',String(y));etiqueta.setAttribute('text-anchor',ancla);etiqueta.setAttribute('font-size','14');etiqueta.setAttribute('fill','#4d0e13');grafico.append(etiqueta);
             }
             const puntos=serie.map(p=>({x:rango?30+(indice(p.periodo)-primero)/rango*540:300,y:150-p.cantidad/max*120}));
-            const linea=svg('polyline');linea.setAttribute('points',puntos.map(p=>p.x+','+p.y).join(' '));linea.setAttribute('fill','none');linea.setAttribute('stroke','#775269');linea.setAttribute('stroke-width','3');grafico.append(linea);
-            for(const p of puntos){const circulo=svg('circle');circulo.setAttribute('cx',String(p.x));circulo.setAttribute('cy',String(p.y));circulo.setAttribute('r','5');circulo.setAttribute('fill','#775269');grafico.append(circulo);}
+            const linea=svg('polyline');linea.setAttribute('points',puntos.map(p=>p.x+','+p.y).join(' '));linea.setAttribute('fill','none');linea.setAttribute('stroke','#67232c');linea.setAttribute('stroke-width','3');grafico.append(linea);
+            for(const p of puntos){const circulo=svg('circle');circulo.setAttribute('cx',String(p.x));circulo.setAttribute('cy',String(p.y));circulo.setAttribute('r','5');circulo.setAttribute('fill','#67232c');grafico.append(circulo);}
             $('#evolucionReservas').append(grafico);
         }else $('#evolucionReservas').append(crear('p',serie.length?'Sin reservas en estos seis meses para el estado seleccionado. La tabla muestra los seis valores cero.':'Selecciona un mes y año válidos en el Resumen económico.'));
         if(serie.length)$('#evolucionReservas').append(tabla);
@@ -148,12 +148,12 @@
             const svg=tag=>doc.createElementNS?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag);
             const grafico=svg('svg');grafico.setAttribute('viewBox','0 0 640 220');grafico.setAttribute('class','linea-reservas');grafico.setAttribute('aria-hidden','true');
             const pico=Math.max(...mensual.serie.flatMap(m=>[m.activas,m.abonosActivas])),escala=Math.max(pico,1);
-            for(const [campo,color] of [['activas','#775269'],['abonosActivas','#aa617e']]){
+            for(const [campo,color] of [['activas','#67232c'],['abonosActivas','#b47880']]){
                 const puntos=mensual.serie.map((m,i)=>({x:90+i*100,y:170-m[campo]/escala*130}));
                 const linea=svg('polyline');linea.setAttribute('points',puntos.map(p=>p.x+','+p.y).join(' '));linea.setAttribute('fill','none');linea.setAttribute('stroke',color);linea.setAttribute('stroke-width','3');if(campo==='abonosActivas')linea.setAttribute('stroke-dasharray','7 4');grafico.append(linea);
                 for(const p of puntos){const punto=svg('circle');punto.setAttribute('cx',String(p.x));punto.setAttribute('cy',String(p.y));punto.setAttribute('r','4');punto.setAttribute('fill',color);grafico.append(punto);}
             }
-            for(const [texto,x,y] of [[clp(pico),2,30],[clp(0),2,175],[mensual.serie[0].periodo,70,205],[periodo,550,205]]){const etiqueta=svg('text');etiqueta.textContent=texto;etiqueta.setAttribute('x',String(x));etiqueta.setAttribute('y',String(y));etiqueta.setAttribute('font-size','14');etiqueta.setAttribute('fill','#503957');grafico.append(etiqueta);}
+            for(const [texto,x,y] of [[clp(pico),2,30],[clp(0),2,175],[mensual.serie[0].periodo,70,205],[periodo,550,205]]){const etiqueta=svg('text');etiqueta.textContent=texto;etiqueta.setAttribute('x',String(x));etiqueta.setAttribute('y',String(y));etiqueta.setAttribute('font-size','14');etiqueta.setAttribute('fill','#4d0e13');grafico.append(etiqueta);}
             $('#evolucionEconomica').append(crear('p','Línea continua: valor de reservas activas. Línea discontinua: abonos contractuales esperados. Meses sin reservas: cero.'),grafico);
         }else $('#evolucionEconomica').append(crear('p','No se traza la evolución: hay meses con importes no disponibles; no se sustituyen por cero.'));
         $('#evolucionEconomica').append(tablaMeses);

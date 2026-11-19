@@ -177,6 +177,7 @@ async function seleccionar(dato) {
         $('#estadoReserva').append(estado);
         informar(primera ? 'Elige profesional, fecha y hora.' : datos.length ? noDisponible : 'No hay servicios publicados por el momento.');
         await profesionales();
+        if(version===versionSeleccion) $('#listaServicios').scrollIntoView?.({behavior:'smooth',block:'start'});
     } catch {
         if (version === versionSeleccion) informar('No se pudieron cargar los servicios de ' + dato.nombre + '. Vuelve a elegir el emprendimiento para reintentar.', 'error');
     }
@@ -235,8 +236,14 @@ function dibujarCatalogo() {
             h.textContent = d.nombre; p.textContent = [d.descripcion, d.comuna, d.direccion].filter(Boolean).join(' · ');
             b.type = 'button'; b.dataset.accion='servicios'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
             a.append(h, p, b);
-            if (vistaIndicaciones) a.append(vistaIndicaciones(d));
-            else {const aviso=document.createElement('p');aviso.className='ayuda';aviso.textContent='Ubicación exacta no disponible.';a.append(aviso);}
+            const foto=document.createElement('div');foto.className='fotoEmprendimiento';
+            const sinFoto=()=>{foto.replaceChildren();const aviso=document.createElement('span');aviso.textContent='Sin fotografía disponible';foto.append(aviso);};
+            if(typeof d.imagen_url==='string'&&/^\/media\/servicios\/[a-f0-9-]+\.webp$/.test(d.imagen_url)){
+                const img=document.createElement('img');img.src=d.imagen_url;img.alt='Servicio de '+d.nombre;img.loading='lazy';img.onerror=sinFoto;foto.append(img);
+            }else sinFoto();
+            a.append(foto);
+            if (vistaIndicaciones && (d.latitud==null || d.longitud==null)) a.append(vistaIndicaciones(d));
+
             if (ubicacionCatalogo) {
                 const distanciaTexto = document.createElement('p'); distanciaTexto.className = 'distanciaNegocio';
                 distanciaTexto.textContent = distancia === null ? 'Distancia no disponible' : 'Aprox. ' + (distancia < 0.1 ? 'menos de 0,1' : new Intl.NumberFormat('es-CL', {maximumFractionDigits:1}).format(distancia)) + ' km';

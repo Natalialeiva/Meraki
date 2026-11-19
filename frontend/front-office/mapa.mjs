@@ -1,5 +1,4 @@
 import {validarCoordenadas} from './geografia.mjs';
-import {aplicarDemoMapa} from './mapa-demo.mjs';
 import {normalizarMarcadores,crearVistaIndicaciones} from './mapa-datos.mjs';
 import {crearProveedorMapa} from './mapa-proveedores.mjs';
 
@@ -94,9 +93,23 @@ export function montarMapa(documento, suscribir) {
         if(evento.key==='Escape' && !panel.hidden) {evento.preventDefault();control.alternar();boton.focus();}
     });
     globalThis.destacarNegocioMapa=id=>control.destacar(id);
-    const demo=globalThis.location && aplicarDemoMapa([{nombre:'Belleza Camila'}],globalThis.location.href)[0].comuna;
-    if(demo){const aviso=documento.createElement('p');aviso.className='ayuda';aviso.textContent='Demostración: Camila en Maipú y Daniela en Las Condes son posiciones ilustrativas, no sus direcciones reales. No se guardan en la base de datos.';panel.prepend(aviso);}
-    suscribir((datos,contexto)=>control.actualizar(globalThis.location?aplicarDemoMapa(datos,globalThis.location.href):datos,contexto));
+    suscribir((datos,contexto)=>{
+        const listaCompacta=documento.getElementById?.('listaMapaCompacta');
+        if(listaCompacta){
+            listaCompacta.replaceChildren();
+            for(const negocio of datos){
+                const tarjeta=documento.createElement('article');tarjeta.className='negocioCompacto';tarjeta.dataset.idNegocio=String(negocio.id_emprendimiento);
+                const titulo=documento.createElement('h5');titulo.textContent=negocio.nombre;
+                const comuna=documento.createElement('p');comuna.textContent=negocio.comuna||'';
+                const distancia=documento.createElement('p');distancia.className='distanciaNegocio';
+                distancia.textContent=typeof negocio.distancia==='number'?'Aprox. '+new Intl.NumberFormat('es-CL',{maximumFractionDigits:1}).format(negocio.distancia)+' km · en línea recta':'';
+                const boton=documento.createElement('button');boton.type='button';boton.textContent='Ver servicios';boton.setAttribute('aria-label','Ver servicios de '+negocio.nombre+' desde el mapa');boton.onclick=()=>globalThis.seleccionar?.(negocio);
+                tarjeta.append(titulo,comuna,distancia,boton);listaCompacta.append(tarjeta);
+            }
+            if(!datos.length){const vacio=documento.createElement('p');vacio.textContent='No hay emprendimientos para estos filtros.';listaCompacta.append(vacio);}
+        }
+        return control.actualizar(datos,contexto);
+    });
     return control;
 }
 if (typeof document!=='undefined') montarMapa(document, escuchar=>globalThis.suscribirMapa?.(escuchar));

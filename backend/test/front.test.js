@@ -332,10 +332,10 @@ test('Identidad visual conserva los archivos oficiales byte por byte', () => {
 });
 test('Banner y logo usan rutas relativas, texto accesible y no duplican las frases visibles', () => {
     assert.match(html,/<img[^>]*src="assets\/logo-meraki-transparente\.png"[^>]*alt="Logo oficial de Meraki"/);
-    assert.match(html,/<img[^>]*src="assets\/banner-meraki-nuevo\.png"[^>]*alt="Encuentra el cuidado que buscas, cerca de ti\. Descubre servicios de cuidado personal ofrecidos por emprendedoras"/);
+    assert.match(html,/class="hero-imagen" role="img" aria-label="Escena de bienestar con orquídeas, velas y toallas"/);
     assert(!html.includes('hero-arte'));
     const visible=html.replace(/<[^>]*>/g,'');
-    assert(!visible.includes('Encuentra el cuidado que buscas, cerca de ti'));
+    assert.equal(visible.split('Descubre emprendimientos de belleza y bienestar.').length-1,1);
     assert(!visible.includes('Descubre servicios de cuidado personal ofrecidos por emprendedoras'));
     assert.match(html,/href="styles\.css\?v=/);
 });
@@ -493,7 +493,7 @@ test('Indicaciones conserva catálogo y reserva aunque coordenadas de API no est
  const p=iniciar({buscar:async()=>[{id_emprendimiento:1,nombre:'Demo',comuna:'Santiago',latitud:0,longitud:0,ubicacion_confirmada:true}]});await p.preparar();
  const doc={createElement:tag=>new Elemento(tag)};
  p.configurarIndicaciones(negocio=>crearVistaIndicaciones(doc,negocio));
- assert.match(textos(p.elementos['#resultados']),/Coordenadas disponibles en el mapa\./);
+ assert.doesNotMatch(textos(p.elementos['#resultados']),/Coordenadas disponibles en el mapa\./);
  assert(!p.elementos['#resultados'].children[0].children.some(n=>n.tag==='a'));
  assert.equal(p.elementos['#crearReserva'].disabled,false);assert.equal(p.creadas(),0);
  assert(p.peticiones.every(r=>r.method==='GET'));
@@ -541,4 +541,14 @@ test('Un rechazo 409 después de una desconexión no descarta el intento inciert
 });
 test('La recuperación no requiere volver a consultar disponibilidad',async()=>{
  let veces=0;const p=iniciar({respuestaReserva:async()=>{if(++veces===1)throw Error('Red');return respuestaInvitada(200);}});await p.preparar();await p.elementos['#formReserva'].requestSubmit();const n=p.peticiones.filter(x=>x.url.startsWith('/api/disponibilidad')).length;await p.elementos['#verificarSolicitud'].onclick();assert.equal(p.peticiones.filter(x=>x.url.startsWith('/api/disponibilidad')).length,n);
+});
+
+test('Tarjetas de negocios muestran foto local y rechazan imágenes externas',async()=>{
+ for(const url of ['/media/servicios/12345678-1234-1234-1234-123456789abc.webp','https://externo.example/foto.webp',null]){
+  const p=iniciar({buscar:async()=>[{id_emprendimiento:1,nombre:'Negocio',imagen_url:url}]});await pausa();
+  const foto=p.elementos['#resultados'].children[0].children.find(n=>n.className==='fotoEmprendimiento');
+  assert(foto);const imagen=foto.children.find(n=>n.tag==='img');
+  if(url?.startsWith('/media/')){assert(imagen);assert.equal(imagen.src,url);imagen.onerror();assert.match(textos(foto),/Sin fotografía disponible/);}
+  else {assert(!imagen);assert.match(textos(foto),/Sin fotografía disponible/);}
+ }
 });

@@ -3946,7 +3946,10 @@ app.get("/api/emprendimientos", async (req, res) => {
                 comuna,
                 direccion,
                 latitud,
-                longitud
+                longitud,
+                (SELECT i.url FROM servicio s JOIN imagen_servicio i ON i.id_servicio=s.id_servicio
+                 WHERE s.id_emprendimiento=e.id_emprendimiento AND s.activo=TRUE AND i.url LIKE '/media/servicios/%'
+                 ORDER BY i.id_imagen DESC LIMIT 1) AS imagen_url
             FROM emprendimiento e
             WHERE estado = TRUE
               AND nombre ILIKE '%' || $1 || '%'

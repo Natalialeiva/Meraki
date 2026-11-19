@@ -1,14 +1,14 @@
 :root {
     color-scheme:light;
-    --crema:#f6f0eb;
-    --papel:#fbf8f4;
-    --tinta:#40332e;
-    --suave:#71625e;
-    --ciruela:#79566f;
-    --oscuro:#5e3b54;
-    --lavanda:#efe7f3;
-    --rosa:#f3e5e8;
-    --borde:#e3d4d2;
+    --crema:#eee4da;
+    --papel:#faf5ef;
+    --tinta:#382326;
+    --suave:#715759;
+    --ciruela:#67232c;
+    --oscuro:#4d0e13;
+    --lavanda:#ead9d4;
+    --rosa:#e7c9c6;
+    --borde:#d9c1b8;
     --error:#942c44;
     --serif:Georgia,'Times New Roman',serif
 }
@@ -1049,3 +1049,97 @@ main {
 .mapaLateral .seleccionMapa button {width:100%;min-height:46px;margin-top:20px;}
 .mapaInvitacion {color:var(--texto);line-height:1.6;}
 @media(max-width:760px){.mapaDistribucion{grid-template-columns:minmax(0,1fr);gap:14px;}.mapaDistribucion .mapaGoogle,.mapaDistribucion .mapaLeaflet{height:320px;}.mapaLateral{padding:18px;}}
+/* Una sola lista, reutilizada dentro o fuera del mapa. */
+#catalogoLateral {padding:0;border:0;background:transparent;}
+#catalogoLateral #resultados {display:flex;flex-direction:column;gap:14px;max-height:560px;overflow-y:auto;padding:4px;}
+#catalogoLateral .negocio-card {margin:0;padding:16px;}
+#catalogoLateral .negocio-card::before {display:none;}
+#catalogoLateral .negocio-card h3 {font-size:1.25rem;}
+.negocio-card {display:flex;flex-direction:column;}
+.fotoEmprendimiento {order:-1;min-height:110px;background:#eee7f0;border-radius:12px;overflow:hidden;display:grid;place-items:center;margin-bottom:12px;color:#695974;font-size:.85rem;}
+.fotoEmprendimiento img {width:100%;height:140px;object-fit:cover;display:block;}
+.tituloListaMapa {margin:0 0 12px;font-size:1.15rem;}
+#listaServicios {scroll-margin-top:90px;}
+@media(min-width:761px){.mapaDistribucion .mapaGoogle,.mapaDistribucion .mapaLeaflet{height:560px;}}
+@media(max-width:760px){#catalogoLateral #resultados{max-height:none;overflow:visible;}}
+/* Paleta cálida: crema, arena, rosa empolvado y burdeos. */
+body {background:linear-gradient(150deg,#eee4da 0%,#faf5ef 48%,#ead9d4 100%);}
+.mapaPreparacion {background:#eee4da;border-color:#d8c4ac;box-shadow:none;}
+.negocio-card {background:#faf5ef;border-color:#d8c4ac;border-radius:18px;box-shadow:0 6px 24px #4d0e1308;}
+.negocio-card h3 {color:#4d0e13;}
+.fotoEmprendimiento {background:#e6d5c6;color:#624b4a;border-radius:10px;min-height:160px;}
+.fotoEmprendimiento img {height:200px;}
+#listaMapaCompacta {display:flex;flex-direction:column;gap:12px;max-height:560px;overflow-y:auto;padding:4px;}
+.negocioCompacto {padding:20px;background:#faf5ef;border:1px solid #d8c4ac;border-radius:14px;}
+.negocioCompacto h5 {font-family:var(--serif);font-size:1.35rem;color:#4d0e13;margin:0 0 8px;font-weight:400;}
+.negocioCompacto p {font-size:.88rem;margin:4px 0;color:#715759;}
+.negocioCompacto button {margin-top:12px;min-height:44px;background:#4d0e13;color:#fff8f2;border:1px solid #4d0e13;box-shadow:none;}
+.negocioCompacto button:hover {background:#70232d;}
+.negocioSeleccionado {outline-color:#a96370;}
+#catalogoSinMapa {margin-top:28px;}
+.pinMeraki {background:#6d2934;box-shadow:0 2px 6px #4d0e1355;}
+.pinMeraki.pinSeleccionado {background:#4d0e13;outline-color:#c8a49f;}
+.pinMeraki.pinClienta {background:#1976d2;}
+@media(max-width:760px){#listaMapaCompacta {max-height:none;overflow:visible;}.negocioCompacto {padding:16px;}.fotoEmprendimiento img{height:180px;}}
+
+/* Fotografías panorámicas: ocupan todo el ancho útil de la tarjeta. */
+.negocio-card .fotoEmprendimiento {
+    width:100%;
+    align-self:stretch;
+    min-height:0;
+    aspect-ratio:16/9;
+    max-height:340px;
+    grid-column:1/-1;
+    grid-row:1;
+}
+.negocio-card .fotoEmprendimiento img {
+    width:100%;
+    height:100%;
+    min-height:0;
+    object-fit:cover;
+    object-position:center;
+}
+.negocio-card:only-child:has(.fotoEmprendimiento) {display:flex;}
+
+/* Portada editorial unida al buscador, sin tarjetas superpuestas. */
+.portada {display:block;max-width:1200px;margin:0 auto 48px;padding:0;border-radius:0;}
+.hero-editorial {display:grid;grid-template-columns:1.12fr 1fr;min-height:470px;background:#eee4da;border-top:1px solid #d8c4ac;overflow:hidden;}
+.hero-contenido {padding:52px 48px 30px;display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.hero-eyebrow {font-size:.7rem;letter-spacing:.19em;color:#67232c;font-weight:650;margin-bottom:22px;}
+.hero-slide h1,.hero-slide h2 {font:400 clamp(2.5rem,4.8vw,4.5rem)/1.03 var(--serif);letter-spacing:-.045em;color:#4d0e13;margin:0 0 24px;}
+.hero-slide em {font-weight:400;color:#8a454d;}
+.hero-slide>p {max-width:390px;font-size:1rem;line-height:1.75;color:#715759;}
+.hero-enlace {display:inline-flex;align-items:center;gap:30px;margin-top:26px;padding:13px 24px;background:#4d0e13;color:#fff8f2;border-radius:28px;text-decoration:none;font-size:.9rem;}
+.hero-enlace:hover {background:#70232d;color:white;}
+.hero-imagen {position:relative;background-image:url('assets/banner-meraki-nuevo.png');background-position:right center;background-size:auto 110%;background-repeat:no-repeat;min-height:430px;}
+.hero-imagen span {position:absolute;bottom:26px;right:24px;left:24px;background:#faf5efe8;padding:14px 18px;color:#4d0e13;font:italic 1.15rem var(--serif);text-align:center;border-radius:2px;}
+.hero-controles {display:flex;align-items:center;gap:16px;margin-top:32px;}
+.hero-controles[hidden],.hero-slide[hidden] {display:none;}
+.hero-controles button {width:44px;height:44px;padding:0;background:transparent;color:#4d0e13;border:1px solid #b89590;border-radius:50%;box-shadow:none;}
+.hero-controles span {font-size:.75rem;letter-spacing:.12em;color:#715759;}
+.hero-slide {animation:portada-entrada .35s ease-out;}
+@keyframes portada-entrada {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.portada .buscador {margin:0;max-width:none;border:0;border-top:1px solid #d8c4ac;border-bottom:1px solid #d8c4ac;border-radius:0;background:#faf5ef;box-shadow:none;padding:28px 32px;}
+@media(max-width:760px){.hero-editorial{grid-template-columns:1fr;}.hero-contenido{padding:32px 24px;}.hero-slide h1,.hero-slide h2{font-size:2.8rem;}.hero-imagen{min-height:230px;background-size:auto 180%;}.hero-imagen span{bottom:16px;}.portada .buscador{padding:24px 18px;}.hero-controles{margin-top:24px;}}
+@media(prefers-reduced-motion:reduce){.hero-slide{animation:none;}html{scroll-behavior:auto;}}
+/* Recorte del recurso existente centrado en la escena, sin su texto impreso. */
+.hero-imagen {background-size:auto 230%;background-position:right center;}
+@media(max-width:760px){.hero-imagen{background-size:auto 300%;}}
+
+/* Composición fluida: aprovecha el escritorio sin márgenes exteriores amplios. */
+.cabecera,main,.pie {width:100%;max-width:none;padding-inline:clamp(16px,3vw,48px);}
+.portada {width:100%;max-width:none;margin-inline:0;}
+.cabecera {border-radius:0;background:#eee4da;}
+.hero-editorial {grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+.hero-contenido {padding-inline:clamp(24px,4vw,72px);}
+.hero-slide>p {max-width:480px;}
+@media(max-width:760px){.hero-editorial{grid-template-columns:minmax(0,1fr);}.cabecera,main,.pie{padding-inline:16px;}.hero-contenido{padding-inline:24px;}}
+/* Ventana sobre el extremo derecho del banner: excluye el texto incorporado. */
+.hero-imagen {background-size:auto 360%;background-position:100% 62%;}
+@media(max-width:760px){.hero-imagen{background-size:auto 430%;background-position:100% 62%;}}
+/* Fotografía de portada proporcionada por Natalia. */
+.hero-imagen {background-image:url('assets/portada-bienestar.jpg');background-size:cover;background-position:center 58%;}
+.hero-imagen span {font-size:clamp(1rem,1.4vw,1.3rem);line-height:1.45;}
+@media(max-width:760px){.hero-imagen{background-size:cover;background-position:center 62%;min-height:300px;}}
+.hero-imagen {background-image:url('assets/portada-meraki-premium.png');background-size:cover;background-position:center;}
+@media(max-width:760px){.hero-imagen{background-size:cover;background-position:center;}}
