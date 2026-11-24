@@ -12,3 +12,39 @@ section,.tarjeta-login {border-radius:26px;box-shadow:0 8px 28px var(--color-b94
 .indicadores>div:nth-child(4n+3){background:var(--mauve);}
 button{border-radius:24px;}
 h1,h2{font-family:var(--font-heading);font-weight:400;color:var(--primary-action);}
+
+/* Extensión local: reutiliza las hojas y tokens vigentes del Back Office. */
+.admin-panel main.contenido-gestion{margin:0;max-width:1450px;}
+.admin-panel .marca span{font-family:var(--font-body);}
+.admin-panel .vista{margin:0;background:var(--bg);border:0;box-shadow:none;}
+.admin-panel #identidadAdmin{margin:0;font-size:12px;overflow-wrap:anywhere;}
+.admin-panel .agenda-metricas{margin-top:20px;}
+.admin-panel .agenda-metricas strong{font-family:var(--font-heading);font-size:2rem;color:var(--ink);}
+.admin-panel .tabla-admin{width:100%;min-width:0;}
+.admin-panel table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
+.admin-panel caption{text-align:left;margin:16px 0;color:var(--mute-readable);}
+.admin-panel th,.admin-panel td{padding:12px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere;}
+.admin-panel th{color:var(--primary-action);}
+.admin-panel td button{max-width:100%;white-space:normal;}
+.admin-panel button,.admin-panel summary{min-height:44px;}
+.admin-panel .acciones-admin{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;}
+.admin-panel #accionesAdmin{display:grid;gap:14px;margin-top:20px;}
+.admin-panel #accionesAdmin article{padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--surface);}
+.admin-panel dialog{max-width:560px;width:calc(100% - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;border:1px solid var(--line);border-radius:28px;background:var(--surface);color:var(--ink);padding:26px;}
+.admin-panel dialog::backdrop{background:var(--color-49345118);}
+.admin-panel dialog textarea{min-height:100px;}
+.admin-panel #estado:empty{display:none;}
+.admin-panel #estado{overflow-wrap:anywhere;}
+@media(max-width:800px){
+ .admin-panel .tabla-admin thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+ .admin-panel .tabla-admin table,.admin-panel .tabla-admin tbody,.admin-panel .tabla-admin tr,.admin-panel .tabla-admin td{display:block;width:100%;}
+ .admin-panel .tabla-admin tr{padding:12px;border:1px solid var(--line);border-radius:18px;background:var(--surface);margin:14px 0;}
+ .admin-panel .tabla-admin td{border:0;padding:6px 0;}
+ .admin-panel .tabla-admin td::before{content:attr(data-label);display:block;font-weight:600;color:var(--primary-action);}
+ .admin-panel .pie-menu{position:static;padding:12px 0 0;}
+ .admin-panel .barra-superior{align-items:flex-start;flex-wrap:wrap;padding:16px 0;}
+ .admin-panel .barra-superior p{max-width:100%;}
+}
+@media(max-width:360px){.admin-panel dialog{padding:18px;}.admin-panel .acciones-admin button{width:100%;}}
+
+.admin-panel .menu-gestion{align-items:stretch;margin-top:0;flex-wrap:nowrap;}

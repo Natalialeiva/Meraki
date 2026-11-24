@@ -32,8 +32,8 @@ const asyncRuta=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next
 function montarAdministracion(app,{pool,Store,limites={ip:30,cuenta:8},ahora=()=>Date.now()}){
  const api=express.Router(),paginas=express.Router();
  const guardarSesion=new Store({pool,tableName:'sesion_meraki',createTableIfMissing:true,pruneSessionInterval:false});
- const middleware=session({name:'meraki.admin.sid',secret:process.env.SESSION_SECRET,
-  store:guardarSesion,resave:false,saveUninitialized:false,
+ const middleware=session({name:'meraki.admin.sid',secret:createHash('sha256').update('meraki-admin-v1:'+process.env.SESSION_SECRET).digest('hex'),
+  store:guardarSesion,resave:false,saveUninitialized:false,rolling:true,
   cookie:{httpOnly:true,sameSite:'strict',secure:process.env.NODE_ENV==='production',path:'/',maxAge:30*60*1000}});
  const cabeceras=(req,res,next)=>{res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff',
   'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"});next();};
@@ -44,6 +44,7 @@ function montarAdministracion(app,{pool,Store,limites={ip:30,cuenta:8},ahora=()=
  };
  async function autorizar(req,res,next){
   if(!Number.isSafeInteger(req.session?.idAdministradora))return res.status(401).json({mensaje:'Inicia sesión administrativa'});
+  if(!Number.isFinite(req.session.adminInicio)||ahora()-req.session.adminInicio>8*60*60*1000){await new Promise(resolve=>req.session.destroy(()=>resolve()));return res.status(401).json({mensaje:'La sesión administrativa venció. Inicia sesión nuevamente.'});}
   const r=await pool.query('SELECT id_administradora,correo FROM administradora WHERE id_administradora=$1 AND activa=TRUE',[req.session.idAdministradora]);
   if(!r.rows.length){await new Promise(resolve=>req.session.destroy(()=>resolve()));return res.status(401).json({mensaje:'Sesión administrativa no disponible'});}
   req.administradora=r.rows[0];next();
@@ -69,6 +70,7 @@ function montarAdministracion(app,{pool,Store,limites={ip:30,cuenta:8},ahora=()=
   if(!cuenta?.activa||!correcta)return res.status(401).json({mensaje:'Correo o contraseña no válidos'});
   await new Promise((resolve,reject)=>req.session.regenerate(e=>e?reject(e):resolve()));
   req.session.idAdministradora=cuenta.id_administradora;
+  req.session.adminInicio=ahora();req.session.adminCSRF=randomBytes(32).toString('hex');
   await new Promise((resolve,reject)=>req.session.save(e=>e?reject(e):resolve()));
   res.json({mensaje:'Sesión administrativa iniciada'});
  }));
@@ -77,8 +79,7 @@ function montarAdministracion(app,{pool,Store,limites={ip:30,cuenta:8},ahora=()=
   res.clearCookie('meraki.admin.sid',{path:'/'}).json({mensaje:'Sesión administrativa cerrada'});
  }));
  api.use(asyncRuta(autorizar));
- api.use((req,res,next)=>{if(!['GET','HEAD'].includes(req.method))return res.status(405).set('Allow','GET, HEAD').json({mensaje:'El panel es de solo lectura'});next();});
- api.get('/auth/yo',(req,res)=>res.json(req.administradora));
+ api.get('/auth/yo',(req,res)=>res.json({...req.administradora,csrf:req.session.adminCSRF}));
  api.get('/emprendimientos',asyncRuta(async(req,res)=>{
   const q=String(req.query.q||'').trim(),estado=String(req.query.estado||''),cuenta=String(req.query.cuenta||''),pagina=Number(req.query.pagina||1);
   if(q.length>150||!['','sin_suscripcion','gratuito','activa','vencida','cancelada'].includes(estado)||!['','activa','inactiva'].includes(cuenta)||!Number.isSafeInteger(pagina)||pagina<1||pagina>100000)return res.status(400).json({mensaje:'Filtros no válidos'});
@@ -110,6 +111,8 @@ function montarAdministracion(app,{pool,Store,limites={ip:30,cuenta:8},ahora=()=
    current_setting('TimeZone') AS zona_origen_fechas FROM contabilizados`,[mes]);
   res.json({mes,zona_horaria:'America/Santiago',moneda:'CLP',...r.rows[0],criterio:'Cobros de suscripción aprobados y finalizados; un registro por período conocido. No incluye abonos de reservas. Fechas convertidas desde la zona PostgreSQL a Santiago; si cambió históricamente, revisar su procedencia. No acredita liquidaciones bancarias.'});
  }));
+ require('./admin-gestion').montarGestionAdministrativa(api,{pool,asyncRuta,origen,cobrosSQL});
+ api.use((req,res,next)=>{if(!['GET','HEAD'].includes(req.method))return res.status(405).set('Allow','GET, HEAD').json({mensaje:'Operación administrativa no permitida'});next();});
  const carpeta=path.join(__dirname,'../frontend/admin');
  paginas.get('/login',(req,res)=>res.sendFile(path.join(carpeta,'login.html')));
  paginas.get(['/admin.css','/admin.js'],(req,res)=>res.sendFile(path.join(carpeta,req.path)));
@@ -118,7 +121,7 @@ function montarAdministracion(app,{pool,Store,limites={ip:30,cuenta:8},ahora=()=
   return autorizar(req,res,next);
  }));
  paginas.get('/',(req,res)=>res.sendFile(path.join(carpeta,'index.html')));
- const fallo=(e,req,res,next)=>{if(res.headersSent)return next(e);res.status(503).json({mensaje:'Administración no disponible. Comprueba su instalación y vuelve a intentar.'});};
+ const fallo=(e,req,res,next)=>{if(res.headersSent)return next(e);res.status(e.estado||503).json({mensaje:e.estado?e.message:'Administración no disponible. Comprueba su instalación y vuelve a intentar.'});};
  api.use(fallo);paginas.use(fallo);
  app.use('/api/admin',api);app.use('/admin',paginas);
  return {store:guardarSesion};
