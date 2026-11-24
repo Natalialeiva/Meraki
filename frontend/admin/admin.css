@@ -48,3 +48,6 @@ h1,h2{font-family:var(--font-heading);font-weight:400;color:var(--primary-action
 @media(max-width:360px){.admin-panel dialog{padding:18px;}.admin-panel .acciones-admin button{width:100%;}}
 
 .admin-panel .menu-gestion{align-items:stretch;margin-top:0;flex-wrap:nowrap;}
+
+/* Mismo enlace de retorno que .tarjeta-acceso del Back Office. */
+.tarjeta-login .enlace-catalogo{display:block;text-align:center;font-size:12px;margin-top:25px;text-decoration:none;}
