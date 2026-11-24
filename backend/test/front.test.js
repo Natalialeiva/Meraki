@@ -552,3 +552,23 @@ test('Tarjetas de negocios muestran foto local y rechazan imágenes externas',as
   else {assert(!imagen);assert.match(textos(foto),/Sin fotografía disponible/);}
  }
 });
+
+for (const [nombre,direccion,comuna,esperado] of [
+ ['Sofía','Avenida San Pascual 59','Las Condes','Avenida San Pascual 59, Las Condes'],
+ ['María Spa','Padre Miguel de Olivares 1456','Maipú','Padre Miguel de Olivares 1456, Maipú'],
+ ['Camila','Plaza de Armas','Santiago','Plaza de Armas, Santiago'],
+ ['solo dirección','Calle 10',null,'Calle 10'],
+ ['solo comuna',null,'Ñuñoa','Ñuñoa'],
+ ['sin datos',undefined,null,'Ubicación no disponible'],
+ ['espacios y comas','  Calle   10,, Las Condes,  ',' Las   Condes ','Calle 10, Las Condes'],
+ ['comuna final sin coma','Calle 10 Las Condes','Las Condes','Calle 10 Las Condes'],
+ ['comparación sin alterar acentos','Calle 10, MAIPÚ','Maipú','Calle 10, MAIPÚ'],
+ ['nombre de avenida','Avenida Providencia','Providencia','Avenida Providencia, Providencia'],
+ ['nulos de texto','null','undefined','Ubicación no disponible']
+]) test('Ubicación de tarjeta: '+nombre,async()=>{
+ const p=iniciar({buscar:()=>[{id_emprendimiento:9,nombre,direccion,comuna,descripcion:'Descripción del negocio'}]});await pausa();
+ const tarjeta=p.elementos['#resultados'].children[0];assert.equal(tarjeta.children[1].textContent,esperado);assert.doesNotMatch(tarjeta.children[1].textContent,/Descripción del negocio/);
+ let avisos=0;p.configurarIndicaciones(()=>{avisos++;const n=new Elemento('p');n.textContent='Coordenadas disponibles en el mapa';return n;});
+ assert.equal(avisos,0);assert.doesNotMatch(textos(p.elementos['#resultados']),/Coordenadas disponibles|Dirección exacta pendiente|Cómo llegar no está habilitado|Ubicación no confirmada/);
+ assert.equal(tarjeta.className,'negocio-card');assert.equal(tarjeta.children[2].textContent,'Ver servicios de '+nombre);
+});

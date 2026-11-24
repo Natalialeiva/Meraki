@@ -221,6 +221,17 @@ function actualizarCercania(posicion, calcular) {
 let receptorMapa = null, vistaIndicaciones=null;
 function configurarIndicaciones(crearVista) {vistaIndicaciones=crearVista;dibujarCatalogo();}
 function suscribirMapa(receptor) { receptorMapa = receptor; receptor(resultadosCatalogo,{ubicacion:ubicacionCatalogo}); }
+// Presentación exclusiva de las tarjetas del catálogo; no modifica sus datos.
+function ubicacionTarjetaCatalogo(negocio) {
+    const limpiar = valor => typeof valor === 'string' && !/^(null|undefined)$/i.test(valor.trim())
+        ? valor.trim().replace(/\s+/g, ' ').replace(/\s*,(?:\s*,)*\s*/g, ', ').replace(/^,\s*|,\s*$/g, '') : '';
+    const direccion = limpiar(negocio.direccion), comuna = limpiar(negocio.comuna);
+    if (!direccion || !comuna) return direccion || comuna || 'Ubicación no disponible';
+    const comparar = valor => valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').replace(/[.]$/, '');
+    const d = comparar(direccion), c = comparar(comuna);
+    const yaIncluida = d === c || d.endsWith(', ' + c) || (/\d/.test(d) && d.endsWith(' ' + c));
+    return yaIncluida ? direccion : direccion + ', ' + comuna;
+}
 function dibujarCatalogo() {
     const foco=document.activeElement;
     const idEnFoco=foco?.closest?.('article[data-id-negocio]')?.dataset.idNegocio;
@@ -233,7 +244,7 @@ function dibujarCatalogo() {
         for (const {dato:d, distancia} of filas) {
             const a = document.createElement('article'), h = document.createElement('h3'), p = document.createElement('p'), b = document.createElement('button');
             a.className = 'negocio-card';a.dataset.idNegocio=String(d.id_emprendimiento);
-            h.textContent = d.nombre; p.textContent = [d.descripcion, d.comuna, d.direccion].filter(Boolean).join(' · ');
+            h.textContent = d.nombre; p.textContent = ubicacionTarjetaCatalogo(d);
             b.type = 'button'; b.dataset.accion='servicios'; b.textContent = 'Ver servicios de ' + d.nombre; b.onclick = () => seleccionar(d);
             a.append(h, p, b);
             const foto=document.createElement('div');foto.className='fotoEmprendimiento';
@@ -242,7 +253,6 @@ function dibujarCatalogo() {
                 const img=document.createElement('img');img.src=d.imagen_url;img.alt='Servicio de '+d.nombre;img.loading='lazy';img.onerror=sinFoto;foto.append(img);
             }else sinFoto();
             a.append(foto);
-            if (vistaIndicaciones && (d.latitud==null || d.longitud==null)) a.append(vistaIndicaciones(d));
 
             if (ubicacionCatalogo) {
                 const distanciaTexto = document.createElement('p'); distanciaTexto.className = 'distanciaNegocio';
