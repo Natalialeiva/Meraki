@@ -13,8 +13,8 @@
     function resolver(hash){return Object.keys(vistas).find(id=>vistas[id].hash===String(hash||'').replace(/^#/,''))||'reservas';}
     function montar({contenedor,menu,titulo,descripcion,ventana=window,alCambiar=()=>{}}){
         function dibujar(id,enfocar){
-            if(!Object.hasOwn(vistas,id))id='reservas';
-            for(const panel of contenedor.querySelectorAll('[data-vista]'))panel.hidden=panel.dataset.vista!==id;
+            if(!Object.hasOwn(vistas,id)||id==='dashboard')id='reservas';
+            for(const panel of contenedor.querySelectorAll('[data-vista]'))panel.hidden=panel.dataset.vista!==id && !(id==='reservas'&&panel.dataset.vista==='dashboard');
             for(const link of menu.querySelectorAll('[data-destino]')){
                 if(link.dataset.destino===id)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
             }

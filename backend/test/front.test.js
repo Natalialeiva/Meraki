@@ -35,7 +35,8 @@ function iniciar(config = {}) {
     const categoria = elementos['#categoriaBusqueda'];
     categoria.name = 'id_categoria';
     categoria.disabled = true;
-    elementos['#buscar'].campos = [filtroNombre,comuna,categoria];
+    const busqueda=new Elemento('input');busqueda.name='q';
+    elementos['#buscar'].campos = [filtroNombre,comuna,categoria,busqueda];
     elementos['#buscar'].elements = {namedItem: clave => elementos['#buscar'].campos.find(c => c.name === clave)};
     const peticiones = []; let reservasCreadas = 0;
     const contexto = vm.createContext({Intl,Date:config.reloj||Date,setTimeout:config.temporizador,URLSearchParams,console,crypto:require("node:crypto"),
@@ -60,7 +61,7 @@ function iniciar(config = {}) {
         }
     });
     vm.runInContext(script, contexto);
-    const p = {configurarIndicaciones:crearVista=>contexto.configurarIndicaciones(crearVista),suscribirMapa:receptor=>contexto.suscribirMapa(receptor),seleccionarMapa:dato=>contexto.seleccionar(dato),actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
+    const p = {busqueda,configurarIndicaciones:crearVista=>contexto.configurarIndicaciones(crearVista),suscribirMapa:receptor=>contexto.suscribirMapa(receptor),seleccionarMapa:dato=>contexto.seleccionar(dato),actualizar:(posicion, calcular)=>contexto.actualizarCercania(posicion, calcular),elementos,peticiones,nombre,correo,telefono,filtroNombre,comuna,creadas:() => reservasCreadas,
         async seleccionar() { await pausa(); return elementos['#resultados'].children[0].children[2].onclick(); },
         async preparar() {
             await p.seleccionar(); elementos['#profesional'].value = '3'; elementos['#profesional'].onchange();
@@ -571,4 +572,25 @@ for (const [nombre,direccion,comuna,esperado] of [
  let avisos=0;p.configurarIndicaciones(()=>{avisos++;const n=new Elemento('p');n.textContent='Coordenadas disponibles en el mapa';return n;});
  assert.equal(avisos,0);assert.doesNotMatch(textos(p.elementos['#resultados']),/Coordenadas disponibles|Dirección exacta pendiente|Cómo llegar no está habilitado|Ubicación no confirmada/);
  assert.equal(tarjeta.className,'negocio-card');assert.equal(tarjeta.children[2].textContent,'Ver servicios de '+nombre);
+});
+
+test('Barra única busca por nombre o comuna y elimina resultados repetidos',async()=>{
+ const p=iniciar({buscar:url=>{
+  const filtros=new URLSearchParams(url.split('?')[1]);
+  if(filtros.get('nombre')==='Maipú')return[{id_emprendimiento:1,nombre:'Maipú Belleza'}];
+  if(filtros.get('comuna')==='Maipú')return[{id_emprendimiento:1,nombre:'Maipú Belleza'},{id_emprendimiento:2,nombre:'Camila',comuna:'Maipú'}];
+  return[];
+ }});await pausa();p.busqueda.value='Maipú';await p.elementos['#buscar'].requestSubmit();
+ assert.equal(p.elementos['#resultados'].children.length,2);
+ assert(p.peticiones.some(r=>r.url.includes('comuna=Maip%C3%BA')));
+ assert(p.peticiones.some(r=>r.url.includes('nombre=Maip%C3%BA')));
+ assert(p.peticiones.every(r=>r.method==='GET'));
+});
+test('Chips filtran por categoría real conservando la búsqueda y actualizan selección',async()=>{
+ const p=iniciar({categorias:()=>[{id_categoria:4,nombre:'Manicure'},{id_categoria:7,nombre:'Pestañas'}]});await pausa();
+ p.busqueda.value='Camila';const chips=p.elementos['#chipsCategorias'];assert.equal(chips.children.length,3);
+ await chips.children[1].onclick();assert.equal(chips.children[1].attributes['aria-pressed'],'true');
+ const consultas=p.peticiones.filter(r=>r.url.startsWith('/api/emprendimientos?')&&r.url.includes('id_categoria=4'));
+ assert.equal(consultas.length,2);assert.match(consultas[0].url,/nombre=Camila/);
+ await p.elementos['#limpiarBusqueda'].onclick();assert.equal(p.busqueda.value,'');assert.equal(chips.children[0].attributes['aria-pressed'],'true');
 });

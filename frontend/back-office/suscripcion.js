@@ -38,7 +38,8 @@
                 const estadoPago=p.estado==='pendiente'?'Resultado en revisión; no se repetirá el cargo automáticamente':p.estado==='aprobado'?'Aprobado':p.estado==='rechazado'?'Rechazado; otro intento requiere tu autorización':p.estado;
                 parrafo(pagos,`Período ${p.periodo_inicio||'anterior'} a ${p.periodo_fin||'—'} · $${Number(p.monto).toLocaleString('es-CL')} · ${estadoPago}`);
             }
-            if(!datos.pagos.length)parrafo(pagos,'Sin cobros registrados.');controles();
+            if(!datos.pagos.length)parrafo(pagos,'Sin cobros registrados.');
+            raiz.MerakiSuscripcionVisual?.dibujar(documento,datos);controles();
         }
         async function cargar(){
             try{datos=await api('/api/suscripcion');dibujar();alActualizar(datos);return true;}

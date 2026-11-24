@@ -1,0 +1,3 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');const {horas}=require('../../frontend/back-office/dashboard-visual');
+test('Horas usa fecha civil de Chile, límites semiabiertos y registros únicos',()=>{const r=(id,f)=>({id_reserva:id,fecha_hora_inicio:f});const a=r(1,'2026-11-23T09:00:00');const m=horas([a,a,r(2,'2026-11-23T12:00:00'),r(3,'2026-11-29T17:59:00'),r(4,'2026-11-29T18:00:00')]);assert.equal(m[0][0],1);assert.equal(m[1][0],1);assert.equal(m[2][6],1);assert.equal(m.flat().reduce((a,b)=>a+b,0),3);});
+test('Horas sin datos no inventa actividad',()=>{assert.equal(horas([]).flat().reduce((a,b)=>a+b,0),0);assert.equal(horas([{id_reserva:1,fecha_hora_inicio:'invalida'}]).flat().reduce((a,b)=>a+b,0),0);});

@@ -621,7 +621,8 @@ test('Desgloses nativos de teclado y etiquetas únicas para nombres iguales, sin
         assert.equal(h.$(lista).querySelectorAll('img').length,0);
     }
     assert(textoCompleto(h.$('#distribucionServicios')).includes(nombre));
-    const css=fs.readFileSync(require.resolve('../../frontend/back-office/gestion.css'),'utf8');
+    const tokens=fs.readFileSync(require.resolve('../../frontend/front-office/diseno-tokens.css'),'utf8');
+    const css=fs.readFileSync(require.resolve('../../frontend/back-office/gestion.css'),'utf8').replace(/var\(--([a-z0-9-]+)\)/g,(original,nombre)=>tokens.match(new RegExp('--'+nombre+':(#[0-9a-f]+)'))?.[1]||original);
     assert(css.includes('summary:focus-visible'));assert(css.includes('min-height:44px'));
 });
 
@@ -664,7 +665,8 @@ test('No hay otra región live en los gráficos; barras y datos desconocidos se 
 });
 
 test('Contraste estático de barras y texto, y reglas de reflujo de estadísticas sin medidas rígidas',()=>{
-    const css=fs.readFileSync(require.resolve('../../frontend/back-office/gestion.css'),'utf8');
+    const tokens=fs.readFileSync(require.resolve('../../frontend/front-office/diseno-tokens.css'),'utf8');
+    const css=fs.readFileSync(require.resolve('../../frontend/back-office/gestion.css'),'utf8').replace(/var\(--([a-z0-9-]+)\)/g,(original,nombre)=>tokens.match(new RegExp('--'+nombre+':(#[0-9a-f]+)'))?.[1]||original);
     const relleno=css.match(/\.barra-distribucion::-webkit-meter-optimum-value\{background:(#[0-9a-f]+)/)[1];
     const fondo=css.match(/\.barra-distribucion::-webkit-meter-bar\{background:(#[0-9a-f]+)/)[1];
     const texto=css.match(/\.distribucion-cantidad\{[^}]*color:(#[0-9a-f]+)/)[1];

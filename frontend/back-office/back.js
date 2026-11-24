@@ -69,7 +69,7 @@ const servicios=MerakiServicios.montar({form:$('#servicioGestion'),lista:$('#lis
     selector:$('#negocio'),actualizar:$('#actualizarServicios'),api,puedeConfigurar});
 const trabajadoras=MerakiTrabajadoras.montar({form:$('#trabajadoraGestion'),lista:$('#listaTrabajadoras'),estado:$('#estadoTrabajadoras'),
     selector:$('#negocio'),actualizar:$('#actualizarTrabajadoras'),asignacion:$('#asignacionGestion'),
-    asignados:$('#asignacionesTrabajadora'),tituloAsignacion:$('#tituloAsignaciones'),api,puedeConfigurar});
+    asignados:$('#asignacionesTrabajadora'),tituloAsignacion:$('#tituloAsignaciones'),selectorTrabajadora:$('#trabajadoraAsignacion'),api,puedeConfigurar});
 const horarios=MerakiHorarios.montar({contenedor:$('#gestionHorarios'),selectorNegocio:$('#negocio'),api,puedeConfigurar});
 const suscripcion=MerakiSuscripcion.montar({contenedor:$('#gestionSuscripcion'),api,alActualizar:datos=>{
     permisoConfiguracion=datos?.capacidades?.configurar===true;
@@ -84,7 +84,7 @@ function limpiarMetricasDashboard(){
     for(const id of ['dashboardTotal',...Object.keys(camposDashboard)])$('#'+id).textContent='—';
 }
 function cambiarVistaResumen(vista){
-    dashboardActivo=vista==='dashboard';
+    dashboardActivo=vista==='dashboard'||vista==='reservas';
     $(dashboardActivo?'#dashboardDistribucion':'#distribucionEnAgenda').append($('#distribucionReservas'));
     $('#alcanceDistribucion').textContent=dashboardActivo
         ? describirFiltrosDashboard()
@@ -104,7 +104,7 @@ function sincronizarDashboard(vista){
     $('#advertenciaDashboard').textContent=vista.ultimaActualizacion.advertencia;
     $('#estadoDashboard').dataset.estado=vista.estado;
     $('#estadoDashboard').textContent=vista.datos.tratamiento==='mostrar'
-        ? $('#dashboardTotal').textContent==='—'?$('#estadoDistribucion').textContent:'Reservas mostradas: '+$('#dashboardTotal').textContent+'.':vista.mensaje;
+        ? $('#dashboardTotal').textContent==='—'?$('#estadoDistribucion').textContent:'':vista.mensaje;
 }
 function filtrarDashboard(){
     if(dashboardActivo&&agendaReservas){actualizarDistribucionReservas(agendaReservas);sincronizarDashboard(presentacionAgenda.obtenerEstado());}
@@ -134,7 +134,7 @@ function mostrarPresentacionAgenda(anunciar=true){
     sincronizarDashboard(vista);
     if(anunciar&&ultimoAnuncioAgenda!==vista.accesibilidad.anuncioId){
         const detalle=vista.datos.tratamiento==='mostrar'
-            ? ' Por cerrar: '+$('#reservasPorCerrar').textContent+'. '+$('#proximaAtencionEstado').textContent+' '+$('#estadoDistribucion').textContent
+            ? ''
             : ['error_carga','error_actualizacion'].includes(vista.estado)?' '+$('#estadoDistribucion').textContent:'';
         $('#estadoAgenda').textContent=vista.mensaje+detalle;
         ultimoAnuncioAgenda=vista.accesibilidad.anuncioId;
@@ -239,9 +239,9 @@ function actualizarDistribucionReservas(reservas,soloInconsistencias=false){
         if(dashboardActivo){
             $('#alcanceDistribucion').textContent=describirFiltrosDashboard();
             // Solo importes históricos y campos mínimos de reservas ya autorizadas.
-            const datos=seleccion.map(r=>({id_reserva:r.id_reserva,estado:r.estado,fecha_hora_inicio:r.fecha_hora_inicio,precio_servicio:r.precio_servicio,monto_abono:r.monto_abono}));
+            const datos=seleccion.map(r=>({id_reserva:r.id_reserva,id_servicio:r.id_servicio,servicio:r.servicio,id_trabajadora:r.id_trabajadora,trabajadora:r.trabajadora,estado:r.estado,fecha_hora_inicio:r.fecha_hora_inicio,precio_servicio:r.precio_servicio,monto_abono:r.monto_abono}));
             const datosMensuales=reservas.filter(r=>!$('#dashboardEstado').value||r.estado===$('#dashboardEstado').value)
-                .map(r=>({id_reserva:r.id_reserva,estado:r.estado,fecha_hora_inicio:r.fecha_hora_inicio,precio_servicio:r.precio_servicio,monto_abono:r.monto_abono}));
+                .map(r=>({id_reserva:r.id_reserva,id_servicio:r.id_servicio,servicio:r.servicio,id_trabajadora:r.id_trabajadora,trabajadora:r.trabajadora,estado:r.estado,fecha_hora_inicio:r.fecha_hora_inicio,precio_servicio:r.precio_servicio,monto_abono:r.monto_abono}));
             MerakiDashboardGraficos.dibujar({reservas:datos,estadisticas:s,reservasEconomicas:datosMensuales,periodo:$('#economiaMes').value,seleccionar:$,documento:document});
         }
         $('#dashboardTotal').textContent=String(s.totalReservasUnicas);
@@ -283,6 +283,7 @@ function actualizarDistribucionReservas(reservas,soloInconsistencias=false){
                 articulo.append(titulo,cantidad,barra,detalle);lista.append(articulo);
             }
         }
+        globalThis.MerakiDistribucionVisual?.presentar(document,s);
         const nombresLideres=(grupos,ids,campoId,campoNombre)=>{
             const porId=new Map(grupos.map(g=>[g[campoId],g]));
             return ids.map(id=>{const g=porId.get(id);return (g[campoNombre]||g.nombres.join(' / '))+' (#'+id+')';}).join('; ');
@@ -305,6 +306,7 @@ const dinero=valor=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CL
 function textoArticulo(articulo,valor){const p=document.createElement('p');p.textContent=valor;articulo.append(p);}
 function renderAgenda(anunciar=true){
     if(!agendaReservas)return;
+    globalThis.MerakiCalendario?.montar(document,agendaReservas,$('#filtroFecha').value,$('#filtroEstado').value);
     const visibles=MerakiAgenda.filtrar(agendaReservas,$('#filtroFecha').value,$('#filtroEstado').value);
     const hoy=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
     $('#totalReservas').textContent=agendaReservas.length;
@@ -334,7 +336,7 @@ function renderAgenda(anunciar=true){
         if(r.id_abono&&['pendiente_abono','confirmada'].includes(r.estado))parrafo('Para cancelar esta reserva, primero revisa el pago asociado.','reserva-nota');
         const acciones=document.createElement('div');acciones.className='acciones-reserva';
         for(const opcion of MerakiAgenda.acciones(r)){
-            const b=document.createElement('button');b.type='button';b.textContent=opcion.texto;
+            const b=document.createElement('button');b.type='button';b.textContent=opcion.texto;b.className='accion-reserva-'+opcion.accion;
             b.onclick=async()=>{
                 if(!confirm(opcion.texto+' para la reserva '+r.id_reserva+'?'))return;
                 for(const x of a.querySelectorAll('button'))x.disabled=true;
@@ -346,8 +348,13 @@ function renderAgenda(anunciar=true){
             const b=document.createElement('button');b.type='button';b.className='accion-abono';b.textContent='Revisar abono '+r.id_abono;
             b.onclick=()=>{$('#pago input[name="id"]').value=r.id_abono;invalidarConsultaPago();$('#resultadoPago').textContent='Abono '+r.id_abono+' seleccionado para la reserva '+r.id_reserva+'.';navegacion.mostrar('pagos');$('#pago').scrollIntoView({behavior:'auto',block:'center'});};acciones.append(b);
         }
-        a.append(acciones);lista.append(a);
+        const detalles=document.createElement('details');detalles.className='reserva-expandible';
+        const resumen=document.createElement('summary');resumen.textContent='Ver detalles';detalles.append(resumen);
+        for(const nodo of Array.from(a.children))if(nodo.className==='reserva-detalle'||nodo.className==='reserva-nota')detalles.append(nodo);
+        if(acciones.children.length){const tituloAcciones=document.createElement('h4');tituloAcciones.className='titulo-acciones-reserva';tituloAcciones.textContent='Gestionar reserva';detalles.append(tituloAcciones,acciones);}
+        a.append(detalles);lista.append(a);
     }
+    globalThis.MerakiReservaVisual?.montar(document,visibles);
 }
 async function reservas(){
     const version=++versionAgenda;

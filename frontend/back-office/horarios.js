@@ -15,14 +15,16 @@
             trabajador.disabled=ocupado||!listo||!personas.length;selectorNegocio.disabled=ocupado;actualizar.disabled=ocupado||!negocio;
             for(const b of [...lista.querySelectorAll('button'),...bloqueos.querySelectorAll('button')])b.disabled=ocupado||!puedeConfigurar();
         }
-        function boton(texto,accion){const b=documento.createElement('button');b.type='button';b.textContent=texto;b.onclick=accion;return b;}
+        function boton(texto,accion){const b=documento.createElement('button');b.type='button';b.textContent=texto;b.className=texto==='Editar horario'?'editar-horario':'';b.onclick=accion;return b;}
         function render(){
             limpiar();bloqueo.reset();lista.replaceChildren();bloqueos.replaceChildren();const t=seleccionada();
             if(!t){estado.textContent='No hay trabajadoras disponibles en este emprendimiento.';controles();return;}
             const propios=horarios.filter(h=>h.id_trabajadora===t.id_trabajadora);
             if(!propios.length)lista.textContent='Sin horarios semanales registrados.';
+            const orden=Object.keys(dias);
+            propios.sort((a,b)=>orden.indexOf(a.dia_semana)-orden.indexOf(b.dia_semana)||a.hora_inicio.localeCompare(b.hora_inicio));
             for(const h of propios){
-                const p=documento.createElement('p');p.textContent=`${dias[h.dia_semana]||h.dia_semana} · ${h.hora_inicio} a ${h.hora_fin} · ${h.activo?'Activo':'Desactivado'}`;
+                const p=documento.createElement('p');p.className='fila-horario'+(h.activo?' horario-activo':' horario-inactivo');p.textContent=`${dias[h.dia_semana]||h.dia_semana} · ${h.hora_inicio} a ${h.hora_fin} · ${h.activo?'Activo':'Desactivado'}`;
                 if(h.activo){
                     if(t.activa)p.append(boton('Editar horario',()=>{
                         if(ocupado)return;edicion=h.id_horario;campo('dia_semana').value=h.dia_semana;campo('hora_inicio').value=h.hora_inicio;campo('hora_fin').value=h.hora_fin;

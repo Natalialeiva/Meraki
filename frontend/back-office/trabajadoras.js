@@ -1,20 +1,27 @@
 (function (raiz) {
-    function montar({form,lista,estado,selector,actualizar,asignacion,asignados,tituloAsignacion,api,documento=document,confirmar=confirm,puedeConfigurar=()=>true}) {
+    function montar({form,lista,estado,selector,actualizar,asignacion,asignados,tituloAsignacion,selectorTrabajadora,api,documento=document,confirmar=confirm,puedeConfigurar=()=>true}) {
         const grupo=form.querySelector('fieldset'),titulo=form.querySelector('[data-titulo-trabajadora]');
         const campos=Object.fromEntries(['nombre','apellido','descripcion'].map(k=>[k,form.elements.namedItem(k)]));
         const grupoAsignacion=asignacion.querySelector('fieldset');
         const elegirServicio=asignacion.elements.namedItem('id_servicio');
-        let negocio=null,edicion=null,seleccionada=null,version=0,versionAsignacion=0,ocupado=false,listo=false,asignacionLista=false;
+        let negocio=null,edicion=null,seleccionada=null,version=0,versionAsignacion=0,ocupado=false,listo=false,asignacionLista=false,personas=[];
         function limpiar(){edicion=null;form.reset();titulo.textContent='Nueva trabajadora';}
         function controles(){
             grupo.disabled=ocupado||!listo||!puedeConfigurar();selector.disabled=ocupado;actualizar.disabled=ocupado||!negocio;
             grupoAsignacion.disabled=ocupado||!asignacionLista||!puedeConfigurar();
+            if(selectorTrabajadora)selectorTrabajadora.disabled=ocupado||!listo||!personas.length;
             for(const boton of [...lista.querySelectorAll('button'),...asignados.querySelectorAll('button')])boton.disabled=ocupado||!puedeConfigurar();
         }
         // Invalida las consultas anteriores para no mostrar asignaciones de otro negocio.
-        function cerrarAsignacion(){versionAsignacion++;seleccionada=null;asignacionLista=false;asignados.replaceChildren();elegirServicio.replaceChildren();tituloAsignacion.textContent='Selecciona una trabajadora para administrar sus servicios.';}
+        function cerrarAsignacion(){versionAsignacion++;seleccionada=null;asignacionLista=false;asignados.replaceChildren();elegirServicio.replaceChildren();if(selectorTrabajadora)selectorTrabajadora.value='';tituloAsignacion.textContent='Selecciona una trabajadora para administrar sus servicios.';}
         function editar(t){if(ocupado)return;edicion=t.id_trabajadora;for(const k of Object.keys(campos))campos[k].value=t[k]??'';titulo.textContent='Editar trabajadora: '+t.nombre;campos.nombre.focus();}
         function dibujar(trabajadoras){
+            personas=trabajadoras;
+            if(selectorTrabajadora){
+                selectorTrabajadora.replaceChildren();const inicial=documento.createElement('option');inicial.value='';inicial.textContent='Selecciona una trabajadora';selectorTrabajadora.append(inicial);
+                for(const t of personas){const opcion=documento.createElement('option');opcion.value=String(t.id_trabajadora);opcion.textContent=[t.nombre,t.apellido].filter(Boolean).join(' ')+(t.activa?'':' · Desactivada');selectorTrabajadora.append(opcion);}
+                selectorTrabajadora.value='';
+            }
             lista.replaceChildren();if(!trabajadoras.length)lista.textContent='Todavía no hay trabajadoras registradas.';
             for(const t of trabajadoras){
                 const articulo=documento.createElement('article'),h=documento.createElement('h3'),p=documento.createElement('p');
@@ -27,7 +34,7 @@
             }
         }
         async function cargar(id){
-            const solicitud=++version;negocio=id?Number(id):null;listo=false;limpiar();cerrarAsignacion();lista.replaceChildren();controles();
+            const solicitud=++version;negocio=id?Number(id):null;listo=false;personas=[];if(selectorTrabajadora)selectorTrabajadora.replaceChildren();limpiar();cerrarAsignacion();lista.replaceChildren();controles();
             if(!negocio){estado.textContent='Selecciona un emprendimiento para administrar sus trabajadoras.';return false;}
             estado.textContent='Cargando trabajadoras…';
             try{const datos=await api('/api/mis-trabajadoras');if(solicitud!==version)return false;dibujar(datos.filter(t=>t.id_emprendimiento===negocio));listo=true;estado.textContent='Administra las trabajadoras y los servicios que realizan.';return true;}
@@ -36,6 +43,7 @@
         }
         async function verServicios(t){
             const solicitud=++versionAsignacion;seleccionada=t;asignacionLista=false;asignados.replaceChildren();elegirServicio.replaceChildren();controles();
+            if(selectorTrabajadora)selectorTrabajadora.value=String(t.id_trabajadora);
             tituloAsignacion.textContent='Servicios de '+[t.nombre,t.apellido].filter(Boolean).join(' ');
             estado.textContent='Cargando asignaciones…';
             try{
@@ -58,7 +66,7 @@
         async function ejecutar(url,metodo,datos,mensaje,recargar){
             ocupado=true;controles();estado.textContent='Guardando cambios…';
             // El guardado y la recarga tienen resultados distintos: nunca repetir una alta por una recarga fallida.
-            try{await api(url,metodo,datos);const recargado=await recargar();estado.textContent=mensaje+(recargado?'':' No se pudo actualizar la vista; vuelve a consultar antes de repetir la operación.');}
+            try{const resultado=await api(url,metodo,datos);const recargado=await recargar(resultado);estado.textContent=mensaje+(recargado?'':' No se pudo actualizar la vista; vuelve a consultar antes de repetir la operación.');}
             catch(error){estado.textContent=error.message;}
             finally{ocupado=false;controles();}
         }
@@ -75,7 +83,11 @@
             const datos=Object.fromEntries(Object.entries(campos).map(([k,e])=>[k,e.value.trim()||(k==='nombre'?'':null)]));
             if(!datos.nombre){estado.textContent='Indica el nombre de la trabajadora.';campos.nombre.focus();return;}
             if(edicion)await ejecutar('/api/trabajadoras/'+edicion,'PATCH',datos,'Trabajadora actualizada correctamente.',()=>cargar(negocio));
-            else await ejecutar('/api/trabajadoras','POST',{...datos,id_emprendimiento:negocio},'Trabajadora registrada correctamente. Asigna sus servicios y configura sus horarios.',()=>cargar(negocio));
+            else await ejecutar('/api/trabajadoras','POST',{...datos,id_emprendimiento:negocio},'Trabajadora registrada correctamente. Asigna sus servicios y configura sus horarios.',async resultado=>{
+                const cargado=await cargar(negocio);if(!cargado)return false;
+                const nueva=personas.find(t=>t.id_trabajadora===resultado?.trabajadora?.id_trabajadora);
+                return nueva?verServicios(nueva):true;
+            });
         };
         asignacion.onsubmit=async evento=>{
             evento.preventDefault();if(ocupado||!puedeConfigurar()||!asignacionLista||!asignacion.reportValidity())return;
@@ -83,6 +95,7 @@
             await ejecutar('/api/trabajadoras/'+t.id_trabajadora+'/servicios','POST',{id_servicio:id},'Servicio asignado correctamente.',()=>verServicios(t));
         };
         form.querySelector('[data-nueva-trabajadora]').onclick=()=>{if(!ocupado){limpiar();estado.textContent='Completa los datos de la nueva trabajadora.';}};
+        if(selectorTrabajadora)selectorTrabajadora.onchange=()=>{if(ocupado)return;const t=personas.find(t=>String(t.id_trabajadora)===selectorTrabajadora.value);if(t)return verServicios(t);cerrarAsignacion();controles();};
         actualizar.onclick=()=>{if(!ocupado)cargar(negocio);};controles();
         return {cargar,actualizarPermisos:controles};
     }

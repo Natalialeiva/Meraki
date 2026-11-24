@@ -19,8 +19,9 @@ function pantalla(responder,confirmar=()=>true,puedeConfigurar=()=>true){
   if(!method&&url.endsWith('/servicios'))return [];
   return {};
  };
- const gestion=montar({form,lista,estado,selector,actualizar,asignacion,asignados,tituloAsignacion,api,documento:{createElement:()=>new Elemento()},confirmar,puedeConfigurar});
- return{gestion,campos,lista,estado,grupo,selector,grupoAsignacion,servicio,asignados,llamadas,nueva,
+ const selectorTrabajadora=new Elemento();
+ const gestion=montar({form,lista,estado,selector,actualizar,asignacion,asignados,tituloAsignacion,selectorTrabajadora,api,documento:{createElement:()=>new Elemento()},confirmar,puedeConfigurar});
+ return{gestion,campos,lista,estado,grupo,selector,grupoAsignacion,servicio,asignados,llamadas,nueva,selectorTrabajadora,
   guardar:()=>form.onsubmit({preventDefault(){}}),asignar:()=>asignacion.onsubmit({preventDefault(){}}),ver:()=>lista.children[0].children[3].onclick()};
 }
 test('Trabajadoras muestra solo su negocio y deshabilita sin selección',async()=>{
@@ -67,4 +68,22 @@ test('Asignaciones ignora una respuesta antigua al cambiar de negocio',async()=>
 test('Trabajadoras y asignaciones quedan de consulta sin vigencia',async()=>{
  const p=pantalla(undefined,()=>true,()=>false);await p.gestion.cargar(1);assert.equal(p.grupo.disabled,true);
  p.campos.nombre.value='No guardar';await p.guardar();await p.ver();assert.equal(p.grupoAsignacion.disabled,true);await p.asignar();assert(!p.llamadas.some(x=>x.method));
+});
+
+test('Asignaciones permite elegir trabajadora desde el selector y limpia al cambiar de negocio',async()=>{
+ const p=pantalla();await p.gestion.cargar(1);assert.equal(p.grupoAsignacion.disabled,true);
+ assert.equal(p.selectorTrabajadora.children.length,2);p.selectorTrabajadora.value='1';await p.selectorTrabajadora.onchange();
+ assert.equal(p.grupoAsignacion.disabled,false);assert.equal(p.servicio.children[0].textContent,'Manicure');
+ await p.gestion.cargar(2);assert.equal(p.selectorTrabajadora.value,'');assert.equal(p.grupoAsignacion.disabled,true);assert.equal(p.servicio.children.length,0);
+});
+
+test('Trabajadora recién creada queda seleccionada para asignar sus servicios',async()=>{
+ let creada=false;const nueva={...trabajadora,id_trabajadora:8,nombre:'Renata'};
+ const p=pantalla((url,method)=>{
+  if(url==='/api/trabajadoras'&&method==='POST'){creada=true;return{trabajadora:nueva};}
+  if(url==='/api/mis-trabajadoras'&&creada)return[trabajadora,nueva];
+ });
+ await p.gestion.cargar(1);p.campos.nombre.value='Renata';await p.guardar();
+ assert.equal(p.selectorTrabajadora.value,'8');assert.equal(p.grupoAsignacion.disabled,false);
+ await p.asignar();assert(p.llamadas.some(x=>x.url==='/api/trabajadoras/8/servicios'&&x.method==='POST'));
 });

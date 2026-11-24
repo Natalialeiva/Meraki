@@ -1,0 +1,498 @@
+/* Superficies y métricas inspiradas en la referencia visual; sin alterar datos. */
+:root{color:var(--ink);background:var(--bg);--tinta:var(--ink);--suave:var(--mute-readable);--borde:var(--line);--ciruela:var(--primary-action);--lavanda:var(--mauve);--rosa:var(--rose);}
+body{background:var(--bg);}
+.barra-lateral{background:white;border-color:var(--color-f7eeee);}
+.menu-gestion a{color:var(--ink);border-radius:20px;}
+.menu-gestion a:hover{background:var(--rose);color:var(--primary-action);}
+.menu-gestion a[aria-current=page]{background:var(--primary-action);color:white;}
+h1,h2,h3{color:var(--primary-action);}
+h1,h2{font-family:var(--font-heading);font-weight:400;letter-spacing:-.025em;}
+.vista,[data-vista="dashboard"]{background:var(--bg);border:0;box-shadow:none;}
+button[type=submit],.primario,[data-vista="dashboard"] button{background:var(--primary-action);color:white;border-color:var(--primary-action);border-radius:24px;}
+button[type=submit]:hover:not(:disabled),.primario:hover:not(:disabled),[data-vista="dashboard"] button:hover:not(:disabled){background:var(--primary-action);}
+input,select,textarea,[data-vista="dashboard"] input,[data-vista="dashboard"] select{background:white;border-color:var(--color-e7cdd5);color:var(--ink);}
+.tarjeta-acceso,.reserva-card,.distribucion-reservas,[data-vista="dashboard"] .graficos-dashboard>section,[data-vista="dashboard"] .resumen-economico{background:white;border:1px solid var(--color-f7eeee);border-radius:28px;box-shadow:0 8px 28px var(--color-b9476905);}
+.agenda-metricas article,[data-vista="dashboard"] .metricas-dashboard>div{background:var(--rose);border:0;border-radius:24px;padding:22px;box-shadow:none;}
+.agenda-metricas article:nth-child(4n+1),[data-vista="dashboard"] .metricas-dashboard>div:nth-child(4n+1){background:var(--sage);}
+.agenda-metricas article:nth-child(4n+2),[data-vista="dashboard"] .metricas-dashboard>div:nth-child(4n+2){background:var(--peach);}
+.agenda-metricas article:nth-child(4n+3),[data-vista="dashboard"] .metricas-dashboard>div:nth-child(4n+3){background:var(--mauve);}
+.agenda-metricas strong,[data-vista="dashboard"] .metricas-dashboard dd{color:var(--color-754453);font-family:var(--font-heading);font-size:2.3rem;font-weight:400;}
+[data-vista="dashboard"] .metricas-dashboard dt,[data-vista="dashboard"] .metricas-dashboard>div:first-child dt,[data-vista="dashboard"] .metricas-dashboard>div:first-child dd,[data-vista="dashboard"] .metricas-dashboard>div:first-child p{color:var(--color-754453);}
+[data-vista="dashboard"] h2,[data-vista="dashboard"] h3{color:var(--primary-action);}
+[data-vista="dashboard"] .filtros,.filtros{background:var(--color-fff3f4);border-color:var(--line);border-radius:18px;}
+[data-vista="dashboard"] th{background:var(--color-fff3f4);color:var(--color-754453);}
+[data-vista="dashboard"] .dona-reservas:after{background:white;}
+.reserva-estado{border-radius:20px;padding:6px 12px;}
+.reserva-estado[data-estado=confirmada],.reserva-estado[data-estado=atendida]{background:var(--sage);color:var(--color-416b50);}
+.reserva-estado[data-estado=pendiente_abono]{background:var(--peach);color:var(--color-805736);}
+@media(max-width:700px){.agenda-metricas article,[data-vista="dashboard"] .metricas-dashboard>div{padding:16px;}}
+
+/* Reservas: composición de paneles blancos y resumen pastel del prototipo. */
+[data-vista="reservas"] {background:var(--bg);border:0;box-shadow:none;padding:0;}
+[data-vista="reservas"] .encabezado-seccion {margin-bottom:24px;}
+[data-vista="reservas"] h2 {font-family:var(--font-heading);font-weight:400;color:var(--primary-action);font-size:clamp(1.7rem,3vw,2.3rem);}
+[data-vista="reservas"] .filtros {background:var(--surface);border:0;box-shadow:var(--shadow);border-radius:24px;padding:20px;}
+.agenda-metricas {gap:14px;}
+.agenda-metricas article {border:0;box-shadow:none;border-radius:24px;min-height:124px;}
+.agenda-metricas article small {font-family:var(--font-body);font-size:.85rem;color:var(--ink);font-weight:400;}
+.agenda-metricas article strong {font-family:var(--font-heading);font-size:2.4rem;font-weight:400;color:var(--ink);}
+.agenda-metricas article:nth-child(4n+1){background:var(--sage);}
+.agenda-metricas article:nth-child(4n+2){background:var(--peach);}
+.agenda-metricas article:nth-child(4n+3){background:var(--mauve);}
+.agenda-metricas article:nth-child(4n){background:var(--rose);}
+.agenda-metricas .punto{display:none;}
+#reservas {display:flex;flex-direction:column;gap:0;background:var(--surface);padding:10px 24px;border-radius:28px;box-shadow:var(--shadow);}
+#reservas:empty{display:none;}
+#reservas .reserva-card {border:0;border-radius:0;box-shadow:none;background:transparent;padding:22px 0;border-bottom:1px solid var(--line);}
+#reservas .reserva-card:last-child {border-bottom:0;}
+.reserva-cabecera {align-items:center;}
+.reserva-estado {border-radius:24px;padding:7px 13px;font-weight:500;font-size:.76rem;}
+.reserva-estado[data-estado="confirmada"] {background:var(--sage);color:var(--sage-ink);}
+.reserva-estado[data-estado="pendiente_abono"] {background:var(--peach);color:var(--ink);}
+.reserva-estado[data-estado="cancelada"],.reserva-estado[data-estado="no_atendida"] {background:var(--line);color:var(--ink);}
+.reserva-estado[data-estado="atendida"] {background:var(--rose);color:var(--ink);}
+.reserva-fecha {border:0;padding-bottom:0;color:var(--primary-action);}
+.acciones-reserva button {min-height:40px;border-radius:22px;}
+.menu-gestion a[aria-current="page"] {background:var(--primary-action);color:var(--surface);border-radius:18px;}
+@media(min-width:801px){.barra-lateral{margin:20px 0 20px 16px;height:calc(100dvh - 40px);top:20px;border:0;border-radius:28px;box-shadow:var(--shadow);}}
+@media(max-width:600px){#reservas{padding:6px 16px;}.agenda-metricas article{min-height:110px;}.reserva-cabecera{align-items:flex-start;gap:12px;}}
+
+/* Resumen compacto: información operativa disponible al desplegar cada cita. */
+#reservas .reserva-card {display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:18px;row-gap:6px;padding:18px 0;}
+#reservas .reserva-cabecera {grid-column:1/-1;margin:0;}
+#reservas .reserva-persona {grid-column:1;margin:0;font-size:.95rem;}
+#reservas .reserva-fecha {grid-column:1;margin:0;font-size:.85rem;}
+#reservas .reserva-cabecera h3 {font-family:var(--font-body);font-size:.75rem;color:var(--mute-readable);}
+.reserva-expandible {grid-column:1/-1;margin-top:4px;}
+.reserva-expandible summary,.distribucion-plegable>summary {cursor:pointer;color:var(--primary-action);font-size:.85rem;min-height:44px;padding:12px 0;}
+.reserva-expandible[open] {background:var(--bg);border-radius:16px;padding:0 16px 16px;}
+.reserva-expandible p {margin-block:8px;}
+.distribucion-plegable {margin:18px 0;background:var(--surface);border-radius:22px;padding:0 20px;}
+.distribucion-plegable summary:focus-visible,.reserva-expandible summary:focus-visible {outline:3px solid var(--rose-strong);outline-offset:3px;border-radius:8px;}
+@media(max-width:600px){#reservas .reserva-card{grid-template-columns:minmax(0,1fr);}}
+
+.calendario-semana{margin-top:24px;background:var(--surface);border-radius:28px;padding:24px;box-shadow:var(--shadow);}
+.calendario-semana h3{font-size:1.6rem;color:var(--ink);margin-bottom:6px;}
+#rangoSemana{font-size:.85rem;color:var(--mute-readable);}
+.dias-semana{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;}
+.dia-semana{min-width:0;background:var(--bg);border-radius:20px;padding:12px 10px;min-height:190px;}
+.dia-semana.dia-hoy{background:var(--rose);}
+.dia-semana h4{font:500 .85rem var(--font-body);margin:0 0 12px;color:var(--primary-action);}
+.dia-semana>p{font-size:.75rem;color:var(--mute-readable);}
+.cita-semana{display:grid;gap:5px;margin:8px 0;padding:10px;border-radius:14px;background:var(--mauve);font-size:.75rem;overflow-wrap:anywhere;}
+.cita-semana[data-estado=confirmada]{background:var(--sage);color:var(--sage-ink);}
+.cita-semana[data-estado=pendiente_abono]{background:var(--peach);}
+.cita-semana[data-estado=atendida]{background:var(--rose);}
+.cita-semana[data-estado=cancelada],.cita-semana[data-estado=no_atendida]{background:var(--line);}
+.cita-semana small{font-size:.7rem;color:inherit;}
+@media(max-width:1100px){.dias-semana{grid-template-columns:repeat(4,minmax(0,1fr));}}
+@media(max-width:600px){.dias-semana{grid-template-columns:repeat(2,minmax(0,1fr));}.calendario-semana{padding:16px;}.dia-semana{min-height:140px;}}
+
+/* Horarios: filas suaves por día, conservando los tramos registrados. */
+#gestionHorarios{background:var(--bg);border:0;box-shadow:none;}
+#gestionHorarios>h2{font-size:clamp(1.8rem,3vw,2.5rem);}
+#listaHorarios{background:var(--surface);border-radius:28px;padding:10px 24px;box-shadow:var(--shadow);margin:20px 0;}
+#listaHorarios:empty{display:none;}
+#listaHorarios .fila-horario{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:18px 0;margin:0;border-bottom:1px solid var(--line);font-size:.9rem;color:var(--ink);}
+#listaHorarios .fila-horario:last-child{border-bottom:0;}
+#listaHorarios .fila-horario::before{content:'';width:12px;height:12px;border-radius:50%;background:var(--rose-strong);flex-shrink:0;}
+#listaHorarios .horario-inactivo{color:var(--mute-readable);background:var(--bg);border-radius:14px;padding-inline:12px;}
+#listaHorarios .horario-inactivo::before{background:var(--line);outline:1px solid var(--mute-readable);}
+#listaHorarios button{border-radius:24px;min-height:44px;background:var(--surface);border:1px solid var(--rose-strong);color:var(--primary-action);}
+#horarioGestion,#bloqueoGestion{background:var(--surface);border:0;border-radius:28px;padding:24px;box-shadow:var(--shadow);margin:22px 0;}
+#horarioGestion fieldset{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+#horarioGestion fieldset>p{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:12px;}
+#gestionHorarios input,#gestionHorarios select{background:var(--bg);border:1px solid var(--line);border-radius:14px;min-height:44px;}
+#listaBloqueos>p{display:flex;align-items:center;flex-wrap:wrap;gap:14px;background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--line);}
+@media(max-width:600px){#horarioGestion fieldset{grid-template-columns:1fr;}#listaHorarios{padding:8px 16px;}#horarioGestion,#bloqueoGestion{padding:18px;}#listaHorarios button{flex:1 1 140px;}}
+
+/* Distribución con selector y barras segmentadas: datos del cálculo existente. */
+.distribucion-reservas{position:relative;}
+.selector-distribucion{display:flex;gap:4px;flex-wrap:wrap;background:var(--rose);padding:4px;border-radius:26px;width:fit-content;margin:12px 0;}
+.selector-distribucion button{border:0;background:transparent;border-radius:24px;min-height:40px;color:var(--ink);}
+.selector-distribucion button[aria-pressed=true]{background:var(--primary-action);color:var(--surface);}
+.distribucion-reservas .columnas-distribucion{display:block;}
+.distribucion-reservas .columnas-distribucion article{border:0;border-top:1px solid var(--line);border-radius:0;padding:16px 0;margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;}
+.distribucion-reservas .columnas-distribucion h5{font-size:1.05rem;margin:0;}
+.distribucion-reservas .distribucion-cantidad{font-size:.8rem;margin:0;color:var(--mute-readable);text-align:right;}
+.distribucion-reservas .barra-distribucion{display:none;}
+.barra-estados{grid-column:1/-1;display:flex;width:100%;height:12px;border-radius:10px;overflow:hidden;background:var(--line);}
+.barra-estados span{flex-basis:0;min-width:0;}
+.barra-estados [data-estado=confirmada]{background:var(--chart-confirmada);}
+.barra-estados [data-estado=pendiente_abono]{background:var(--chart-pendiente);}
+.barra-estados [data-estado=atendida]{background:var(--chart-atendida);}
+.barra-estados [data-estado=no_atendida]{background:var(--chart-no-atendida);}
+.barra-estados [data-estado=cancelada]{background:var(--chart-cancelada);}
+.distribucion-reservas .columnas-distribucion details{grid-column:1/-1;border:0;margin:0;padding:0;}
+.distribucion-reservas .columnas-distribucion details ul{display:flex;flex-wrap:wrap;gap:8px 20px;list-style:none;padding:0;}
+.distribucion-reservas .totales-distribucion{gap:12px;margin-block:14px;}
+.distribucion-reservas .totales-distribucion>div{background:var(--bg);border:0;border-radius:16px;}
+@media(min-width:900px){.selector-distribucion{position:absolute;right:24px;top:12px;}.distribucion-reservas>h3{padding-right:290px;min-height:40px;}}
+@media(max-width:600px){.distribucion-reservas .columnas-distribucion article{grid-template-columns:minmax(0,1fr);}.distribucion-reservas .distribucion-cantidad{text-align:left;}}
+
+/* Una sola cabecera visible; mantener el título de sección para foco y accesibilidad. */
+[data-vista="reservas"] .encabezado-seccion>div {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="reservas"] .encabezado-seccion {justify-content:flex-end;margin-bottom:16px;}
+.ayuda-reservas {margin:0 0 14px;font-size:.8rem;color:var(--mute-readable);}
+.ayuda-reservas summary {cursor:pointer;min-height:32px;padding:6px 0;color:var(--primary-action);}
+.ayuda-reservas summary:focus-visible {outline:3px solid var(--rose-strong);outline-offset:3px;}
+.ayuda-reservas p {max-width:740px;}
+#estadoAgenda[data-estado="cargada"],#estadoAgenda[data-estado="actualizada"] {background:transparent;border:0;padding:0;}
+
+/* Horarios: marcador dentro de la fila y una sola cabecera visible. */
+#gestionHorarios>h2 {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);}
+#gestionHorarios {padding-top:12px;}
+#listaHorarios .fila-horario {position:relative;padding:18px 18px 18px 42px;gap:12px;border:0;border-bottom:1px solid var(--line);border-radius:0;}
+#listaHorarios .fila-horario::before {position:absolute;left:16px;top:50%;transform:translateY(-50%);width:10px;height:10px;}
+#listaHorarios .horario-inactivo {padding-left:42px;border-radius:14px;}
+#listaHorarios .fila-horario button {margin:0;}
+@media(max-width:600px){#listaHorarios .fila-horario{padding:16px 12px 16px 34px;}#listaHorarios .fila-horario::before{left:12px;top:25px;}#listaHorarios .fila-horario button{flex:1 1 135px;}}
+
+/* Equipo: cabecera única y contenido próximo al título principal. */
+[data-vista="equipo"]>h2 {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="equipo"] {padding:12px 0 24px;background:transparent;border:0;box-shadow:none;}
+#actualizarTrabajadoras {display:block;margin:0 0 18px auto;min-height:44px;}
+[data-vista="equipo"] #listaTrabajadoras {margin-top:0;gap:18px;}
+[data-vista="equipo"] #listaTrabajadoras article {background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:22px;box-shadow:var(--shadow);}
+@media(max-width:600px){#actualizarTrabajadoras{margin-left:0;}[data-vista="equipo"] #listaTrabajadoras article{padding:18px;}}
+
+/* Notificaciones: cabecera única y ayuda secundaria. */
+[data-vista="notificaciones"]>h2 {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="notificaciones"] {padding:12px 0 24px;background:transparent;border:0;box-shadow:none;}
+.notificaciones-ayuda {background:var(--surface);border-radius:18px;padding:6px 18px;margin:0 0 18px;max-width:850px;}
+.notificaciones-ayuda summary {cursor:pointer;padding:10px 0;color:var(--primary-action);font-size:.85rem;min-height:44px;}
+.notificaciones-ayuda p {font-size:.85rem;color:var(--mute-readable);line-height:1.7;}
+.notificaciones-ayuda summary:focus-visible {outline:3px solid var(--rose-strong);outline-offset:3px;}
+
+/* Servicios: una cabecera, barra de acciones y botones de igual tamaño. */
+[data-vista="servicios"]>h2 {position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="servicios"] {padding:12px 0 24px;background:transparent;border:0;box-shadow:none;}
+#actualizarServicios {display:block;margin:16px 0 20px auto;min-height:44px;}
+#listaServicios article {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-content:start;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:22px;}
+#listaServicios article h3,#listaServicios article p {grid-column:1/-1;margin:0;}
+#listaServicios article h3 {font-size:1.2rem;}
+#listaServicios article button {width:100%;min-height:44px;margin:0;align-self:end;border-radius:24px;}
+@media(max-width:600px){#actualizarServicios{margin-left:0;}#listaServicios article{padding:18px;gap:8px;}#listaServicios article button{padding-inline:8px;}}
+/* Dashboard: dos tarjetas de distribución como en la referencia. */
+[data-vista="dashboard"] .encabezado-seccion>div {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="dashboard"] .encabezado-seccion {justify-content:flex-end;padding:0;border:0;margin-bottom:16px;}
+[data-vista="dashboard"] .metricas-dashboard {grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}
+[data-vista="dashboard"] .distribucion-reservas {padding:0;border:0;background:transparent;}
+[data-vista="dashboard"] .distribucion-reservas>.selector-distribucion[hidden]{display:none;}
+[data-vista="dashboard"] .distribucion-reservas .columnas-distribucion {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;}
+[data-vista="dashboard"] .columnas-distribucion>section {background:var(--surface);padding:22px;border-radius:28px;box-shadow:var(--shadow);}
+[data-vista="dashboard"] .columnas-distribucion h4 {font-size:1.4rem;color:var(--ink);margin-top:0;}
+[data-vista="dashboard"] .distribucion-reservas>h3 {padding:0;min-height:0;}
+.ayuda-dashboard {margin:8px 0 16px;}
+.ayuda-dashboard summary {font-size:.78rem;color:var(--primary-action);cursor:pointer;min-height:32px;padding:6px 0;}
+.ayuda-dashboard summary:focus-visible {outline:3px solid var(--rose-strong);outline-offset:3px;}
+[data-vista="dashboard"] #graficoEstados {display:flex;align-items:center;flex-wrap:wrap;gap:20px;}
+[data-vista="dashboard"] .dona-reservas {flex:0 0 160px;margin:12px 0;}
+[data-vista="dashboard"] .leyenda-grafico {flex:1 1 180px;}
+@media(max-width:800px){[data-vista="dashboard"] .distribucion-reservas .columnas-distribucion{grid-template-columns:minmax(0,1fr);}}
+
+/* Dashboard de la referencia: indicadores y cuatro paneles alineados. */
+[data-vista="dashboard"]{padding:0;background:var(--bg);}
+[data-vista="dashboard"]>.filtros{justify-content:flex-end;background:transparent;border:0;padding:0;gap:12px;}
+[data-vista="dashboard"]>.filtros label{flex:0 1 220px;}
+[data-vista="dashboard"]>.filtros input,[data-vista="dashboard"]>.filtros select{border-radius:28px;}
+#contenidoDashboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;align-items:stretch;}
+#contenidoDashboard>.metricas-dashboard{grid-column:1/-1;grid-template-columns:repeat(6,minmax(0,1fr));margin:0;gap:12px;}
+#contenidoDashboard>.metricas-dashboard>div{display:flex;flex-direction:column-reverse;border-radius:22px;padding:16px;min-height:88px;justify-content:center;}
+#contenidoDashboard>.metricas-dashboard dd{font-size:2rem;margin:0 0 4px;}
+#contenidoDashboard>.metricas-dashboard dt{font-size:.82rem;}
+[data-vista="dashboard"] .graficos-dashboard,[data-vista="dashboard"] #dashboardDistribucion,[data-vista="dashboard"] #distribucionReservas,[data-vista="dashboard"] #datosDistribucion,[data-vista="dashboard"] .columnas-distribucion{display:contents;}
+[data-vista="dashboard"] .graficos-dashboard>section,[data-vista="dashboard"] .columnas-distribucion>section{padding:22px;background:var(--surface);border:0;border-radius:28px;box-shadow:var(--shadow);margin:0;min-width:0;}
+[data-vista="dashboard"] .graficos-dashboard h3,[data-vista="dashboard"] .columnas-distribucion h4{font:400 1.4rem/1.4 var(--font-heading);color:var(--primary-action);margin:0 0 14px;}
+[data-vista="dashboard"] #graficoEstados{display:flex;flex-direction:column;align-items:flex-start;gap:10px;}
+[data-vista="dashboard"] .leyenda-grafico{flex:auto;margin:12px 0 0;font-size:.75rem;}
+[data-vista="dashboard"] .leyenda-grafico li{font-size:.75rem;}
+[data-vista="dashboard"] .dona-reservas{width:140px;flex:0 0 auto;margin:0 0 16px;}
+[data-vista="dashboard"] #distribucionReservas>h3,[data-vista="dashboard"] #distribucionReservas>#alcanceDistribucion,[data-vista="dashboard"] #distribucionReservas>#estadoDistribucion,[data-vista="dashboard"] #datosDistribucion>.totales-distribucion,[data-vista="dashboard"] #ayudaBarrasDistribucion,[data-vista="dashboard"] #lideresServicios,[data-vista="dashboard"] #lideresProfesionales{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="dashboard"] .columnas-distribucion article{grid-template-columns:minmax(0,1fr);padding:14px 0;gap:6px;}
+[data-vista="dashboard"] .columnas-distribucion h5{font-size:1.05rem;}
+[data-vista="dashboard"] .columnas-distribucion .distribucion-cantidad{text-align:left;font-size:.75rem;}
+[data-vista="dashboard"] .resumen-economico{grid-column:1/-1;margin:0;}
+.modo-dashboard{grid-column:1/-1;display:flex;width:fit-content;gap:4px;background:var(--rose);padding:4px;border-radius:28px;}
+.modo-dashboard button{background:transparent!important;color:var(--ink)!important;border:0!important;}
+.modo-dashboard button[aria-pressed=true]{background:var(--primary-action)!important;color:var(--surface)!important;}
+[data-vista="dashboard"][data-modo="reservas"] .resumen-economico{display:none;}
+[data-vista="dashboard"][data-modo="valores"] .graficos-dashboard>section,[data-vista="dashboard"][data-modo="valores"] .columnas-distribucion>section{display:none;}
+.tabla-dashboard-plegada summary{font-size:.75rem;cursor:pointer;color:var(--primary-action);padding:12px 0;}
+.horas-dashboard{grid-column:1/-1;background:var(--surface);border-radius:28px;padding:22px;box-shadow:var(--shadow);}
+.horas-dashboard h3{font-size:1.4rem;}
+.mapa-horas{display:grid;grid-template-columns:55px repeat(7,minmax(0,1fr));gap:5px;align-items:center;font-size:.72rem;color:var(--mute-readable);text-align:center;}
+.celda-horas{border-radius:8px;min-height:28px;display:grid;place-items:center;color:var(--ink);background:var(--line);}
+.celda-horas[data-nivel="1"]{background:var(--rose);}.celda-horas[data-nivel="2"]{background:var(--color-e7cdd5);}.celda-horas[data-nivel="3"],.celda-horas[data-nivel="4"]{background:var(--rose-strong);}
+@media(max-width:1200px){#contenidoDashboard{grid-template-columns:repeat(2,minmax(0,1fr));}#contenidoDashboard>.metricas-dashboard{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:650px){#contenidoDashboard{grid-template-columns:minmax(0,1fr);}#contenidoDashboard>.metricas-dashboard{grid-template-columns:repeat(2,minmax(0,1fr));}.mapa-horas{grid-template-columns:40px repeat(7,minmax(0,1fr));gap:3px;font-size:.65rem;}}
+
+#dineroVisual{grid-column:1/-1;min-width:0;}
+[data-vista="dashboard"][data-modo="reservas"] #dineroVisual{display:none;}
+[data-vista="dashboard"][data-modo="valores"] .resumen-economico{display:block;grid-row:auto;}
+.dinero-indicadores{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:22px;}
+.dinero-indicadores article{display:grid;gap:6px;background:var(--sage);border-radius:22px;padding:18px;min-width:0;}
+.dinero-indicadores article:nth-child(2){background:var(--peach);}.dinero-indicadores article:nth-child(3){background:var(--rose);}.dinero-indicadores article:nth-child(4){background:var(--mauve);}.dinero-indicadores article:nth-child(5){background:var(--line);}
+.dinero-indicadores strong{font:400 clamp(1.2rem,2vw,1.9rem) var(--font-heading);overflow-wrap:anywhere;}.dinero-indicadores span{font-size:.8rem;}
+.dinero-graficos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;}
+.dinero-panel{background:var(--surface);border-radius:28px;padding:22px;box-shadow:var(--shadow);min-width:0;}
+.dinero-panel h3{font-size:1.4rem;}.dinero-panel .dona-reservas{width:140px;}.leyenda-dinero{font-size:.75rem;}
+.meses-dinero{display:flex;gap:6px;align-items:flex-end;min-height:230px;}.mes-dinero{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;}.mes-dinero small{font-size:.6rem;overflow-wrap:anywhere;}.mes-dinero-barra{display:flex;flex-direction:column-reverse;width:100%;min-height:2px;border-radius:5px;overflow:hidden;}.mes-dinero-barra span{flex-basis:0;}
+.fila-dinero{padding:14px 0;border-top:1px solid var(--line);}.fila-dinero h4{font-size:1rem;margin:0;color:var(--primary-action);}.fila-dinero p{font-size:.75rem;margin:6px 0;}
+@media(max-width:1200px){.dinero-graficos{grid-template-columns:repeat(2,minmax(0,1fr));}.dinero-indicadores{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:650px){.dinero-graficos{grid-template-columns:minmax(0,1fr);}.dinero-indicadores{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+/* Vista Dinero: composición despejada de la referencia. */
+[data-vista="dashboard"][data-modo="valores"] #dineroVisual{display:contents;}
+[data-vista="dashboard"][data-modo="valores"] #dineroVisual>h3{grid-column:1/-1;grid-row:2;margin:0;font-size:1.1rem;}
+[data-vista="dashboard"][data-modo="valores"] .dinero-indicadores{grid-column:1/-1;grid-row:3;margin:0;}
+[data-vista="dashboard"][data-modo="valores"] #modoDashboard{grid-row:4;}
+[data-vista="dashboard"][data-modo="valores"] .dinero-graficos{grid-column:1/-1;grid-row:6;}
+[data-vista="dashboard"][data-modo="valores"] .ayuda-dinero{grid-column:1/-1;grid-row:5;font-size:.75rem;}
+[data-vista="dashboard"][data-modo="valores"] #horasDashboard{grid-row:7;}
+[data-vista="dashboard"][data-modo="valores"] .resumen-economico{grid-row:8;border:0;box-shadow:none;background:transparent;}
+[data-vista="dashboard"][data-modo="valores"] .resumen-economico>#datosEconomicos,[data-vista="dashboard"][data-modo="valores"] .resumen-economico>#estadoEconomico,[data-vista="dashboard"][data-modo="valores"] .resumen-economico>#alcanceEconomico,[data-vista="dashboard"][data-modo="valores"] .resumen-economico>h3{display:none;}
+.dinero-panel .dona-reservas{position:relative;display:grid;place-items:center;margin:18px 0 24px;width:150px;}
+.total-dona-dinero{position:relative;z-index:1;font:400 1.1rem var(--font-heading);color:var(--primary-action);}
+.dinero-panel .dona-reservas:after{inset:18%;}
+.dinero-indicadores small{font-size:.72rem;line-height:1.5;color:var(--mute-readable);}
+.ayuda-dinero summary{cursor:pointer;color:var(--primary-action);min-height:32px;padding:6px 0;}
+.dinero-panel{min-height:330px;}
+
+/* Cabecera compacta del Dashboard; el período mensual interno se conserva. */
+[data-vista="dashboard"]>.encabezado-seccion {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);margin:0;padding:0;}
+[data-vista="dashboard"]>.filtros {display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:flex-start;gap:12px;margin:0 0 16px;padding:0;}
+[data-vista="dashboard"]>.filtros label {flex:0 1 220px;max-width:none;}
+[data-vista="dashboard"]>.filtros button {min-height:44px;margin:0;white-space:nowrap;}
+[data-vista="dashboard"] #limpiarDashboard {background:var(--surface);color:var(--primary-action);border:1px solid var(--rose-strong);}
+[data-vista="dashboard"]>.ayuda-dashboard {margin:0 0 12px;}
+[data-vista="dashboard"] #estadoDashboard {margin:0 0 8px;max-width:none;background:transparent;border:0;padding:0;color:var(--mute-readable);}
+[data-vista="dashboard"] #actualizacionDashboard {margin:0 0 16px;}
+[data-vista="dashboard"] .resumen-economico:has(>.selector-mes-economico[hidden]):not(:has(#datosEconomicos:not([hidden]))) {display:none;}
+[data-vista="dashboard"][data-modo="valores"] .resumen-economico {display:none;}
+@media(max-width:600px){[data-vista="dashboard"]>.filtros label{flex:1 1 140px;}[data-vista="dashboard"]>.filtros button{flex:1 1 140px;}}
+
+/* Selector de profesional y actualización con separación consistente. */
+.herramientas-horarios{display:flex;align-items:flex-end;flex-wrap:wrap;gap:16px;margin:4px 0 26px;}
+.herramientas-horarios label{flex:0 1 350px;min-width:0;margin:0;}
+#gestionHorarios #trabajadoraHorario{background:var(--surface);border:1px solid var(--rose-strong);border-radius:14px;min-height:46px;width:100%;}
+#gestionHorarios #actualizarHorarios{background:var(--primary-action);color:var(--surface);border:1px solid var(--primary-action);min-height:46px;border-radius:24px;margin:0;padding:11px 20px;}
+#gestionHorarios #actualizarHorarios:hover:not(:disabled){filter:brightness(.94);}
+@media(max-width:600px){.herramientas-horarios{align-items:stretch;gap:14px;}.herramientas-horarios label{flex-basis:100%;}#gestionHorarios #actualizarHorarios{width:100%;}}
+
+/* Pagos: usar únicamente la cabecera principal de la vista. */
+[data-vista="pagos"]>h2 {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="pagos"] {padding:12px 0 24px;background:transparent;border:0;box-shadow:none;}
+[data-vista="pagos"]>p:first-of-type{margin-top:0;}
+[data-vista="pagos"] #pago {margin-top:18px;border-radius:24px;border-color:var(--line);}
+
+/* Perfil: una sola cabecera y formulario sin espacio redundante. */
+[data-vista="perfil"]>h2 {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);}
+[data-vista="perfil"] {padding:12px 0 24px;background:transparent;border:0;box-shadow:none;}
+[data-vista="perfil"] #perfil {margin-top:0;border-radius:24px;background:var(--surface);}
+
+/* Cada gráfico ocupa una columna real; evitar la cuadrícula anidada comprimida. */
+[data-vista="dashboard"] #dashboardDistribucion,
+[data-vista="dashboard"] #distribucionReservas,
+[data-vista="dashboard"] #distribucionReservas #datosDistribucion:not([hidden]),
+[data-vista="dashboard"] #distribucionReservas .columnas-distribucion {display:contents;}
+[data-vista="dashboard"] #contenidoDashboard {grid-template-columns:repeat(4,minmax(0,1fr));}
+[data-vista="dashboard"] #distribucionReservas .columnas-distribucion>section {width:100%;min-width:0;}
+@media(max-width:1350px){[data-vista="dashboard"] #contenidoDashboard{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:700px){[data-vista="dashboard"] #contenidoDashboard{grid-template-columns:minmax(0,1fr);}}
+
+/* Indicadores y gráficos comparten el color semántico de cada estado. */
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardTotal){background:var(--bg);}
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardConfirmadas){background:var(--chart-confirmada);}
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardPendientes){background:var(--chart-pendiente);}
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardAtendidas){background:var(--chart-atendida);}
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardCanceladas){background:var(--chart-cancelada);}
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardNoAtendidas){background:var(--chart-no-atendida);}
+[data-vista="dashboard"] #contenidoDashboard>.metricas-dashboard>div:has(#dashboardTotal){background:var(--sky);}
+
+.leyenda-dinero{display:flex;align-items:baseline;gap:7px;}
+.punto-leyenda-dinero{display:inline-block;flex:0 0 10px;width:10px;height:10px;border-radius:50%;}
+
+/* Tabla de apoyo con presentación compacta y legible. */
+.tabla-dashboard-plegada {margin-top:18px;border-top:1px solid var(--line);padding-top:8px;}
+.tabla-dashboard-plegada>summary {display:list-item;list-style-position:inside;padding:10px 12px;min-height:44px;border-radius:14px;background:var(--rose);color:var(--primary-action);font-size:.8rem;font-weight:500;cursor:pointer;}
+.tabla-dashboard-plegada>summary:focus-visible {outline:3px solid var(--rose-strong);outline-offset:3px;}
+[data-vista="dashboard"] .tabla-dashboard-plegada table {table-layout:fixed;width:100%;margin-top:12px;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--line);border-radius:16px;font-size:.78rem;}
+[data-vista="dashboard"] .tabla-dashboard-plegada caption {font-size:.73rem;color:var(--mute-readable);font-weight:400;line-height:1.5;margin:8px 0 12px;}
+[data-vista="dashboard"] .tabla-dashboard-plegada th,[data-vista="dashboard"] .tabla-dashboard-plegada td {padding:11px 12px;border-bottom:1px solid var(--line);background:var(--surface);font-weight:400;vertical-align:middle;}
+[data-vista="dashboard"] .tabla-dashboard-plegada tr:first-child th {background:var(--rose);font-size:.73rem;font-weight:600;color:var(--ink);}
+[data-vista="dashboard"] .tabla-dashboard-plegada tr:nth-child(2n+1):not(:first-child)>* {background:var(--bg);}
+[data-vista="dashboard"] .tabla-dashboard-plegada td {text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);}
+[data-vista="dashboard"] .tabla-dashboard-plegada tr:last-child>* {border-bottom:0;}
+
+/* Suscripción: vigencia destacada, plan y tarjeta en paneles independientes. */
+#gestionSuscripcion{padding:12px 0;background:transparent;border:0;box-shadow:none;}
+#gestionSuscripcion>h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
+.suscripcion-vigencia{background:linear-gradient(120deg,var(--rose),var(--peach));padding:28px;border-radius:28px;margin-bottom:20px;}
+.suscripcion-vigencia h3{font:400 clamp(1.5rem,3vw,2rem)/1.4 var(--font-heading);color:var(--primary-action);margin:14px 0;}
+.suscripcion-insignia{display:inline-block;background:var(--surface);border-radius:20px;padding:6px 14px;color:var(--primary-action);font-size:.8rem;}
+.suscripcion-pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:26px;}
+.suscripcion-pasos>div{display:grid;gap:8px;border-top:2px solid var(--surface);padding-top:14px;min-width:0;}
+.suscripcion-pasos span{font-size:.85rem;overflow-wrap:anywhere;}
+.suscripcion-tarjetas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-bottom:22px;}
+.suscripcion-tarjetas>section{background:var(--surface);border-radius:28px;padding:26px;box-shadow:var(--shadow);min-width:0;}
+.suscripcion-tarjetas h3{font:400 1.5rem var(--font-heading);color:var(--primary-action);}
+.suscripcion-precio{font:400 2rem var(--font-heading);color:var(--ink);}
+.suscripcion-tarjetas ul{padding-left:20px;line-height:2.2;font-size:.9rem;}
+.suscripcion-tarjeta{min-height:145px;background:linear-gradient(120deg,var(--primary-action),var(--rose-strong));border-radius:24px;padding:22px;color:var(--surface);display:flex;flex-direction:column;justify-content:space-between;gap:25px;}
+.suscripcion-tarjeta strong{font-size:1.3rem;letter-spacing:.08em;overflow-wrap:anywhere;}
+.suscripcion-detalle{margin-bottom:20px;font-size:.85rem;}.suscripcion-detalle summary{cursor:pointer;padding:12px;color:var(--primary-action);}
+#gestionSuscripcion>label{background:var(--surface);border-radius:20px;}
+#gestionSuscripcion>p:has(button){display:flex;flex-wrap:wrap;gap:12px;padding:16px 0;}
+#gestionSuscripcion>p:has(button) button{border-radius:26px;min-height:44px;margin:0;}
+#pagosSuscripcion{background:var(--surface);border-radius:28px;padding:22px;box-shadow:var(--shadow);}
+@media(max-width:650px){.suscripcion-tarjetas,.suscripcion-pasos{grid-template-columns:minmax(0,1fr);}.suscripcion-vigencia,.suscripcion-tarjetas>section{padding:20px;}}
+
+/* Una sección de Reservas con agenda y análisis en bloques identificables. */
+.resumen-en-reservas{margin-top:32px;padding-top:24px!important;border-top:1px solid var(--line)!important;}
+.titulo-resumen-integrado{font:400 clamp(1.4rem,2.5vw,1.9rem) var(--font-heading);color:var(--primary-action);margin:0 0 20px;}
+#menuGestion a[data-destino="dashboard"][hidden]{display:none;}
+
+[data-vista="reservas"] .encabezado-seccion {gap:12px;flex-wrap:wrap;}
+#bajarDashboard{background:var(--primary-action);color:var(--surface);border-color:var(--primary-action);min-height:44px;border-radius:24px;}
+#resumenDashboardIntegrado{scroll-margin-top:24px;}
+.notificaciones-al-pie{margin-top:32px;padding:0!important;border:0;background:transparent;box-shadow:none;}
+#abrirNotificaciones{background:var(--surface);border-radius:24px;padding:18px 22px;box-shadow:var(--shadow);}
+#abrirNotificaciones>summary{display:list-item;list-style-position:inside;cursor:pointer;background:var(--primary-action);color:var(--surface);border-radius:24px;padding:12px 20px;width:fit-content;min-height:44px;font-size:.9rem;}
+#abrirNotificaciones>summary:focus-visible{outline:3px solid var(--rose-strong);outline-offset:4px;}
+#abrirNotificaciones[open]>summary{margin-bottom:22px;}
+#menuGestion a[data-destino="notificaciones"][hidden]{display:none;}
+
+/* Prioridad al análisis; notificaciones cerradas al pie de la página. */
+#resumenDashboardIntegrado{margin:26px 0 30px;padding-bottom:24px!important;}
+.notificaciones-al-pie{clear:both;margin-top:44px;border-top:1px solid var(--line)!important;padding-top:24px!important;}
+#abrirNotificaciones:not([open]){box-shadow:none;background:transparent;padding:0;}
+#abrirNotificaciones>summary{max-width:100%;}
+
+/* Solicitudes al pie de Reservas; Notificaciones conserva su vista independiente. */
+#solicitudesAlFinal{margin:28px 0 12px;padding:18px 22px;background:var(--surface);border-radius:24px;box-shadow:var(--shadow);}
+#solicitudesAlFinal>summary{cursor:pointer;padding:12px 18px;border-radius:24px;background:var(--primary-action);color:var(--surface);width:fit-content;max-width:100%;min-height:44px;list-style-position:inside;}
+#solicitudesAlFinal>summary:focus-visible{outline:3px solid var(--rose-strong);outline-offset:3px;}
+#solicitudesAlFinal[open]>summary{margin-bottom:20px;}
+#solicitudesAlFinal>h3{display:none;}
+
+/* Lista operativa consultable sin ocupar toda la página. */
+#detalleListaReservas{margin:28px 0;background:var(--surface);border-radius:24px;padding:16px 22px;box-shadow:var(--shadow);}
+#detalleListaReservas>summary{cursor:pointer;min-height:44px;padding:10px 0;font:400 1.3rem var(--font-heading);color:var(--primary-action);list-style-position:inside;}
+#detalleListaReservas>summary:focus-visible{outline:3px solid var(--rose-strong);outline-offset:3px;}
+#detalleListaReservas #resumenReservas{margin:10px 0;font-size:.75rem;}
+#detalleListaReservas #reservas{max-height:560px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;border-radius:14px;box-shadow:none;padding:0 12px 0 0;}
+#detalleListaReservas #reservas .reserva-card{padding:14px 0;row-gap:5px;}
+#detalleListaReservas .reserva-persona{font-size:.9rem;}
+#detalleListaReservas .reserva-expandible>summary{font-size:.78rem;min-height:36px;padding:8px 0;}
+@media(max-width:600px){#detalleListaReservas{padding:14px 16px;}#detalleListaReservas #reservas{max-height:65vh;}}
+
+#detalleListaReservas>.filtros{margin:16px 0;background:var(--bg);border:1px solid var(--line);box-shadow:none;padding:16px;gap:14px;}
+#detalleListaReservas>.filtros label{flex:1 1 180px;max-width:260px;}
+#detalleListaReservas>.filtros button{min-height:44px;}
+
+/* Mantener las acciones de gestión visibles, fuera del detalle plegado. */
+#reservas .acciones-reserva {grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+#reservas .acciones-reserva:empty {display:none;}
+#reservas .acciones-reserva button {min-height:44px;padding:10px 16px;}
+
+.titulo-acciones-reserva{font:500 .9rem var(--font-body);color:var(--ink);margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line);}
+.reserva-expandible .acciones-reserva{margin-top:8px;}
+
+/* Lista y ficha de gestión, conservando los botones originales de cada reserva. */
+#detalleListaReservas #reservas.reservas-maestro-detalle{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;max-height:none;overflow:visible;padding:0;background:transparent;}
+.lista-reservas-compacta{display:flex;flex-direction:column;gap:10px;max-height:650px;overflow-y:auto;padding:4px;scrollbar-width:thin;}
+.reserva-opcion{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;text-align:left;padding:18px;background:var(--bg);border:2px solid transparent;border-radius:22px;color:var(--ink);min-width:0;}
+.reserva-opcion strong{grid-column:1;font-size:.9rem;}
+.reserva-opcion>span:not(.reserva-estado){grid-column:1;font-size:.8rem;font-weight:400;color:var(--mute-readable);overflow-wrap:anywhere;}
+.reserva-opcion>.reserva-estado{grid-column:2;grid-row:1;align-self:start;}
+.reserva-opcion[aria-pressed=true]{border-color:var(--primary-action);background:var(--rose);}
+.reserva-por-cerrar{grid-column:2;color:var(--primary-action);font-weight:500;}
+.ficha-reserva-seleccionada{background:var(--surface);padding:22px;border-radius:28px;box-shadow:var(--shadow);min-width:0;align-self:start;position:sticky;top:20px;}
+#reservas .ficha-reserva-seleccionada .reserva-card{border:0;padding:0;}
+.ficha-reserva-seleccionada .reserva-expandible>summary{display:none;}
+.ficha-reserva-seleccionada .reserva-expandible[open]{padding:0;background:transparent;}
+.ficha-reserva-seleccionada .reserva-persona{font:400 1.3rem var(--font-heading)!important;color:var(--primary-action);}
+#reservas .ficha-reserva-seleccionada .acciones-reserva{display:flex;flex-direction:column;gap:10px;}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button{width:100%;min-height:48px;border-radius:26px;}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button:nth-child(2){background:var(--primary-action);color:var(--surface);}
+@media(max-width:800px){#detalleListaReservas #reservas.reservas-maestro-detalle{grid-template-columns:minmax(0,1fr);}.lista-reservas-compacta{max-height:330px;}.ficha-reserva-seleccionada{position:static;}}
+@media(max-width:450px){.reserva-opcion{grid-template-columns:minmax(0,1fr);}.reserva-opcion>.reserva-estado,.reserva-por-cerrar{grid-column:1;grid-row:auto;justify-self:start;}.ficha-reserva-seleccionada{padding:16px;}}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button{background:var(--surface);color:var(--primary-action);order:3;}
+#reservas .ficha-reserva-seleccionada .acciones-reserva .accion-reserva-atender{background:var(--primary-action);color:var(--surface);order:0;}
+#reservas .ficha-reserva-seleccionada .acciones-reserva .accion-reserva-no-atendida{background:var(--peach);color:var(--ink);order:1;}
+#reservas .ficha-reserva-seleccionada .acciones-reserva .accion-reserva-cancelar{background:var(--surface);color:var(--primary-action);border-color:var(--rose-strong);order:2;}
+
+/* Prioridad: gestión de citas, calendario y Dashboard, sin indicadores duplicados. */
+[data-vista="reservas"] .agenda-metricas[hidden]{display:none;}
+[data-vista="reservas"] #detalleListaReservas{margin-top:18px;}
+[data-vista="reservas"] #estadoAgenda:not([data-estado^="error"]){font-size:.75rem;}
+
+/* Jerarquía consistente: calendario, gestión de reservas y análisis. */
+.calendario-semana>h3,#detalleListaReservas>summary,.titulo-resumen-integrado{font-family:var(--font-heading);font-size:clamp(1.3rem,2vw,1.6rem);font-weight:400;line-height:1.35;}
+#detalleListaReservas>summary{padding-block:10px;}
+#detalleListaReservas .reserva-opcion strong{font-size:.95rem;line-height:1.4;}
+#detalleListaReservas .reserva-opcion>span:not(.reserva-estado){font-size:.85rem;line-height:1.5;}
+#detalleListaReservas .reserva-estado{font-size:.75rem;line-height:1.4;}
+#detalleListaReservas .ficha-reserva-seleccionada .reserva-persona{font-size:1.25rem!important;line-height:1.4;}
+#detalleListaReservas .reserva-detalle,#detalleListaReservas .reserva-nota{font-size:.85rem;line-height:1.6;}
+#rangoSemana,#resumenReservas{font-size:.8rem;line-height:1.5;}
+
+/* Colores fijos por acción, también al pasar el mouse o enfocar. */
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-reserva-atender,
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-reserva-atender:hover {background:var(--primary-action);color:var(--surface);border:1px solid var(--primary-action);}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-reserva-no-atendida,
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-reserva-no-atendida:hover {background:var(--peach);color:var(--ink);border:1px solid var(--peach);}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-reserva-cancelar,
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-reserva-cancelar:hover {background:var(--surface);color:var(--primary-action);border:1px solid var(--rose-strong);}
+#reservas button,#reservas button:hover,#reservas button:active {transform:none;translate:none;scale:none;position:static;transition:background-color .15s,color .15s;}
+#reservas .acciones-reserva button {box-sizing:border-box;font-size:.9rem;line-height:1.4;padding:12px 18px;min-height:48px;border-width:1px;font-weight:600;}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-abono {
+  border:2px solid var(--primary);
+  background:var(--surface);
+  color:var(--primary-action);
+}
+#reservas .ficha-reserva-seleccionada .acciones-reserva button.accion-abono:hover {
+  background:var(--rose);
+}
+
+/* Equipo y horarios: lectura cómoda y acciones con colores consistentes. */
+[data-vista="equipo"]{max-width:1200px;margin-inline:auto;width:100%;box-sizing:border-box;}
+[data-vista="equipo"] #listaTrabajadoras article{text-align:center;padding:28px;}
+[data-vista="equipo"] h3{font-size:1.4rem;line-height:1.4;}
+[data-vista="equipo"] p,[data-vista="equipo"] label,[data-vista="equipo"] input,[data-vista="equipo"] textarea,[data-vista="equipo"] select{font-size:1rem;line-height:1.6;}
+[data-vista="equipo"] button{font-size:1rem;min-height:48px;padding:11px 18px;margin:5px;border-radius:24px;}
+#trabajadoraGestion{border-radius:28px;padding:26px;}
+#trabajadoraGestion>h3,#tituloAsignaciones{text-align:center;}
+#trabajadoraGestion fieldset>p{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;}
+#listaHorarios .fila-horario{font-size:1rem;line-height:1.7;}
+#listaHorarios .fila-horario button{font-size:.95rem;min-height:48px;padding:11px 18px;}
+#listaHorarios .fila-horario button.editar-horario,#listaHorarios .fila-horario button.editar-horario:hover{background:var(--peach);color:var(--ink);border-color:var(--peach);}
+
+/* Movimiento breve al interactuar, sin cambiar el espacio de los controles. */
+@media(hover:hover) and (prefers-reduced-motion:no-preference){
+  body button:not(:disabled),.menu-gestion a,#listaTrabajadoras article,#listaServicios article{transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease,color .18s ease;}
+  body button:not(:disabled):hover,.menu-gestion a:hover{transform:translateY(-2px);}
+  #reservas button:not(:disabled):hover{transform:translateY(-2px);}
+  #listaTrabajadoras article:hover,#listaServicios article:hover{transform:translateY(-3px);box-shadow:var(--shadow);}
+  body button:not(:disabled):active,#reservas button:not(:disabled):active{transform:translateY(0);}
+}
+@media(prefers-reduced-motion:reduce){body button,.menu-gestion a,#listaTrabajadoras article,#listaServicios article{transition:none!important;transform:none!important;}}
+@media(max-width:600px){[data-vista="equipo"] #listaTrabajadoras article,#trabajadoraGestion{padding:20px;}[data-vista="equipo"] button{margin:4px 2px;}}
+
+/* Vigencia destacada y acciones semanales alineadas entre filas. */
+#detalleSuscripcion{border:2px solid var(--rose-strong);}
+#trabajadoraAsignacion{background:var(--surface);max-width:520px;min-height:48px;}
+#listaHorarios .fila-horario{display:grid;grid-template-columns:minmax(0,360px) 160px 200px;align-items:center;column-gap:16px;}
+#listaHorarios .fila-horario button.editar-horario{grid-column:2;grid-row:1;}
+#listaHorarios .fila-horario button:not(.editar-horario){grid-column:3;grid-row:1;}
+#listaHorarios .fila-horario button{width:100%;margin:0;white-space:normal;}
+@media(max-width:900px){
+ #listaHorarios .fila-horario{grid-template-columns:minmax(0,1fr) minmax(0,1fr);row-gap:14px;}
+ #listaHorarios .fila-horario button.editar-horario{grid-column:1;grid-row:2;}
+ #listaHorarios .fila-horario button:not(.editar-horario){grid-column:2;grid-row:2;}
+}
+@media(max-width:420px){
+ #listaHorarios .fila-horario{grid-template-columns:minmax(0,1fr);}
+ #listaHorarios .fila-horario button:not(.editar-horario){grid-column:1;grid-row:3;}
+}

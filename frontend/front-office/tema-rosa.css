@@ -1,0 +1,105 @@
+/* Referencia visual Meraki: rosa, superficies blancas y pasteles suaves. */
+:root{--crema:var(--bg);--papel:var(--surface);--tinta:var(--ink);--suave:var(--mute-readable);--ciruela:var(--primary-action);--oscuro:var(--primary-action);--lavanda:var(--mauve);--rosa:var(--rose);--borde:var(--line);}
+body{background:var(--bg);color:var(--tinta);}
+.cabecera{background:var(--bg);border-color:var(--line);}
+.hero-editorial{background:var(--bg);border:0;}
+.hero-slide h1,.hero-slide h2{color:var(--primary-action);}
+.hero-slide em{color:var(--rose-strong);}
+.hero-slide>p,.hero-eyebrow{color:var(--mute-readable);}
+.hero-enlace,.negocioCompacto button{background:var(--primary-action);border-color:var(--primary-action);color:white;}
+.hero-enlace:hover,.negocioCompacto button:hover{background:var(--primary-action);color:white;}
+.portada .buscador{background:white;border:1px solid var(--line);border-radius:28px;box-shadow:0 10px 30px var(--color-b9476907);}
+.hero-imagen{border-radius:180px 180px 20px 20px;margin:24px;min-height:390px;}
+.catalogo,.reserva{background:transparent;border-color:transparent;box-shadow:none;}
+.negocio-card{background:white;border:1px solid var(--color-f7eeee);border-radius:28px;box-shadow:0 10px 30px var(--color-b9476908);padding:18px;}
+.negocio-card::before{display:none;}
+.negocio-card h3{color:var(--primary-action);margin-top:4px;}
+.negocio-card button{color:var(--color-a1395a);border-color:var(--rose-strong);background:white;border-radius:28px;min-height:44px;}
+.negocio-card button:hover:not(:disabled){background:var(--primary-action);color:white;}
+.fotoEmprendimiento{border-radius:120px 120px 18px 18px;background:linear-gradient(135deg,var(--peach),var(--rose));color:var(--primary-action);}
+.negocio-card:nth-child(3n+2) .fotoEmprendimiento{background:linear-gradient(135deg,var(--mauve),var(--rose));}
+.negocio-card:nth-child(3n) .fotoEmprendimiento{background:linear-gradient(135deg,var(--sage),var(--peach));}
+.mapaPreparacion{background:var(--color-fff5f5);border:1px solid var(--line);border-radius:28px;}
+.negocioCompacto{background:white;border:1px solid var(--color-f7eeee);border-radius:24px;padding:22px;}
+.negocioCompacto h5{color:var(--primary-action);}
+.negocioSeleccionado{outline-color:var(--rose-strong);}
+.pinMeraki{background:var(--primary-action);}.pinMeraki.pinSeleccionado{background:var(--primary-action);outline-color:var(--color-f0adc0);}.pinMeraki.pinClienta{background:var(--color-1976d2);}
+@media(max-width:760px){.hero-imagen{margin:0 18px 24px;min-height:280px;border-radius:120px 120px 18px 18px;}.portada .buscador{border-radius:22px;}}
+/* Contener el lienzo cartográfico dentro de su columna. */
+.mapaGoogle,.mapaLeaflet{overflow:hidden;position:relative;}
+.pie{width:auto;margin-inline:0;}
+.hero-contenido,.hero-imagen{min-width:0;}
+
+/* Una búsqueda principal y controles de ubicación junto al mapa. */
+.soloLectores{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+.portada #buscar{display:flex;flex-direction:column;align-items:stretch;gap:14px;}
+.barraBusquedaUnica{display:flex;align-items:center;gap:8px;padding:7px;border:2px solid var(--rose-strong);border-radius:40px;background:var(--surface);min-width:0;}
+.barraBusquedaUnica input{flex:1;min-width:0;width:100%;border:0;background:transparent;box-shadow:none;padding:14px 18px;border-radius:30px;font-size:1rem;}
+.barraBusquedaUnica button{flex-shrink:0;border-radius:30px;min-height:48px;padding:12px 24px;}
+.opcionesBusqueda{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+.filtrosAdicionales{flex:1;min-width:0;}
+.filtrosAdicionales summary{cursor:pointer;color:var(--primary-action);padding:12px 0;}
+.filtrosAdicionales .camposBusqueda{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px;}
+.controlesMapa{padding-top:0;border-top:0;margin-bottom:20px;}
+.controlesMapa>.acciones{display:flex;flex-wrap:wrap;gap:12px;}
+.controlesMapa>.acciones button{margin:0;min-height:48px;}
+.controlesMapa>.ayuda{max-width:85ch;line-height:1.6;}
+@media(max-width:500px){.barraBusquedaUnica input{padding:12px 8px;font-size:.95rem;}.barraBusquedaUnica button{padding:12px 16px;}.filtrosAdicionales .camposBusqueda{grid-template-columns:minmax(0,1fr);}.opcionesBusqueda{gap:10px;}}
+
+/* Respuesta al mouse sin desplazar las tarjetas vecinas. */
+@media(hover:hover) and (prefers-reduced-motion:no-preference){
+ .negocio-card,.negocioCompacto,.servicio-card{transition:transform .2s ease,box-shadow .2s ease;}
+ .negocio-card:hover,.negocioCompacto:hover,.servicio-card:hover{transform:translateY(-4px);box-shadow:var(--shadow);}
+}
+@media(prefers-reduced-motion:reduce){.negocio-card,.negocioCompacto,.servicio-card{transition:none;transform:none;}}
+
+/* Servicios y reserva comparten la paleta del Back Office. */
+.servicio-card,.reserva .paso{background:var(--surface);border:1px solid var(--line);border-radius:28px;box-shadow:var(--shadow);}
+.servicio-card[data-seleccionado=true]{border:1px solid var(--primary);box-shadow:inset 0 0 0 1px var(--primary),var(--shadow);}
+.servicio-card h3,.reserva .paso h3{color:var(--primary-action);}
+.servicio-card .servicio-categoria,.numeroPaso{background:var(--peach);color:var(--ink);}
+.servicio-card button,#crearReserva{background:var(--primary-action);color:var(--surface);border-color:var(--primary-action);border-radius:28px;}
+.servicio-card button:hover:not(:disabled),#crearReserva:hover:not(:disabled){background:var(--primary);border-color:var(--primary);}
+.servicio-card[data-disponible=true] .servicio-estado{color:var(--sage-ink);}
+.reserva .resumenPanel{background:var(--surface);border:2px solid var(--rose-strong);}
+.resumen-fila{border-color:var(--line);}
+.resumen-fila dt{color:var(--mute-readable);}
+.resumen-fila dd{color:var(--ink);}
+.resumen-precio dd,.resumen-abono dd{color:var(--primary-action);}
+.reserva input,.reserva select{background:var(--surface);border-color:var(--rose-strong);color:var(--ink);}
+
+/* Categorías de un toque, con desplazamiento horizontal en móvil. */
+.barraBusquedaUnica button{background:var(--primary-action);color:var(--surface);border:0;border-radius:32px;flex-shrink:0;}
+.barraBusquedaUnica input:not([type=hidden]){flex:1;min-width:0;background:transparent;border:0;border-radius:32px;box-shadow:none;padding:14px 18px;}
+.barraBusquedaUnica:focus-within{outline:2px solid var(--primary);outline-offset:3px;}
+.categoriasBusqueda{display:flex;align-items:center;gap:14px;min-width:0;}
+.chipsCategorias{display:flex;gap:10px;overflow-x:auto;min-width:0;padding:6px 2px;flex:1;scrollbar-width:thin;}
+.chipsCategorias button{display:inline-flex;align-items:center;gap:8px;flex-shrink:0;border:1px solid var(--line);border-radius:28px;background:var(--surface);color:var(--ink);padding:10px 16px;min-height:44px;white-space:nowrap;}
+.chipsCategorias button[aria-pressed=true]{background:var(--rose);border-color:var(--rose-strong);color:var(--primary-action);}
+.chipsCategorias button:hover{background:var(--rose);}
+#buscar #limpiarBusqueda{flex-shrink:0;margin:0;min-height:44px;}
+#buscar>[hidden],#buscar label[hidden]{display:none!important;}
+#buscar,#resultados{scroll-margin-top:24px;}
+#catalogoSinMapa{container-type:inline-size;}
+#catalogoSinMapa #resultados{
+  --columnas-catalogo:1;
+  --separacion-catalogo:1.1rem;
+  grid-template-columns:repeat(var(--columnas-catalogo),minmax(0,1fr));
+  gap:var(--separacion-catalogo);
+}
+@container(min-width:640px){#catalogoSinMapa #resultados{--columnas-catalogo:2;}}
+@container(min-width:960px){#catalogoSinMapa #resultados{--columnas-catalogo:3;}}
+#resultados .negocio-card:only-child{
+  grid-column:1/-1;
+  width:calc((100% - (var(--columnas-catalogo,1) - 1) * var(--separacion-catalogo,1.1rem)) / var(--columnas-catalogo,1));
+  max-width:100%;
+  justify-self:center;
+  margin-inline:auto;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+}
+#resultados .negocio-card:only-child .fotoEmprendimiento{width:100%;aspect-ratio:16/9;overflow:hidden;}
+#resultados .negocio-card:only-child .fotoEmprendimiento img{width:100%;height:100%;object-fit:cover;}
+@media(max-width:500px){.categoriasBusqueda{flex-wrap:wrap;}.chipsCategorias{flex-basis:100%;}.barraBusquedaUnica input:not([type=hidden]){padding:12px 8px;}.barraBusquedaUnica{gap:2px;}}

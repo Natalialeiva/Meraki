@@ -268,6 +268,36 @@ function dibujarCatalogo() {
 }
 $('#ordenCercania').onchange = dibujarCatalogo;
 
+function actualizarChipsCategorias() {
+    const valor=$('#categoriaBusqueda').value;
+    for(const b of $('#chipsCategorias').children)b.setAttribute('aria-pressed',String(b.dataset.categoria===valor));
+}
+function mostrarChipsCategorias(categorias) {
+    const grupo=$('#chipsCategorias');grupo.replaceChildren();
+    const apariencia={manicure:['💅','Uñas'],pedicure:['💅','Pedicure'],pestañas:['👁️','Pestañas'],facial:['🌿','Facial'],masajes:['🕯️','Masajes'],peluquería:['💇‍♀️','Pelo'],maquillaje:['🌸','Maquillaje']};
+    for(const c of [{id_categoria:'',nombre:'Todas'},...categorias]){
+        const b=document.createElement('button');b.type='button';b.dataset.categoria=String(c.id_categoria);
+        const [icono,texto]=apariencia[c.nombre.toLocaleLowerCase('es-CL')]||[c.id_categoria?'🌸':'✨',c.nombre];
+        const emoji=document.createElement('span');emoji.textContent=icono;emoji.setAttribute('aria-hidden','true');
+        b.append(emoji);const etiqueta=document.createElement('span');etiqueta.textContent=texto;b.append(etiqueta);
+        b.onclick=()=>{if(enviando||intentoBloqueado())return;$('#categoriaBusqueda').value=b.dataset.categoria;return $('#buscar').requestSubmit();};grupo.append(b);
+    }
+    actualizarChipsCategorias();
+}
+
+async function buscarCatalogo(filtros) {
+    const texto=filtros.get('q')?.trim();
+    if(!texto)return api('/api/emprendimientos?'+filtros);
+    // La API existente combina filtros con AND. Consultar ambos campos permite
+    // buscar por nombre O comuna sin cambiar rutas ni contratos del servidor.
+    const porNombre=new URLSearchParams(filtros),porComuna=new URLSearchParams(filtros);
+    for(const p of [porNombre,porComuna]){p.delete('q');p.delete('nombre');p.delete('comuna');}
+    porNombre.set('nombre',texto);porComuna.set('comuna',texto);
+    const resultados=await Promise.all([api('/api/emprendimientos?'+porNombre),api('/api/emprendimientos?'+porComuna)]);
+    const unicos=new Map();for(const r of resultados.flat())unicos.set(r.id_emprendimiento,r);
+    return [...unicos.values()].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es-CL'));
+}
+
 async function cargarCategorias() {
     const selector = $('#categoriaBusqueda');
     const estadoCategorias = $('#estadoCategorias');
@@ -280,13 +310,14 @@ async function cargarCategorias() {
         }
         opciones(selector, categorias, 'id_categoria', c => c.nombre, 'Todas las categorías');
         selector.disabled = categorias.length === 0;
+        mostrarChipsCategorias(categorias);
         estadoCategorias.textContent = categorias.length ? '' : 'No hay categorías disponibles.';
     } catch {
         estadoCategorias.textContent = 'Las categorías no están disponibles temporalmente. Puedes buscar por nombre y comuna.';
     }
 }
 
-const camposBusqueda = {nombre:'Nombre', comuna:'Comuna', id_categoria:'Categoría'};
+const camposBusqueda = {q:'Búsqueda',nombre:'Nombre', comuna:'Comuna', id_categoria:'Categoría'};
 let ultimaBusqueda = new URLSearchParams();
 
 function repetirBusqueda(filtros, campoFoco) {
@@ -331,7 +362,9 @@ $('#reintentarBusqueda').onclick = () => repetirBusqueda(ultimaBusqueda);
 $('#buscar').onsubmit = async evento => {
     evento.preventDefault(); if (enviando || intentoBloqueado()) return;
     const filtros = new URLSearchParams(new FormData(evento.target));
+    if(!filtros.get('q')?.trim())filtros.delete('q');
     if (!filtros.get('id_categoria')) filtros.delete('id_categoria');
+    actualizarChipsCategorias();
     ultimaBusqueda = filtros;
     mostrarFiltros(filtros);
     const version = ++versionBusqueda; versionSeleccion++; versionProfesional++; limpiarHoras();
@@ -341,7 +374,7 @@ $('#buscar').onsubmit = async evento => {
     $('#estadoCatalogo').append(estado);
     informar('Buscando emprendimientos…', 'carga');
     try {
-        const datos = await api('/api/emprendimientos?' + filtros);
+        const datos = await buscarCatalogo(filtros);
         if (version !== versionBusqueda) return;
         resultadosCatalogo = datos; dibujarCatalogo();
         informar(datos.length ? datos.length + ' emprendimiento(s). Selecciona uno para ver sus servicios.' : 'No encontramos emprendimientos con esos filtros. Prueba quitando algún filtro o pulsa Ver todos.');

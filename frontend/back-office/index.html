@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#f7f5f8">
 <title>Mi negocio | Meraki</title>
 <link rel="stylesheet" href="gestion.css?v=notificaciones-1">
+<link rel="stylesheet" href="tema-rosa.css?v=1">
+<link rel="stylesheet" href="/front-office/diseno-tokens.css?v=1">
 </head>
 <body>
 <a class="saltar" href="#tituloVista">Saltar al contenido</a>
@@ -126,7 +128,7 @@
 </svg>
 <span>Suscripción</span>
 </a>
-<a href="#tituloDashboard" data-destino="dashboard">
+<a href="#tituloDashboard" data-destino="dashboard" hidden>
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z"/>
 </svg>
@@ -173,33 +175,21 @@
 <h2 id="tituloReservas" tabindex="-1">Agenda de reservas</h2>
 <p>Consulta las citas y gestiona cada atención.</p>
 </div>
+<button id="bajarDashboard" type="button">Dashboard ↓</button>
 <button id="cargar" type="button">
 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M20 7v5h-5M4 17v-5h5m-4.9-1a8 8 0 0 1 13.2-5.5L20 8M4 16l2.7 2.5A8 8 0 0 0 19.9 13"/>
 </svg>Actualizar agenda</button>
 </div>
-<div class="filtros">
-<label>Fecha <input id="filtroFecha" type="date">
-</label>
-<label>Estado <select id="filtroEstado">
-<option value="">Todos</option>
-<option value="pendiente_abono">Pendiente de abono</option>
-<option value="confirmada">Confirmada</option>
-<option value="atendida">Atendida</option>
-<option value="no_atendida">No atendida</option>
-<option value="cancelada">Cancelada</option>
-</select>
-</label>
-<button id="limpiarFiltros" type="button">Limpiar filtros</button>
-</div>
-<p class="ayuda-agenda">Resumen del emprendimiento seleccionado. Los filtros cambian la lista, no estos indicadores. Valores de la última carga válida; las reservas no representan ingresos.</p>
+
+
 <p id="estadoAgenda" class="estado-agenda" role="status" aria-live="polite" aria-atomic="true">Selecciona un emprendimiento para consultar su agenda.</p>
 <p id="ultimaActualizacionAgenda" class="actualizacion-agenda"></p>
 <p id="advertenciaActualizacionAgenda" class="advertencia-agenda"></p>
-<p class="ayuda-agenda">La última carga indica recepción de datos en este navegador, no una modificación de PostgreSQL. Hora de Santiago.</p>
+
 <button id="reintentarAgenda" type="button" hidden>Reintentar carga de agenda</button>
 <div id="agendaContenido" aria-busy="false">
-<div class="agenda-metricas" aria-label="Resumen de la agenda">
+<div class="agenda-metricas" aria-label="Resumen de la agenda" hidden>
 <article>
 <small>Reservas en agenda</small>
 <span class="sr-only">Todas las fechas y estados, incluidas las canceladas.</span>
@@ -236,7 +226,76 @@
 <span class="punto" aria-hidden="true"></span>
 </article>
 </div>
-<div id="distribucionEnAgenda">
+
+<section class="calendario-semana" aria-labelledby="tituloSemana"><h3 id="tituloSemana">Calendario de la semana</h3><p id="rangoSemana"></p><div id="diasSemana" class="dias-semana"></div></section>
+<details id="detalleListaReservas" open><summary>Detalle de reservas</summary>
+<div class="filtros">
+<label>Fecha <input id="filtroFecha" type="date">
+</label>
+<label>Estado <select id="filtroEstado">
+<option value="">Todos</option>
+<option value="pendiente_abono">Pendiente de abono</option>
+<option value="confirmada">Confirmada</option>
+<option value="atendida">Atendida</option>
+<option value="no_atendida">No atendida</option>
+<option value="cancelada">Cancelada</option>
+</select>
+</label>
+<button id="limpiarFiltros" type="button">Limpiar filtros</button>
+</div>
+<p id="resumenReservas"></p>
+
+<div id="reservas"></div>
+</details>
+<section id="resumenDashboardIntegrado" class="vista resumen-en-reservas" data-vista="dashboard" hidden aria-labelledby="tituloDashboard">
+<h3 class="titulo-resumen-integrado">Resumen y gráficos de reservas</h3>
+<div class="encabezado-seccion"><div><h2 id="tituloDashboard" tabindex="-1">Resumen de reservas</h2><p>Solo el emprendimiento seleccionado. Cantidades de reservas, no ingresos ni pagos.</p></div></div>
+<div class="filtros">
+<label>Fecha de atención (Santiago)<input id="dashboardFecha" type="date"></label>
+<label>Estado<select id="dashboardEstado"><option value="">Todos</option><option value="confirmada">Confirmada</option><option value="pendiente_abono">Pendiente de abono</option><option value="cancelada">Cancelada</option><option value="atendida">Atendida</option><option value="no_atendida">No atendida</option></select></label>
+<button id="limpiarDashboard" type="button">Limpiar filtros</button>
+<button id="actualizarDashboard" type="button">Actualizar datos</button>
+</div>
+<details class="ayuda-dashboard"><summary>Cómo leer estos datos</summary><p class="ayuda-agenda">Estos filtros cambian los indicadores y gráficos del Dashboard. Los filtros de Reservas son independientes.</p></details>
+<p id="estadoDashboard" class="estado-agenda" role="status" aria-live="polite" aria-atomic="true">Carga la agenda para consultar el Dashboard.</p>
+<p id="actualizacionDashboard" class="actualizacion-agenda"></p>
+<p id="advertenciaDashboard" class="advertencia-agenda"></p>
+<div id="contenidoDashboard" aria-busy="false">
+<dl class="metricas-dashboard" aria-label="Reservas por estado">
+<div><dt>Total de reservas</dt><dd id="dashboardTotal">—</dd></div>
+<div><dt>Confirmadas</dt><dd id="dashboardConfirmadas">—</dd></div>
+<div><dt>Pendientes de abono</dt><dd id="dashboardPendientes">—</dd></div>
+<div><dt>Canceladas</dt><dd id="dashboardCanceladas">—</dd></div>
+<div><dt>Atendidas</dt><dd id="dashboardAtendidas">—</dd></div>
+<div><dt>No atendidas</dt><dd id="dashboardNoAtendidas">—</dd></div>
+</dl>
+<div class="graficos-dashboard">
+<section aria-labelledby="tituloGraficoEstados"><h3 id="tituloGraficoEstados">Reservas por estado</h3><div id="graficoEstados"></div></section>
+<section aria-labelledby="tituloEvolucion"><h3 id="tituloEvolucion">Evolución mensual por fecha de atención</h3><details class="ayuda-dashboard"><summary>Cómo leer estos datos</summary><p class="ayuda-agenda">Este gráfico muestra la cantidad de reservas de cada mes durante un período de seis meses. Cada punto corresponde a un mes, según la fecha de atención de la cita. Un valor de 0 significa que no hay reservas para ese mes. El filtro «Estado» sí cambia estas cantidades; el filtro «Fecha de atención» no cambia este gráfico.</p></details><div id="evolucionReservas"></div></section>
+</div>
+<div id="dashboardDistribucion"></div>
+<section class="resumen-economico" aria-labelledby="tituloEconomico">
+<h3 id="tituloEconomico">Resumen económico</h3>
+<label class="selector-mes-economico" hidden>Mes y año de atención<input id="economiaMes" type="month" required aria-describedby="alcanceEconomico"></label>
+<p id="alcanceEconomico" class="ayuda-agenda">Importes contractuales históricos del mes de atención, en CLP, según el filtro de estado. Son valores proyectados y no representan pagos recibidos. La fecha diaria no cambia este resumen mensual.</p>
+<p id="estadoEconomico"></p>
+<div id="datosEconomicos" hidden>
+<dl class="metricas-dashboard">
+<div><dt>Valor de servicios del mes sin canceladas</dt><dd id="valorServicios">—</dd><p>Confirmadas, pendientes de abono, atendidas y no atendidas.</p></div>
+<div><dt>Valor proyectado de reservas activas del mes</dt><dd id="valorReservasActivas">—</dd><p>Solo confirmadas y pendientes de abono.</p></div>
+<div><dt>Abonos esperados contractualmente del mes</dt><dd id="abonosActivos">—</dd><p>Requeridos por reservas activas. No indica cuánto se pagó ni cuánto falta por pagar.</p></div>
+</dl>
+<h4>Comparación de valores contractuales activos</h4><details class="ayuda-dashboard"><summary>Cómo leer estos datos</summary><p class="ayuda-agenda">Los abonos forman parte del valor de los servicios: no deben sumarse como valores adicionales. No representa movimientos de dinero.</p></details>
+<div id="comparacionEconomica"></div>
+<div id="detalleEconomico" class="tabla-economica"></div>
+<h4>Evolución económica de seis meses</h4><details class="ayuda-dashboard"><summary>Cómo leer estos datos</summary><p class="ayuda-agenda">Valor de reservas activas y abonos contractuales esperados del mes seleccionado y cinco anteriores. Según el filtro de estado; meses sin reservas: cero. No representa ingresos recibidos.</p></details>
+<div id="evolucionEconomica"></div>
+</div>
+</section>
+</div>
+</section>
+
+<details class="distribucion-plegable" hidden><summary>Ver distribución por servicios y profesionales</summary><div id="distribucionEnAgenda">
 <section id="distribucionReservas" class="distribucion-reservas" aria-labelledby="tituloDistribucion" aria-describedby="alcanceDistribucion estadoDistribucion">
 <h3 id="tituloDistribucion">Distribución de reservas</h3>
 <p id="alcanceDistribucion">Todas las fechas y estados de la agenda del emprendimiento seleccionado, incluidas canceladas y pendientes de abono. Los filtros de la lista no cambian esta distribución. No representa ingresos ni productividad.</p>
@@ -256,62 +315,18 @@
 </div>
 </section>
 </div>
-<p id="resumenReservas"></p>
-<h3>Solicitudes de cancelación</h3>
+</details>
+
+<details id="solicitudesAlFinal" hidden><summary>Solicitudes de cancelación · Ver u ocultar</summary><h3>Solicitudes de cancelación</h3>
 <p>Revisar una solicitud no cancela la cita ni devuelve el abono.</p>
 <button id="actualizarSolicitudes" type="button">Actualizar solicitudes</button>
-<div id="solicitudesCancelacion"></div>
-<div id="reservas"></div>
-</div>
-</section>
-<section class="vista" data-vista="dashboard" hidden aria-labelledby="tituloDashboard">
-<div class="encabezado-seccion"><div><h2 id="tituloDashboard" tabindex="-1">Resumen de reservas</h2><p>Solo el emprendimiento seleccionado. Cantidades de reservas, no ingresos ni pagos.</p></div><button id="actualizarDashboard" type="button">Actualizar datos</button></div>
-<div class="filtros">
-<label>Fecha de atención (Santiago)<input id="dashboardFecha" type="date"></label>
-<label>Estado<select id="dashboardEstado"><option value="">Todos</option><option value="confirmada">Confirmada</option><option value="pendiente_abono">Pendiente de abono</option><option value="cancelada">Cancelada</option><option value="atendida">Atendida</option><option value="no_atendida">No atendida</option></select></label>
-<button id="limpiarDashboard" type="button">Limpiar filtros</button>
-</div>
-<p class="ayuda-agenda">Estos filtros cambian los indicadores y gráficos del Dashboard. Los filtros de Reservas son independientes.</p>
-<p id="estadoDashboard" class="estado-agenda" role="status" aria-live="polite" aria-atomic="true">Carga la agenda para consultar el Dashboard.</p>
-<p id="actualizacionDashboard" class="actualizacion-agenda"></p>
-<p id="advertenciaDashboard" class="advertencia-agenda"></p>
-<div id="contenidoDashboard" aria-busy="false">
-<dl class="metricas-dashboard" aria-label="Reservas por estado">
-<div><dt>Total de reservas</dt><dd id="dashboardTotal">—</dd></div>
-<div><dt>Confirmadas</dt><dd id="dashboardConfirmadas">—</dd></div>
-<div><dt>Pendientes de abono</dt><dd id="dashboardPendientes">—</dd></div>
-<div><dt>Canceladas</dt><dd id="dashboardCanceladas">—</dd></div>
-<div><dt>Atendidas</dt><dd id="dashboardAtendidas">—</dd></div>
-<div><dt>No atendidas</dt><dd id="dashboardNoAtendidas">—</dd></div>
-</dl>
-<div class="graficos-dashboard">
-<section aria-labelledby="tituloGraficoEstados"><h3 id="tituloGraficoEstados">Reservas por estado</h3><div id="graficoEstados"></div></section>
-<section aria-labelledby="tituloEvolucion"><h3 id="tituloEvolucion">Evolución mensual por fecha de atención</h3><p class="ayuda-agenda">Mes seleccionado en el Resumen económico y cinco anteriores, según el filtro de estado. Meses sin reservas: cero. Unidad: cantidad de reservas. El filtro de fecha diaria no cambia esta evolución.</p><div id="evolucionReservas"></div></section>
-</div>
-<div id="dashboardDistribucion"></div>
-<section class="resumen-economico" aria-labelledby="tituloEconomico">
-<h3 id="tituloEconomico">Resumen económico</h3>
-<label class="selector-mes-economico">Mes y año de atención<input id="economiaMes" type="month" required aria-describedby="alcanceEconomico"></label>
-<p id="alcanceEconomico" class="ayuda-agenda">Importes contractuales históricos del mes de atención, en CLP, según el filtro de estado. Son valores proyectados y no representan pagos recibidos. La fecha diaria no cambia este resumen mensual.</p>
-<p id="estadoEconomico"></p>
-<div id="datosEconomicos" hidden>
-<dl class="metricas-dashboard">
-<div><dt>Valor de servicios del mes sin canceladas</dt><dd id="valorServicios">—</dd><p>Confirmadas, pendientes de abono, atendidas y no atendidas.</p></div>
-<div><dt>Valor proyectado de reservas activas del mes</dt><dd id="valorReservasActivas">—</dd><p>Solo confirmadas y pendientes de abono.</p></div>
-<div><dt>Abonos esperados contractualmente del mes</dt><dd id="abonosActivos">—</dd><p>Requeridos por reservas activas. No indica cuánto se pagó ni cuánto falta por pagar.</p></div>
-</dl>
-<h4>Comparación de valores contractuales activos</h4><p class="ayuda-agenda">Los abonos forman parte del valor de los servicios: no deben sumarse como valores adicionales. No representa movimientos de dinero.</p>
-<div id="comparacionEconomica"></div>
-<div id="detalleEconomico" class="tabla-economica"></div>
-<h4>Evolución económica de seis meses</h4><p class="ayuda-agenda">Valor de reservas activas y abonos contractuales esperados del mes seleccionado y cinco anteriores. Según el filtro de estado; meses sin reservas: cero. No representa ingresos recibidos.</p>
-<div id="evolucionEconomica"></div>
-</div>
-</section>
+<div id="solicitudesCancelacion"></div></details>
+
 </div>
 </section>
 <section class="vista" data-vista="perfil" hidden aria-labelledby="tituloPerfil">
 <h2 id="tituloPerfil" tabindex="-1">Perfil del emprendimiento</h2>
-<p>Estos datos se muestran a las clientas en el catálogo.</p>
+
 <form id="perfil">
 <fieldset disabled>
 <label>Nombre <input name="nombre" required maxlength="150">
@@ -395,6 +410,9 @@
 </fieldset>
 </form>
 <h3 id="tituloAsignaciones">Selecciona una trabajadora para administrar sus servicios.</h3>
+<label>Trabajadora para asignar servicios
+<select id="trabajadoraAsignacion" disabled aria-controls="asignacionGestion asignacionesTrabajadora"></select>
+</label>
 <div id="asignacionesTrabajadora"></div>
 <form id="asignacionGestion">
 <fieldset disabled>
@@ -408,10 +426,10 @@
 </section>
 <section class="vista" data-vista="horarios" hidden id="gestionHorarios" aria-labelledby="tituloHorarios">
 <h2 id="tituloHorarios" tabindex="-1">Horarios y bloqueos</h2>
-<p>Las horas y fechas corresponden a Chile. Cambiar un horario no cancela las citas existentes; revísalas en la agenda.</p>
-<label>Trabajadora <select id="trabajadoraHorario"></select>
+
+<div class="herramientas-horarios"><label>Trabajadora <select id="trabajadoraHorario"></select>
 </label>
-<button id="actualizarHorarios" type="button">Actualizar horarios</button>
+<button id="actualizarHorarios" type="button">Actualizar horarios</button></div>
 <h3>Horarios semanales</h3>
 <div id="listaHorarios"></div>
 <form id="horarioGestion">
@@ -470,7 +488,7 @@
 </section>
 <section class="vista" data-vista="suscripcion" hidden id="gestionSuscripcion" aria-labelledby="tituloSuscripcion">
 <h2 id="tituloSuscripcion" tabindex="-1">Suscripción mensual a Meraki</h2>
-<div id="detalleSuscripcion"></div>
+<div id="suscripcionVisual"></div><details class="suscripcion-detalle"><summary>Ver estado detallado</summary><div id="detalleSuscripcion"></div></details>
 <p>Un mes calendario gratuito por cuenta. En las cuentas nuevas comienza al registrarte. Después, $9.990 CLP al mes. Inscribir una tarjeta no cobra ni activa renovaciones automáticas. Puedes autorizar un cobro cuando venza tu período. No se acumulan mensualidades atrasadas.</p>
 <label id="consentimientoPlan">
 <input id="consentimientoSuscripcion" type="checkbox"> Acepto el plan de $9.990 CLP mensuales y la operación solicitada. La inscripción no activa renovaciones automáticas. Un nuevo cobro requiere autorización independiente y la reinscripción no concede otro mes gratuito.</label>
@@ -488,8 +506,8 @@
 </section>
 <section class="vista" data-vista="notificaciones" hidden>
 <h2 id="tituloNotificaciones" tabindex="-1">Notificaciones</h2>
-<p>Consulta el estado de los correos de confirmación enviados a tus clientas.</p>
-<details class="notificaciones-ayuda"><summary>Ayuda sobre los estados de envío</summary><p>Un envío aceptado por Gmail no confirma su lectura ni su llegada a la bandeja de entrada. Antes de resolver un envío interrumpido, comprueba su entrega en el proveedor y registra la evidencia. Un resultado incierto debe permanecer en revisión.</p></details>
+
+<details class="notificaciones-ayuda"><summary>Cómo interpretar los envíos</summary><p>Un correo enviado puede llegar a spam; su estado no indica si fue leído. Si el envío se interrumpió, verifica si llegó antes de reintentarlo y registra la evidencia. Si no puedes confirmarlo, mantenlo en revisión.</p></details>
 <button id="actualizar">Actualizar notificaciones</button>
 <p id="estadoNotificaciones" role="status" aria-live="polite" aria-atomic="true"></p>
 <div id="notificaciones" aria-busy="false"></div>
@@ -508,10 +526,17 @@
 <script src="fotografias.js?v=2"></script>
 <script src="trabajadoras.js?v=acceso-1"></script>
 <script src="horarios.js?v=acceso-1"></script>
+<script src="suscripcion-visual.js"></script>
 <script src="suscripcion.js?v=gestion-2"></script>
 <script src="navegacion.js?v=dashboard-1"></script>
+<script src="dashboard-visual.js"></script>
+<script src="dashboard-dinero.js"></script>
 <script src="dashboard-graficos.js?v=evolucion-seis-meses-1"></script>
 <script src="notificaciones-ui.js?v=tarjetas-1"></script>
+<script src="calendario-semana.js"></script>
+<script src="distribucion-visual.js"></script>
+<script src="reserva-visual.js"></script>
 <script src="back.js?v=notificaciones-1"></script>
+<script src="accesos-reservas.js"></script>
 </body>
 </html>
